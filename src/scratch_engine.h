@@ -80,7 +80,7 @@ typedef struct {
 } ts_slot_t;
 
 /* A generated clip is kept as its recipe: the same recipe makes the same clip. */
-typedef struct { int used, style, bars; uint32_t seed; int fwd; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100 */
+typedef struct { int used, style, bars; uint32_t seed; int fwd; int bpm; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100; bpm: the song's tempo */
 
 typedef struct ts_engine {
     float       sr;
@@ -193,7 +193,12 @@ int   ts_engine_load_clips(ts_engine_t *e, const char *path);  /* clips.bin: the
 void ts_clip_generate(ts_clip_t *out, int style, uint32_t seed, int bars);
 /* The same, for a sample: each bar's strokes start where the sample has an attack (the start of its sound, the start of a word), the way a
  * DJ places the record, and the positions are the sample's own (the clip is "native": tag 3). With no sample it is the plain one above. */
-void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd);     /* fwd: 0..1, forwards in Any */
+void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm);     /* fwd: 0..1, forwards in Any */
+/* The song's tempo shapes "Any": a hand moves at about the same real speed whatever the tempo, so a slow song gets more notes to the beat.
+ * From 99 bpm up the phrase is on sixteenths (4 to the beat); from 73 to 99 on sixteenth triplets (6 to the beat), and below 73 on
+ * thirty-seconds (8 to the beat): the steps a second stay close to those at 120 (the switch points are where the two rates either side
+ * are the same distance from it). A bar is always four beats, so a clip still fits the song. */
+int ts_steps_per_beat(float bpm);
 int  ts_engine_generate(ts_engine_t *e);               /* a new "try" clip from the Generate settings; plays it; returns its style */
 int  ts_engine_keep(ts_engine_t *e, int pad);          /* the try clip on a clip pad of the selected sample (0: the first free one); the pad, or -1 */
 void ts_engine_select_sample(ts_engine_t *e, int sample);   /* another sample: its own clip pads, and the clip it last had selected */

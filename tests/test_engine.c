@@ -1454,7 +1454,7 @@ static void test_generator(void)
         int none = 0, all = 0;                                                    /* the Forwards setting: 0 none, 1 every bar */
         for (uint32_t seed = 1; seed <= 40; seed++) {
             for (int pass = 0; pass < 2; pass++) {
-                ts_clip_generate_for(&ph, GS_ANY, seed * 7919u, 4, NULL, pass ? 1.0f : 0.0f);
+                ts_clip_generate_for(&ph, GS_ANY, seed * 7919u, 4, NULL, pass ? 1.0f : 0.0f, 120.0f);
                 int found = 0;
                 for (int i = 0; i + 3 * (TS_CLIP_RES / 4) < ph.n; i += TS_CLIP_RES / 16) {
                     int j = i + 3 * (TS_CLIP_RES / 4), op = 0;
@@ -1685,7 +1685,7 @@ static void test_attacks(void)
     static ts_clip_t c;
     int tagged = 1, at_attack = 1, both = 0;
     for (uint32_t seed = 1; seed <= 60; seed++) {
-        ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, &e->slot[3], 0.75f);
+        ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, &e->slot[3], 0.75f, 120.0f);
         tagged &= c.tag == 3;
         int hit0 = 0, hit1 = 0;
         for (int bar = 0; bar < 4; bar += 2) {                                 /* (a phrase starts on bars 1 and 3) */
@@ -1699,13 +1699,88 @@ static void test_attacks(void)
     }
     CHECK(tagged && at_attack, "every phrase starts on one of the attacks, in the sample's own positions");
     CHECK(both > 5, "and a four-bar clip visits both of them now and then (%d of 60)", both);
-    ts_clip_generate_for(&c, GS_BABY, 5, 2, NULL, 0.0f);
+    ts_clip_generate_for(&c, GS_BABY, 5, 2, NULL, 0.0f, 120.0f);
     CHECK(c.tag == 0, "with no sample it is the plain generator (not native)");
     ts_engine_destroy(e);
 }
 
 /* the module as it ships: no hand-written clips on any pad */
 /* Swing: as a clip plays, each eighth is split long-short; the clip itself does not change */
+/* Tempo: Any is made for the song's tempo. At 99 bpm and up nothing has changed (the same clips, bit for bit); below, the phrase and the
+ * fader are on triplets (6 to the beat) and then thirty-seconds (8), so the steps a second stay about where they are at 120. */
+static uint32_t clip_fnv(const ts_clip_t *c)
+{
+    uint32_t h = 2166136261u;
+    for (int i = 0; i < c->n; i++) { h = (h ^ (c->pos[i] & 255)) * 16777619u; h = (h ^ (c->pos[i] >> 8)) * 16777619u; h = (h ^ c->gate[i]) * 16777619u; }
+    return h ^ (uint32_t)c->n ^ ((uint32_t)c->tag << 20);
+}
+
+static void test_tempo(void)
+{
+    printf("tempo\n");
+    CHECK(ts_steps_per_beat(120) == 4 && ts_steps_per_beat(99) == 4 && ts_steps_per_beat(98.9f) == 6 && ts_steps_per_beat(75) == 6 && ts_steps_per_beat(73) == 6 &&
+          ts_steps_per_beat(72.9f) == 8 && ts_steps_per_beat(50) == 8 && ts_steps_per_beat(0) == 4 && ts_steps_per_beat(NAN) == 4, "steps to the beat: 4 from 99 bpm, 6 from 73, 8 below; nonsense gives 4");
+    /* clips made before the tempo was looked at, for a few seeds and styles: unchanged at 99 bpm and up */
+    static const uint32_t before[15] = { 1953970742u, 557623256u, 1711664955u, 4219920907u, 4086795089u, 4086795089u, 1724656640u, 2335758686u,
+                                          2335758686u, 3515860986u, 236595325u, 236595325u, 4199836569u, 3654799649u, 3654799649u };
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    int have = ts_engine_load_dir(e, "samples") == 3;
+    const int cfg[5][3] = { { GS_ANY, 4, 1 }, { GS_ANY, 2, 0 }, { GS_BABY, 2, 1 }, { GS_FLARE, 4, 0 }, { GS_CUTS, 1, 0 } };
+    static ts_clip_t c;
+    int same = 1, n_checked = 0;
+    for (int k = 0; k < 5; k++)
+        for (int sl = -1; sl < 2; sl++) {
+            if (sl >= 0 && !have) continue;
+            uint32_t seed = 7919u * (uint32_t)(k + 3);
+            for (int bi = 0; bi < 3; bi++) {
+                float bpm = bi == 0 ? 120.0f : (bi == 1 ? 140.0f : 99.0f);
+                ts_clip_generate_for(&c, cfg[k][0], seed, cfg[k][1], sl >= 0 ? &e->slot[sl] : NULL, cfg[k][2] ? 0.75f : 0.0f, bpm);
+                same &= clip_fnv(&c) == before[k * 3 + (sl + 1)];
+                n_checked++;
+            }
+        }
+    CHECK(same && n_checked >= 15, "at 99, 120 and 140 bpm the clips are exactly what they were (%d checked)", n_checked);
+    /* at 75 bpm the openings of the fader fall on the triplet grid; the sounds a second are close to those at 120 */
+    double near = 0.0, edges = 0.0, on16 = 0.0, tones[3] = { 0, 0, 0 }, beats[3] = { 0, 0, 0 };
+    const float bp[3] = { 120.0f, 75.0f, 60.0f };
+    for (int bi = 0; bi < 3; bi++)
+        for (uint32_t seed = 1; seed <= 40; seed++) {
+            ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, NULL, 0.0f, bp[bi]);
+            beats[bi] += c.len;
+            double step = TS_CLIP_RES / (double)ts_steps_per_beat(bp[bi]);
+            for (int i = 0; i < c.n; i++) {
+                int a = c.gate[(i + c.n - 1) % c.n] != 0, g = c.gate[i] != 0;
+                if (a || !g) continue;
+                tones[bi]++;
+                if (bi == 1) {
+                    double ph = fmod(i / step, 1.0), p16 = fmod(i / (TS_CLIP_RES / 4.0), 1.0);
+                    edges++; near += ph < 0.3 || ph > 0.65; on16 += p16 < 0.3 || p16 > 0.65;
+                }
+            }
+        }
+    double rate120 = tones[0] / beats[0] * 120.0 / 60.0, rate75 = tones[1] / beats[1] * 75.0 / 60.0, rate60 = tones[2] / beats[2] * 60.0 / 60.0;
+    CHECK(edges > 100 && near / edges > 0.9 && on16 / edges < 0.8, "at 75 bpm the fader's openings are on the triplet grid (%.0f%%), not on the sixteenths (%.0f%%)", 100 * near / edges, 100 * on16 / edges);
+    CHECK(rate75 > 0.7 * rate120 && rate75 < 1.3 * rate120 && rate60 > 0.65 * rate120 && rate60 < 1.3 * rate120,
+          "the sounds a second hold up at slow tempi (120 bpm: %.1f, 75: %.1f, 60: %.1f) instead of falling in step", rate120, rate75, rate60);
+    /* a forward at a slow tempo runs at the sample's own speed: a one second sample, 75 bpm (0.8 s a beat) */
+    load_sample(e, 3, "one.wav", SMP_SINE, 0.7f, 44100);
+    int found = 0, speed_ok = 1;
+    for (uint32_t seed = 1; seed <= 30; seed++) {
+        ts_clip_generate_for(&c, GS_ANY, seed * 104729u, 4, &e->slot[3], 1.0f, 75.0f);
+        for (int i = 0; i + 3 * (TS_CLIP_RES / 4) < c.n; i += TS_CLIP_RES / 16) {
+            int j = i + 3 * (TS_CLIP_RES / 4), op = 0;
+            for (int q = i; q < j; q++) op += c.gate[q] != 0;
+            if ((int)c.pos[j] - (int)c.pos[i] < (int)(0.55 * 65535) || op < (j - i) * 7 / 10) continue;
+            double secs = (j - i) / (double)TS_CLIP_RES * 60.0 / 75.0, spd = ((double)c.pos[j] - (double)c.pos[i]) / 65535.0 / secs;     /* sample lengths a second */
+            found++;
+            speed_ok &= spd > 0.6 && spd < 1.5;
+            break;
+        }
+    }
+    CHECK(found > 20 && speed_ok, "forwards at 75 bpm run at about the sample's own speed (%d clips with one)", found);
+    ts_engine_destroy(e);
+}
+
 static void test_swing(void)
 {
     printf("swing\n");
@@ -2677,10 +2752,10 @@ static void test_recipes_library(void)
     if (f) { size_t n = fread(text, 1, sizeof text - 1, f); text[n] = 0; fclose(f); }
     int sa = -1, a = 0, b = 0, c = 0, sa2 = -1, a2 = 0, b2 = 0, c2 = 0;
     unsigned long s1 = 0, s2 = 0;
-    int fw1 = -1, fw2 = -1;
-    int got = sscanf(text, "%d %d %d %d %lu %d\n%d %d %d %d %lu %d", &sa, &a, &b, &c, &s1, &fw1, &sa2, &a2, &b2, &c2, &s2, &fw2);
-    CHECK(f && got == 12 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && fw1 == 0 && fw2 == 0 && !e->recipes_dirty,
-          "the service call writes it: one line per clip (sample, pad, style, bars, seed, forwards) (%s)", text);
+    int fw1 = -1, fw2 = -1, bp1 = -1, bp2 = -1;
+    int got = sscanf(text, "%d %d %d %d %lu %d %d\n%d %d %d %d %lu %d %d", &sa, &a, &b, &c, &s1, &fw1, &bp1, &sa2, &a2, &b2, &c2, &s2, &fw2, &bp2);
+    CHECK(f && got == 14 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && fw1 == 0 && fw2 == 0 && bp1 == 120 && bp2 == 120 && !e->recipes_dirty,
+          "the service call writes it: one line per clip (sample, pad, style, bars, seed, forwards, tempo) (%s)", text);
     static ts_clip_t keep9, keep12;
     memcpy(&keep9, PADCLIP(e, 9), sizeof keep9);
     memcpy(&keep12, PADCLIP(e, 12), sizeof keep12);
@@ -3021,6 +3096,7 @@ int main(int argc, char **argv)
     test_delete_any();
     test_empty_pads();
     test_swing();
+    test_tempo();
     test_pad_mutes_clip();
     test_pad_runs_clip();
     test_unload_files();
