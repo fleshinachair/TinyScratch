@@ -727,6 +727,17 @@ fixtures.forEach((v, i) => {
         check(!has(c, "clip_delete") && c.count(0, 57, 127, 63) > 30, "held to the end: nothing is deleted, and the screen says why");
         bt.canvas_overlay.onMidi(c, { data: [0x80, 68 + 24, 0] });
     }
+    // with no clip playing the bottom row of pads are cues: another colour, and ticks on the waveform where each drops the needle
+    {
+        const T = box.__tinyscratch, base = Object.assign({}, fixtures[0], { cu: "10203040506070" + "7f", cq: -1 });
+        const cueView = Object.assign({}, base, { cm: 0, cs: 1 }), clipView = Object.assign({}, base, { cm: 3, cs: 1 }), offView = Object.assign({}, base, { cm: 0, cs: 0 });
+        check(T.padColor({ view: cueView, held: {} }, 2) === T.COL.cue && T.padColor({ view: clipView, held: {} }, 2) === T.COL.cut && T.padColor({ view: offView, held: {} }, 2) === T.COL.cut,
+              "the bottom row is the cue colour with no clip playing, red with a clip, or with Cue Pads off");
+        check(T.padColor({ view: cueView, held: { 2: true } }, 2) === T.COL.cutHot, "a held cue pad is white");
+        const tick = (view, col) => draw(box, view).on(Math.round(col * 105 / 127), 31);
+        check(tick(cueView, 0x10) && tick(cueView, 0x7f) && !tick(clipView, 0x10) && !tick(offView, 0x10), "the waveform has a tick under each cue, only in cue mode");
+    }
+
     // an empty User slot, held, records for as long as it is held
     {
         const bt = load(() => true), c = makeCtx({ values: {} });

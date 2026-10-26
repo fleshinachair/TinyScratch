@@ -59,6 +59,7 @@ typedef struct {
     int   lock;                 /* 1: the clips follow the transport while it runs (and free-run while it is stopped) */
     int   cut_from;             /* lowest cutting note; C3 = 60 */
     int   pads;                 /* 1: the 32 pads are a fixed grid (below) instead of plain notes */
+    int   cues;                 /* 1: with no clip playing, the bottom row of pads are cues: each drops the needle at an attack of the sample and plays it on */
     int   clip;                 /* 0 off, 1..16 a clip, 17 auto, 18 the clip just generated ("try") */
     int   gen_style;            /* what Generate makes: 0 any, or one of the styles above */
     int   gen_bars;             /* 0, 1, 2: a clip of 1, 2 or 4 bars */
@@ -107,6 +108,11 @@ typedef struct ts_engine {
     int         pad_raw;        /* >0: samples left of raw pad mode: the Pads screen reports the pads, the notes are ignored */
     unsigned    pad_cuts;       /* the cut pads held, from the Pads screen: bit n is pad n of the bottom two rows */
     int         pad_held;       /* how many */
+    unsigned    note_cues;      /* the bottom-row pads held as notes: bit n is the pad in column n */
+    unsigned    cue_prev;       /* the cue pads held a frame ago */
+    int         cue_on;         /* 1: a cue pad is playing the sound on from its cue */
+    int         cue_pad;        /* which one (0..7) */
+    double      cue_pos;        /* where it has got to, 0..1 */
     int         last_note;      /* the last note that arrived, 0 if none (the screen shows it, to see what the pads send) */
     int         running;        /* 1: the transport runs (Lock on), or Lock is off: clips play */
     uint32_t    rng;

@@ -1639,6 +1639,96 @@ static void test_pad_runs_clip(void)
     ts_engine_destroy(e);
 }
 
+/* Cue pads: with no clip playing, the bottom row drops the needle at the sample's attacks and plays on at its own speed */
+static void test_cues(void)
+{
+    printf("cue pads\n");
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    static int16_t pcm[44100];
+    for (int i = 0; i < 44100; i++) {                                            /* three bursts, 0.05, 0.40 and 0.70 s in, with near silence between */
+        double t = i / 44100.0;
+        double env = (t >= 0.05 && t < 0.25) || (t >= 0.40 && t < 0.60) || (t >= 0.70 && t < 0.90) ? 0.8 : 0.01;
+        pcm[i] = (int16_t)(env * sin(6.2831853 * 440.0 * t) * 32767.0);
+    }
+    size_t sz = make_wav(g_wav, pcm, 44100, 44100, 1, 16, 1);
+    CHECK(ts_engine_load_wav_mem(e, 0, "bursts.wav", g_wav, sz) == TS_WAV_OK, "(a sample with three attacks)");
+    ts_params_t p;
+    ts_params_default(&p);
+    p.clip = 0; p.normalise = 0; p.drag = 0.0f; p.note_gate = 1; p.swing = 0.0f;
+    ts_engine_set_params(e, &p);
+    static char js[8192];
+    char z[64];
+    double v = 0;
+    ts_engine_view(e, js, sizeof js);
+    int cu[8] = { 0 }, asc = json_str(js, "cu", z, sizeof z) && strlen(z) == 16, near40 = 0, near70 = 0;
+    for (int i = 0; i < 8 && asc; i++) {
+        sscanf(z + 2 * i, "%2x", &cu[i]);
+        asc &= i == 0 || cu[i] >= cu[i - 1];
+        near40 |= abs(cu[i] - (int)(0.40 * 127)) <= 4;
+        near70 |= abs(cu[i] - (int)(0.70 * 127)) <= 4;
+    }
+    CHECK(asc && abs(cu[0] - (int)(0.05 * 127)) <= 4 && near40 && near70, "the view lists eight cues in order: the start of the sound, then its attacks (%s)", z);
+    CHECK(json_num(js, "cs", &v) && v == 1 && json_num(js, "cq", &v) && v == -1, "...and none is playing");
+
+    static float blk[128];
+    ts_engine_note(e, TS_PAD_FIRST + 3, 100, 1);
+    for (int b = 0; b < 10; b++) ts_engine_render(e, blk, 128);
+    double want = cu[3] / 127.0 + 1280.0 / 44099.0;
+    CHECK(e->cue_on && e->cue_pad == 3 && fabs(e->cue_pos - want) < 0.012, "a pad drops the needle on its cue and plays on (at %.3f, wanted %.3f)", e->cue_pos, want);
+    CHECK(e->gate > 0.99f && fabsf(e->vel_out - 1.0f) < 0.1f, "...with the sound open, at the sample's own speed (%.2f)", (double)e->vel_out);
+    ts_engine_view(e, js, sizeof js);
+    CHECK(json_num(js, "cq", &v) && v == 3, "...and the view says which");
+    ts_engine_note(e, TS_PAD_FIRST + 3, 0, 0);
+    for (int b = 0; b < 3; b++) ts_engine_render(e, blk, 128);
+    CHECK(!e->cue_on && e->gate < 0.01f, "let go: it stops, the sound shut");
+
+    ts_engine_note(e, TS_PAD_FIRST + 0, 100, 1);
+    ts_engine_render(e, blk, 128);
+    double first = e->cue_pos;
+    ts_engine_note(e, TS_PAD_FIRST + 0, 0, 0);
+    ts_engine_note(e, TS_PAD_FIRST + 7, 100, 1);
+    ts_engine_render(e, blk, 128);
+    double last = e->cue_pos;
+    ts_engine_note(e, TS_PAD_FIRST + 7, 0, 0);
+    CHECK(first < 0.15 && last > first + 0.3, "the first pad is the start of the sound and the last is further on (%.2f, %.2f)", first, last);
+
+    ts_engine_note(e, TS_PAD_FIRST + 5, 100, 1);                                  /* a turn of the knob takes over; the cue carries on from where the hand left it */
+    ts_engine_render(e, blk, 128);
+    p.turntable = 0.8f;
+    ts_engine_set_params(e, &p);
+    for (int b = 0; b < 10; b++) ts_engine_render(e, blk, 128);
+    CHECK(fabs(e->cue_pos - 0.8) < 0.01, "a turn of the knob moves the playhead, not the cue (%.3f)", e->cue_pos);
+    for (int b = 0; b < 250; b++) ts_engine_render(e, blk, 128);                  /* 0.6 s of hand hold in all, and a little more */
+    CHECK(e->cue_pos > 0.85 && e->cue_pos < 1.0 + 1e-9, "...and when the hand lets go it plays on from there (%.3f)", e->cue_pos);
+    ts_engine_note(e, TS_PAD_FIRST + 5, 0, 0);
+    ts_engine_render(e, blk, 128);
+
+    p.clip = 1; p.turntable = 0.0f;                                                /* with a clip playing the pads cut it, as they always did */
+    ts_engine_set_params(e, &p);
+    ts_engine_note(e, TS_PAD_FIRST + 2, 100, 1);
+    for (int b = 0; b < 4; b++) ts_engine_render(e, blk, 128);
+    CHECK(!e->cue_on, "with a clip playing the pads are not cues");
+    ts_engine_note(e, TS_PAD_FIRST + 2, 0, 0);
+    p.clip = 0; p.cues = 0;
+    ts_engine_set_params(e, &p);
+    ts_engine_note(e, TS_PAD_FIRST + 2, 100, 1);
+    for (int b = 0; b < 4; b++) ts_engine_render(e, blk, 128);
+    CHECK(!e->cue_on && e->gate > 0.99f, "with Cue Pads off they open the sound where the playhead is, as they did");
+    ts_engine_note(e, TS_PAD_FIRST + 2, 0, 0);
+    p.cues = 1;
+    ts_engine_set_params(e, &p);
+
+    ts_engine_pad_raw(e, 1);                                                      /* the Pads screen reports the pads itself */
+    ts_engine_pad_cuts(e, 1u << 6);
+    ts_engine_render(e, blk, 128);
+    CHECK(e->cue_on && e->cue_pad == 6, "from the Pads screen too");
+    ts_engine_pad_cuts(e, 0);
+    ts_engine_render(e, blk, 128);
+    CHECK(!e->cue_on, "...and it stops when they are let go");
+    ts_engine_pad_raw(e, 0);
+    ts_engine_destroy(e);
+}
+
 static void test_pad_mutes_clip(void)
 {
     ts_engine_t *e = ts_engine_create(44100.0f);
@@ -3166,6 +3256,7 @@ int main(int argc, char **argv)
     test_echo();
     test_tempo();
     test_pad_mutes_clip();
+    test_cues();
     test_pad_runs_clip();
     test_unload_files();
     test_load_file_and_zoom();

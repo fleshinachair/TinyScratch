@@ -786,6 +786,34 @@ static int slot_onsets(const ts_slot_t *s, float *out, int cap)
     return n;
 }
 
+/* The eight cues of a sample, in order along it: the start of its sound and its attacks (see above), then, if there are fewer than eight,
+ * the middle of the biggest gap, again and again, so the pads always cover all of it. Positions 0..1. */
+static void cue_points(const ts_slot_t *s, float out[8])
+{
+    float p[9];
+    int n = slot_onsets(s, p, 8);
+    const float lo = s && s->loaded ? s->lo : 0.0f, hi = s && s->loaded ? s->hi : 1.0f;
+    if (n == 0) p[n++] = clampf(lo - 0.01f, 0.0f, 0.9f);
+    for (int k = 1; k < n && s && s->loaded; k++) {                              /* a stroke starts a few columns ahead of an attack; a pad you tap lands on it */
+        int i = clampi((int)((p[k] + 0.01f) * (float)TS_VIEW_COLS + 0.5f), 0, TS_VIEW_COLS - 6);
+        float base = (float)s->rms[i] / 255.0f, top = (float)s->rms[i + 4] / 255.0f;
+        for (int j = i; j <= i + 5; j++)
+            if ((float)s->rms[j] / 255.0f >= base + 0.35f * (top - base)) { p[k] = clampf((float)j / (float)TS_VIEW_COLS - 0.004f, p[k], 0.95f); break; }
+    }
+    while (n < 8) {
+        int at = 0;
+        float gap = -1.0f;
+        for (int i = 0; i < n; i++) {
+            float nx = i + 1 < n ? p[i + 1] : fmaxf(hi, p[i]);
+            if (nx - p[i] > gap) { gap = nx - p[i]; at = i; }
+        }
+        for (int i = n; i > at + 1; i--) p[i] = p[i - 1];
+        p[at + 1] = p[at] + gap * 0.5f;
+        n++;
+    }
+    for (int i = 0; i < 8; i++) out[i] = p[i];
+}
+
 /* "Any": a phrase, the way the example clips are made. They are neither one technique repeated nor techniques glued together: a two-bar
  * phrase of strokes of every length (a sixteenth 22%, two 24%, three 21%, four 14%, so nothing pulses on the beat: the clips hardly match
  * themselves a beat later), pushes up by about half the sample and pulls back that far or right back to the start (about half the time),
@@ -1379,6 +1407,7 @@ void ts_params_default(ts_params_t *p)
     p->lock = 1;
     p->cut_from = TS_CUT_NOTE;
     p->pads = 1;
+    p->cues = 1;
     p->clip = TS_CLIP_AUTO;              /* the clips in turn: a routine from the first press */
     p->gen_style = 0;
     p->gen_bars = 1;                     /* two bars */
@@ -1402,6 +1431,7 @@ void ts_params_sanitize(ts_params_t *p)
     p->lock = p->lock ? 1 : 0;
     p->cut_from = clampi(p->cut_from, 0, 127);
     p->pads = p->pads ? 1 : 0;
+    p->cues = p->cues ? 1 : 0;
     p->clip = clampi(p->clip, 0, TS_CLIP_TRY);
     p->gen_style = clampi(p->gen_style, 0, TS_GEN_STYLES - 1);
     p->gen_bars = clampi(p->gen_bars, 0, 2);
@@ -1501,8 +1531,10 @@ void ts_engine_note(ts_engine_t *e, int note, int velocity, int on)
                 if (e->notes_held == 0) e->held_clock = 0.0;
                 if (e->notes_held < 64) e->notes_held++;
                 e->last_vel = clampi(velocity, 1, 127);
-            } else if (e->notes_held > 0) {
-                e->notes_held--;
+                e->note_cues |= 1u << col;
+            } else {
+                if (e->notes_held > 0) e->notes_held--;
+                e->note_cues &= ~(1u << col);
             }
         } else if (!on) {
             return;
@@ -1529,14 +1561,14 @@ void ts_engine_note(ts_engine_t *e, int note, int velocity, int on)
 
 void ts_engine_all_notes_off(ts_engine_t *e)
 {
-    if (e) e->notes_held = 0;
+    if (e) { e->notes_held = 0; e->note_cues = 0; }
 }
 
 void ts_engine_pad_raw(ts_engine_t *e, int on)
 {
     if (!e) return;
     if (on) {
-        if (e->pad_raw <= 0) e->notes_held = 0;                 /* notes held from before are not coming off now */
+        if (e->pad_raw <= 0) { e->notes_held = 0; e->note_cues = 0; }     /* notes held from before are not coming off now */
         e->pad_raw = (int)(1.5f * e->sr);
     } else {
         e->pad_raw = 0;
@@ -2087,6 +2119,27 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         /* a clip made for this sample says where in it; any other is spread over where this sample has its sound */
         const int native = ck && ck->tag != 0 && (ck->tag == sample_tag(p->sample) || ck->tag == TAG_GENERATED);
 
+        /* Cues: with no clip playing, a bottom-row pad drops the needle at its cue and plays the sound on at its own speed while it is held;
+         * a turn of the knob takes it over, and it carries on from where the hand left it. */
+        const unsigned cues_now = (e->note_cues | e->pad_cuts) & 0xFFu;
+        const unsigned fresh = cues_now & ~e->cue_prev;
+        e->cue_prev = cues_now;
+        if (clip != 0 || !p->cues || cues_now == 0) e->cue_on = 0;
+        else {
+            if (fresh) {
+                float cu[8];
+                cue_points(s, cu);
+                e->cue_pad = __builtin_ctz(fresh);
+                e->cue_pos = cu[e->cue_pad];
+                e->pos = e->cue_pos;
+                e->cue_on = 1;
+            }
+            if (e->cue_on) {
+                if (e->hand_hold > 0) e->cue_pos = e->man;
+                else if (len > 1) { e->cue_pos += 1.0 / (double)(len - 1); if (e->cue_pos > 1.0) e->cue_pos = 1.0; }
+            }
+        }
+
         if (e->hand_hold > 0) e->hand_hold--;
         if (e->hand_hold > 0 || !live) e->target = e->man;
         else if (clip > 0) {
@@ -2094,6 +2147,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
             v = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
             e->target = native ? v : (double)s->lo + (double)(s->hi - s->lo) * v;
         }
+        else if (e->cue_on) e->target = e->cue_pos;
         else e->target = e->man;
         double before = e->pos;
         e->pos += (double)alpha * (e->target - e->pos);
@@ -2161,6 +2215,10 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     const ts_clip_t *shown_clip = p->clip ? clip_at(e, e->clip_now) : NULL;
     const int lane_beats = shown_clip ? shown_clip->len : TS_LANE_BEATS;
 
+    char cue_cols[17];                                                         /* where the eight cue pads drop the needle, a column each (two hex digits) */
+    float cue_at[8];
+    cue_points(s, cue_at);
+    for (int i = 0; i < 8; i++) snprintf(cue_cols + 2 * i, 3, "%02x", clampi((int)(cue_at[i] * (float)(TS_VIEW_COLS - 1) + 0.5f), 0, TS_VIEW_COLS - 1));
     jw(&j, "{\"v\":3,\"n\":\"%s\",\"s\":%d,\"sn\":\"", s->loaded ? s->name : "EMPTY", shown);
     for (int i = 0; i < TS_SLOTS; i++) {
         const ts_slot_t *t = &e->slot[i];
@@ -2171,12 +2229,13 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     jw(&j, "\",\"ld\":\"");
     for (int i = 0; i < TS_SLOTS; i++) jw(&j, "%c", e->slot[i].loaded ? '1' : '0');
     jw(&j, "\",\"x\":%d,\"tx\":%d,\"p\":%.4f,\"tt\":%.3f,\"vl\":%.2f,\"dr\":%.2f,\"gn\":%.1f,\"ng\":%d,\"vv\":%d,\"no\":%d,\"lk\":%d,"
-           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"fn\":%.2f,\"ec\":%.2f,\"w\":\"",
+           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"fn\":%.2f,\"ec\":%.2f,\"cs\":%d,\"cq\":%d,\"cu\":\"%s\",\"w\":\"",
        x, tx, e->pos, (double)p->turntable, (double)e->vel_out, (double)p->drag, (double)p->gain_db, p->note_gate, p->vel_to_vol, p->normalise, p->lock,
        p->cut_from, e->gate > 0.5f, e->notes_held + e->pad_held, e->transport, e->lane_col, p->clip ? e->clip_now : 0, p->clip, e->running, e->last_note, e->pad_raw > 0, lane_beats, e->nclips,
        e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
        e->try_valid, e->try_valid ? e->try_recipe.style : 0, e->view_seq,
-       (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin, (double)p->gen_echo);
+       (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin, (double)p->gen_echo,
+       p->cues, e->cue_on ? e->cue_pad : -1, cue_cols);
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->pk[c] : 0);       /* the waveform: peak, then body */
     jw(&j, "\",\"wr\":\"");
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->rms[c] : 0);

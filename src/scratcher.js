@@ -38,7 +38,7 @@
     /* Move palette indices (Schwung shared/constants.mjs) */
     /* Move palette indices: the numbers are indices into the Move's own colour table, which is not the order of Schwung's names for
      * them (checked against what the Move really lit: 120 white, 127 red, 7 yellow, 123 grey, 11 and 13 greens, 23 purple, 3 orange). */
-    var COL = { off: 0, white: 120, cut: 127, cutHot: 120, clip: 23, clipNow: 13, sample: 7, sampleEmpty: 123, clipAuto: 11, clipNo: 127, gen: 3 };
+    var COL = { off: 0, white: 120, cut: 127, cutHot: 120, clip: 23, clipNow: 13, sample: 7, sampleEmpty: 123, clipAuto: 11, clipNo: 127, gen: 3, cue: 13 };
 
     /* The dials on the Pads screen, as on the module's first page: the first one opens this screen, so it does nothing here. Everything
      * else (the sample, the clip, Generate) is on the pads; Style and Length are what Generate makes. Turntable, Drag, Gain and Record
@@ -153,6 +153,9 @@
     var PAGE = { waveTop: 11, waveH: 18, vinylY: 10, laneY: 30, laneH: 16, laneW: 84, blockY: 31, blockH: 2, pathHi: 34, pathLo: 42, tickY: 44 };
     var WAVE_X = 0, WAVE_W = 106;
 
+    /* with no clip playing, the bottom row of pads are cues (the engine says so with cs and the clip being off) */
+    function cueMode(v) { return num(v.cm, 0) === 0 && num(v.cs, 0) === 1; }
+
     /* the waveform: the body of the sound solid, the peaks drawn round it as one outline, and the playhead cut out of it so it always reads */
     function drawWave(ctx, v, L) {
         var pk = typeof v.w === "string" ? v.w : "", rm = typeof v.wr === "string" ? v.wr : "";
@@ -175,6 +178,11 @@
         if (num(v.cl, 0) > 0) {                               /* where the clip is sending it */
             var t = WAVE_X + Math.round(clamp(num(v.tx, 0), 0, 127) * (WAVE_W - 1) / 127);
             ctx.fillRect(t - 1, L.waveTop + L.waveH, 3, 1, 1);
+        } else if (cueMode(v) && typeof v.cu === "string") {  /* where each cue pad drops the needle; the one playing is wider */
+            for (var k = 0; k < 8; k++) {
+                var cx = WAVE_X + Math.round(clamp(hex2(v.cu, k) * 255, 0, 127) * (WAVE_W - 1) / 127), now = num(v.cq, -1) === k;
+                ctx.fillRect(now ? cx - 1 : cx, L.waveTop + L.waveH, now ? 3 : 1, 1, 1);
+            }
         }
     }
 
@@ -310,7 +318,7 @@
      * A clip you made, held, goes red until it is deleted. */
     function padColor(st, idx) {
         var row = Math.floor(idx / 8), col = idx % 8, v = st.view || {}, cm = num(v.cm, 0);
-        if (row === 0) return st.held[idx] ? COL.cutHot : COL.cut;
+        if (row === 0) return st.held[idx] ? COL.cutHot : (cueMode(v) ? COL.cue : COL.cut);
         if (row === 1) {
             {
                 if (st.hold && st.hold.ok && st.hold.kind === "sample" && st.hold.n === col) return COL.cut;     /* held to unload: red */
