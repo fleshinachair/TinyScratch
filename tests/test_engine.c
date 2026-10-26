@@ -2551,6 +2551,51 @@ static void test_recipes_library(void)
     CHECK(memcmp(PADCLIP(e, 9)->pos, keep9.pos, (size_t)keep9.n * 2) == 0 && memcmp(PADCLIP(e, 9)->gate, keep9.gate, (size_t)keep9.n) == 0 &&
           memcmp(PADCLIP(e, 12)->pos, keep12.pos, (size_t)keep12.n * 2) == 0 && memcmp(PADCLIP(e, 12)->gate, keep12.gate, (size_t)keep12.n) == 0, "...exactly the clips that were kept");
     CHECK(!e->recipes_dirty, "(loading does not rewrite the file)");
+    ts_engine_destroy(e);
+
+    /* a kept clip's own data is saved next to the recipes (kept.bin), and wins over making it again: a clip you chose stays as it is,
+     * whatever the generator does later. Proved by changing the saved data: the loaded clip has the change. */
+    {
+        const char *kpath = TDIR "/rec/kept.bin";
+        FILE *kf = fopen(kpath, "rb");
+        static uint8_t kb[1 << 16];
+        size_t kn = kf ? fread(kb, 1, sizeof kb, kf) : 0;
+        if (kf) fclose(kf);
+        CHECK(kn > 7 && !memcmp(kb, "TSKP", 4) && kb[4] == 1 && (kb[5] | (kb[6] << 8)) == 2, "the clips' data is written beside the recipes (%zu bytes, 2 clips)", kn);
+        size_t g0 = 7 + 12 + (size_t)(kb[7 + 10] | (kb[7 + 11] << 8)) * 2;      /* the first clip's first gate byte */
+        uint8_t was = kb[g0];
+        kb[g0] = was ? 0 : 1;
+        kb[7 + 12] ^= 0x55;                                                       /* and its first position */
+        kf = fopen(kpath, "wb");
+        fwrite(kb, 1, kn, kf);
+        fclose(kf);
+        e = ts_engine_create(44100.0f);
+        ts_engine_set_recipes_path(e, path);
+        CHECK(ts_engine_load_recipes(e) == 2 && PADCLIP(e, 9) && PADCLIP(e, 9)->gate[0] == (was ? 0 : 1) && PADCLIP(e, 9)->pos[0] != keep9.pos[0] &&
+              memcmp(PADCLIP(e, 12)->pos, keep12.pos, (size_t)keep12.n * 2) == 0 && !e->recipes_dirty,
+              "a new instance takes the clips from their saved data, not from the generator");
+        ts_engine_destroy(e);
+        kb[g0] = was; kb[7 + 12] ^= 0x55;                                         /* (as it was) */
+        kf = fopen(kpath, "wb");
+        fwrite(kb, 1, kn, kf);
+        fclose(kf);
+        remove(kpath);                                                            /* no data: made again from the recipes, and the data is written next time */
+        e = ts_engine_create(44100.0f);
+        ts_engine_set_recipes_path(e, path);
+        CHECK(ts_engine_load_recipes(e) == 2 && memcmp(PADCLIP(e, 9)->pos, keep9.pos, (size_t)keep9.n * 2) == 0 && e->recipes_dirty,
+              "without the data the recipes make them again, and the data is due to be written");
+        ts_engine_service(e);
+        kf = fopen(kpath, "rb");
+        CHECK(kf != NULL, "...and it is");
+        if (kf) fclose(kf);
+        kf = fopen(kpath, "wb");                                                   /* a broken file is ignored, not trusted */
+        fputs("TSKP", kf); fputc(1, kf); fputc(9, kf); fputc(0, kf); fputs("rubbish", kf);
+        fclose(kf);
+        ts_engine_destroy(e);
+        e = ts_engine_create(44100.0f);
+        ts_engine_set_recipes_path(e, path);
+        CHECK(ts_engine_load_recipes(e) == 2 && memcmp(PADCLIP(e, 9)->pos, keep9.pos, (size_t)keep9.n * 2) == 0, "a broken data file is ignored: the recipes make the clips");
+    }
 
     /* deleting rewrites it */
     ts_engine_clear_clip(e, 9);

@@ -1075,18 +1075,93 @@ int ts_engine_clear_clip(ts_engine_t *e, int pad)
     return drop_pad(e, e->p.sample, pad, 1);
 }
 
-int ts_engine_restore_kept(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars)
+/* A kept clip back on its pad: from its saved data if there is any (so a clip you chose sounds the same whatever the generator has become
+ * since), otherwise made again from its recipe. */
+static int restore_kept_from(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars, const ts_clip_t *data)
 {
     if (!e || sample < 0 || sample >= TS_SLOTS) return -1;
     if (find_recipe(e, sample, clampi(style, 0, TS_GEN_STYLES - 1), bars, seed) > 0) return -2;            /* it is there already */
     if (pad < 1 || pad > TS_CLIP_PADS || e->bank[sample][pad - 1] != 0) pad = first_free_pad(e, sample);     /* its pad is taken: the next free one */
     if (pad < 0) return -1;
     static ts_clip_t tmp;                                                       /* (called from the thread that sets parameters, one at a time) */
-    ts_clip_generate_for(&tmp, clampi(style, 0, TS_GEN_STYLES - 1), seed, bars, &e->slot[sample]);
+    if (data) tmp = *data;
+    else ts_clip_generate_for(&tmp, clampi(style, 0, TS_GEN_STYLES - 1), seed, bars, &e->slot[sample]);
     ts_recipe_t r = { 1, clampi(style, 0, TS_GEN_STYLES - 1), tmp.len / 4, seed };
     if (install_clip(e, sample, pad, &tmp, &r) != 0) return -1;
     e->recipes_dirty = 0;                                                       /* it came from the library */
     return pad;
+}
+
+int ts_engine_restore_kept(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars)
+{
+    return restore_kept_from(e, sample, pad, style, seed, bars, NULL);
+}
+
+/* ---- kept.bin: the kept clips' own data, next to recipes.txt ----
+ * "TSKP" 1, then a 16-bit count, then for each clip: sample, pad, style, bars (a byte each), the seed (32 bits), the length in beats and the
+ * tag (a byte each), the point count (16 bits), the positions (16 bits each) and the gate (a byte each). Little-endian. */
+static void kept_path(const ts_engine_t *e, char *out, size_t cap)
+{
+    snprintf(out, cap, "%s", e->recipes_path);
+    char *cut = strrchr(out, '/'), *bs = strrchr(out, '\\');
+    if (bs && (!cut || bs > cut)) cut = bs;
+    if (cut) cut[1] = 0; else out[0] = 0;
+    size_t len = strlen(out);
+    snprintf(out + len, cap - len, "kept.bin");
+}
+
+static void save_kept(ts_engine_t *e)
+{
+    char path[520], tmp[530];
+    kept_path(e, path, sizeof path);
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    FILE *f = fopen(tmp, "wb");
+    if (!f) return;
+    int count = 0;
+    for (int s = 0; s < TS_SLOTS; s++) for (int pad = 1; pad <= TS_NUM_CLIPS; pad++) { int idx = e->bank[s][pad - 1] - 1; count += idx >= 0 && e->kept[idx].used; }
+    uint8_t h[6] = { 'T', 'S', 'K', 'P', 1, 0 };
+    int ok = fwrite(h, 1, 5, f) == 5 && fputc(count & 255, f) != EOF && fputc(count >> 8, f) != EOF;
+    for (int s = 0; s < TS_SLOTS && ok; s++)
+        for (int pad = 1; pad <= TS_NUM_CLIPS && ok; pad++) {
+            int idx = e->bank[s][pad - 1] - 1;
+            if (idx < 0 || !e->kept[idx].used) continue;
+            const ts_clip_t *c = &e->clip_data[idx];
+            const ts_recipe_t *r = &e->kept[idx];
+            uint8_t hd[12] = { (uint8_t)s, (uint8_t)pad, (uint8_t)r->style, (uint8_t)r->bars,
+                               (uint8_t)(r->seed & 255), (uint8_t)((r->seed >> 8) & 255), (uint8_t)((r->seed >> 16) & 255), (uint8_t)(r->seed >> 24),
+                               (uint8_t)c->len, (uint8_t)c->tag, (uint8_t)(c->n & 255), (uint8_t)(c->n >> 8) };
+            ok = fwrite(hd, 1, 12, f) == 12;
+            for (int i = 0; i < c->n && ok; i++) ok = fputc(c->pos[i] & 255, f) != EOF && fputc(c->pos[i] >> 8, f) != EOF;
+            ok = ok && fwrite(c->gate, 1, (size_t)c->n, f) == (size_t)c->n;
+        }
+    ok = fclose(f) == 0 && ok;
+    if (!ok) { remove(tmp); return; }
+    remove(path);
+    if (rename(tmp, path) != 0) remove(tmp);
+}
+
+/* the saved data of one kept clip, found by its recipe; 1 if there is some */
+static int kept_find(const uint8_t *d, size_t n, int sample, int style, int bars, uint32_t seed, ts_clip_t *out)
+{
+    if (!d || n < 7 || memcmp(d, "TSKP", 4) != 0 || d[4] != 1) return 0;
+    int count = d[5] | (d[6] << 8);
+    size_t at = 7;
+    for (int k = 0; k < count && at + 12 <= n; k++) {
+        const uint8_t *h = d + at;
+        int len = h[8], tag = h[9], pts = h[10] | (h[11] << 8);
+        size_t size = 12 + (size_t)pts * 3;
+        if (at + size > n || pts != len * TS_CLIP_RES || len < 4 || len > TS_CLIP_MAX_BEATS || tag > TAG_GENERATED) return 0;      /* a broken file: none of it */
+        uint32_t sd = (uint32_t)h[4] | ((uint32_t)h[5] << 8) | ((uint32_t)h[6] << 16) | ((uint32_t)h[7] << 24);
+        if (h[0] == sample && h[2] == style && h[3] == bars && sd == seed) {
+            memset(out, 0, sizeof *out);
+            out->len = len; out->tag = tag; out->n = pts;
+            for (int i = 0; i < pts; i++) out->pos[i] = (uint16_t)(h[12 + 2 * i] | (h[13 + 2 * i] << 8));
+            for (int i = 0; i < pts; i++) out->gate[i] = h[12 + 2 * pts + i] ? 1 : 0;
+            return 1;
+        }
+        at += size;
+    }
+    return 0;
 }
 
 void ts_engine_select_sample(ts_engine_t *e, int s)
@@ -1108,8 +1183,19 @@ int ts_engine_load_recipes(ts_engine_t *e)
     if (!e || !e->recipes_path[0]) return 0;
     FILE *f = fopen(e->recipes_path, "rb");
     if (!f) return 0;
-    char line[128];
-    int n = 0, dropped = 0;
+    char line[128], kp[520];
+    int n = 0, dropped = 0, missing = 0;
+    uint8_t *kd = NULL;
+    size_t kn = 0;
+    kept_path(e, kp, sizeof kp);
+    FILE *kf = fopen(kp, "rb");
+    if (kf) {
+        long sz = -1;
+        if (fseek(kf, 0, SEEK_END) == 0) sz = ftell(kf);
+        if (sz > 0 && sz < 4L * 1024 * 1024 && fseek(kf, 0, SEEK_SET) == 0 && (kd = (uint8_t *)TS_CALLOC((size_t)sz)) != NULL) kn = fread(kd, 1, (size_t)sz, kf);
+        fclose(kf);
+    }
+    static ts_clip_t saved;
     while (fgets(line, sizeof line, f) && n < TS_POOL) {
         int sample, pad, style, bars;
         unsigned long seed;
@@ -1127,14 +1213,17 @@ int ts_engine_load_recipes(ts_engine_t *e)
             if (sscanf(line, "%d %d %d %lu", &pad, &style, &bars, &seed) != 4) continue;
         }
         if ((bars == 1 || bars == 2 || bars == 4) && style >= 0 && style < TS_GEN_STYLES && sample >= 0 && sample < TS_SLOTS) {
-            int r = ts_engine_restore_kept(e, sample, pad, style, (uint32_t)seed, bars);
+            int have = kept_find(kd, kn, sample, style, bars, (uint32_t)seed, &saved);
+            int r = restore_kept_from(e, sample, pad, style, (uint32_t)seed, bars, have ? &saved : NULL);
+            missing |= r > 0 && !have;                                          /* (made again from its recipe: its data is written next time) */
             if (r > 0) n++;
             else if (r == -2) dropped = 1;                                      /* a copy of one it already has: left out */
         }
     }
     fclose(f);
+    TS_FREE(kd);
     recount_clips(e);
-    e->recipes_dirty = dropped;                                                 /* (the library is rewritten without the copies) */
+    e->recipes_dirty = dropped || missing;                                      /* (the library is rewritten without the copies, and with the data) */
     return n;
 }
 
@@ -1159,6 +1248,7 @@ static void save_recipes(ts_engine_t *e)
     if (!ok) { remove(tmp); return; }
     remove(e->recipes_path);                                                    /* (a rename does not replace a file on every system) */
     if (rename(tmp, e->recipes_path) != 0) remove(tmp);
+    save_kept(e);
 }
 
 /* ------------------------------------------------------------------ */
