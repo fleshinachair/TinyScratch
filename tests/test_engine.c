@@ -224,7 +224,7 @@ static void test_defaults(void)
     memset(&w, 0, sizeof w);
     w.sample = 99; w.turntable = NAN; w.drag = 9.0f; w.gain_db = -500.0f; w.note_gate = 7; w.cut_from = 999; w.pads = 5; w.lock = 3; w.clip_depth = INFINITY; w.clip_offset = NAN;
     ts_params_sanitize(&w);
-    CHECK(w.sample == 5 && w.turntable == 0.0f && w.drag == 1.0f && w.gain_db == -24.0f && w.note_gate == 1 && w.cut_from == 127 && w.pads == 1 && w.lock == 1 &&
+    CHECK(w.sample == 7 && w.turntable == 0.0f && w.drag == 1.0f && w.gain_db == -24.0f && w.note_gate == 1 && w.cut_from == 127 && w.pads == 1 && w.lock == 1 &&
           w.clip_depth == 1.0f && w.clip_offset == 0.0f,
           "every value is clamped, NaN and infinity become something sane");
     w.gain_db = 99.0f;
@@ -296,7 +296,7 @@ static void test_samples(void)
     put_file(dir, "bad.wav", "not a wav at all, but long enough to be tried, honestly yes", 60);
     e = ts_engine_create(44100.0f);
     int mask = ts_engine_load_dir(e, dir);
-    CHECK(mask == 0x3F, "all six slots filled (mask %x)", mask);
+    CHECK(mask == 0x7F, "seven slots filled, the eighth left empty (mask %x)", mask);
     CHECK(!strcmp(e->slot[0].name, "AHHH") && !strcmp(e->slot[1].name, "FRESSSH") && !strcmp(e->slot[2].name, "ALPHA") && !strcmp(e->slot[3].name, "BETA") &&
           !strcmp(e->slot[4].name, "DELTA") && !strcmp(e->slot[5].name, "GAMMA"), "the slots: %s %s %s %s %s %s", e->slot[0].name, e->slot[1].name,
           e->slot[2].name, e->slot[3].name, e->slot[4].name, e->slot[5].name);
@@ -323,7 +323,7 @@ static void test_samples(void)
     render_n(e, buf, 2048);
     char js[2048];
     CHECK(peak_of(buf, 2048) == 0.0f, "no samples at all: silence");
-    CHECK(ts_engine_view(e, js, sizeof js) > 0 && strstr(js, "\"n\":\"EMPTY\"") && strstr(js, "\"ld\":\"000000\""), "...and the screen says EMPTY");
+    CHECK(ts_engine_view(e, js, sizeof js) > 0 && strstr(js, "\"n\":\"EMPTY\"") && strstr(js, "\"ld\":\"00000000\""), "...and the screen says EMPTY");
     ts_engine_destroy(e);
 }
 
@@ -539,9 +539,8 @@ static void test_pads(void)
                 cut_ok &= e->notes_held == 1 && e->last_vel == 90 && e->p.sample == 3 && e->p.clip == 5;
                 ts_engine_note(e, note, 0, 0);
                 cut_ok &= e->notes_held == 0;
-            } else if (row == 1) {                                          /* the samples (the last two pads are not used) */
-                if (col < 6) sample_ok &= e->p.sample == col && e->notes_held == 0;
-                else off_ok &= e->p.clip == 5 && e->p.sample == 3 && e->notes_held == 0 && !e->try_valid;
+            } else if (row == 1) {                                          /* the eight samples */
+                sample_ok &= e->p.sample == col && e->notes_held == 0;
                 int s = e->p.sample, l = e->p.clip;
                 ts_engine_note(e, note, 0, 0);
                 off_ok &= e->p.sample == s && e->p.clip == l && e->notes_held == 0;
@@ -574,7 +573,7 @@ static void test_pads(void)
             bad += e->notes_held < 0 || e->notes_held > 1;
         }
     CHECK(cut_ok, "the bottom row (8 pads) is cuts, with their velocity");
-    CHECK(sample_ok, "second row, left to right: Ahhh, Fresssh, User 1, 2, 3, 4");
+    CHECK(sample_ok, "second row, left to right: Ahhh, Fresssh, User 1 to 6");
     CHECK(auto_ok, "Auto (a random clip every bar) is the last pad of the clip rows; the last two pads of the sample row are not used");
     CHECK(gen_ok, "the pad before Auto is Generate: a new clip to try, and it plays");
     CHECK(clip_ok, "the top two rows pick clips 1 to 14, 1-8 on the top row");
@@ -698,8 +697,8 @@ static void test_view(void)
     CHECK(json_num(js, "dr", &v) && fabs(v - 0.3) < 0.01 && json_num(js, "gn", &v) && fabs(v + 3.0) < 0.01 && json_num(js, "ng", &v) && v == 1 && json_num(js, "vv", &v) && v == 1 &&
           json_num(js, "no", &v) && v == 0 && json_num(js, "lk", &v) && v == 1 && json_num(js, "cn", &v) && v == 48, "the controls");
     CHECK(json_num(js, "tp", &v) && v == 0 && !strstr(js, "\"lf\"") && !strstr(js, "\"ls\""), "no transport, and nothing of an LFO");
-    CHECK(json_str(js, "n", s, sizeof s) && !strcmp(s, "TEST") && json_str(js, "sn", s, sizeof s) && !strcmp(s, "TEST|FRESSSH|MY VOICE|USER 2|USER 3|USER 4") &&
-          json_str(js, "ld", s, sizeof s) && !strcmp(s, "101000"), "the sample's name, the six tabs and which are loaded: %s", s);
+    CHECK(json_str(js, "n", s, sizeof s) && !strcmp(s, "TEST") && json_str(js, "sn", s, sizeof s) && !strcmp(s, "TEST|FRESSSH|MY VOICE|USER 2|USER 3|USER 4|USER 5|USER 6") &&
+          json_str(js, "ld", s, sizeof s) && !strcmp(s, "10100000"), "the sample's name, the eight tabs and which are loaded: %s", s);
     CHECK(json_str(js, "w", s, sizeof s) && strlen(s) == 2 * TS_VIEW_COLS && strspn(s, "0123456789abcdef") == strlen(s) &&
           json_str(js, "wr", s, sizeof s) && strlen(s) == 2 * TS_VIEW_COLS && strspn(s, "0123456789abcdef") == strlen(s), "the waveform: 128 columns of peak and of body, two hex digits each");
     CHECK(json_str(js, "lnp", s, sizeof s) && strlen(s) == TS_LANE && json_str(js, "lng", s, sizeof s) && strlen(s) == TS_LANE && strspn(s, "01") == TS_LANE,
@@ -2090,7 +2089,7 @@ static void test_recording(void)
     render_n(e, buf, 4096);
     CHECK(rms_of(buf, 4096) > 0.01, "and it plays");
     ts_engine_view(e, js, sizeof js);
-    CHECK(strstr(js, "\"n\":\"USER 2\"") && strstr(js, "\"ld\":\"100100\"") && json_num(js, "rc", &v) && v == 0, "the screen shows its name, and that it is no longer recording");
+    CHECK(strstr(js, "\"n\":\"USER 2\"") && strstr(js, "\"ld\":\"10010000\"") && json_num(js, "rc", &v) && v == 0, "the screen shows its name, and that it is no longer recording");
 
     /* it was kept as a file, and a fresh start loads it back into the same slot whatever else is there */
     ts_engine_t *f = ts_engine_create(44100.0f);

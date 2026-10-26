@@ -46,7 +46,7 @@ typedef struct {
     const char *extra;          /* raw JSON members for canvas / string entries */
 } pdef_t;
 
-static const char *const o_sample[] = { "Ahhh", "Fresssh", "User 1", "User 2", "User 3", "User 4" };
+static const char *const o_sample[] = { "Ahhh", "Fresssh", "User 1", "User 2", "User 3", "User 4", "User 5", "User 6" };
 static const char *const o_onoff[] = { "Off", "On" };
 static const char *const o_record[] = { "Idle", "Record" };
 static const char *const o_clear[] = { "Idle", "Clear" };
@@ -57,7 +57,7 @@ static const char *const o_genstyle[] = { "Any", "Baby", "Cuts", "Military", "Sc
 static const char *const o_genbars[] = { "1 bar", "2 bars", "4 bars" };
 
 static const pdef_t k_params[P_COUNT] = {
-    [P_SAMPLE]      = { "sample", "Sample", K_ENUM, o_sample, 6, 0, 5, 0, 0, NULL },
+    [P_SAMPLE]      = { "sample", "Sample", K_ENUM, o_sample, 8, 0, 7, 0, 0, NULL },
     [P_TURNTABLE]   = { "turntable", "Turntable", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.005f, NULL },
     [P_DRAG]        = { "drag", "Drag", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.5f, 0.01f, NULL },
     [P_GAIN]        = { "gain", "Gain", K_FLOAT, NULL, 0, -24.0f, 12.0f, 0.0f, 0.5f, NULL },

@@ -21,7 +21,7 @@ Transcription Methodology, TTM).
 
 | | |
 |---|---|
-| **Sample** | six slots: **Ahhh**, **Fresssh**, **User 1-4**, chosen with the second row of pads. Best with samples of one to two seconds, noisy and aggressive, with a little silence at each end |
+| **Sample** | eight slots: **Ahhh**, **Fresssh**, **User 1-6**, chosen with the second row of pads (one pad each). Best with samples of one to two seconds, noisy and aggressive, with a little silence at each end |
 | **Clip** | what plays the scratch for you: **Clip 1-14** (the top two rows of pads), **Auto** (a random other clip every bar), **Try** (the clip you just generated) or **Off**. **Auto by default** |
 | **Drag** (More page) | how quickly the playhead follows. Low is responsive and "digital", high is heavy and "analogue"; the middle is the sweet spot |
 | **Gain** (More page) | -24 to +12 dB |
@@ -163,7 +163,7 @@ the bottom-left, eight to a row, so a clip recorded from the pads plays back the
 | row | pads |
 |---|---|
 | top two | **clips 1 to 14** of the selected sample: 1-8 on the top row, 9-14 below it (tap an empty one to keep the clip you just generated there), then **Generate** and **Auto** (a random clip every bar; tap it again to turn it off) as the last two pads |
-| second | **Ahhh, Fresssh, User 1, 2, 3, 4** (hold an empty one to record into it; hold a User sample to unload it), then two pads not used |
+| second | **Ahhh, Fresssh, User 1 to 6**: the eight samples (hold an empty one to record into it; hold a User sample to unload it) |
 | bottom | 8 cut pads: with a clip running, hold one to cut the sound out; stopped, hold one to play the clip |
 
 Notes outside 36-99 keep the rule above. Turn Pad Grid off for plain notes.
@@ -182,7 +182,7 @@ bar) and, in Auto, the next bar's clip arriving at the bar line. Turn it left to
 ### The screens
 
 Two pages, and the full-screen Pads screen. The first is the picture: the **name of the sample in use** in big letters (with a block and dots under the
-vinyl for the six slots); the waveform (the body of the sound solid, the peaks drawn round it) with the playhead through
+vinyl for the eight slots); the waveform (the body of the sound solid, the peaks drawn round it) with the playhead through
 it, and a tick under it where the clip is sending it; the **vinyl** (the white line starts at 12 o'clock and goes once round
 as the playhead crosses the sample); and the **clip view** along the bottom: the whole clip (2 to 4 bars) in a column each,
 with the playhead's path as a line, the **cuts as blocks**, a tick on every beat (a taller one on each bar) and a cursor
@@ -208,7 +208,7 @@ it also puts back, at once, any pad the Move lights itself (a pressed pad flashe
 their basic tools, which come from the end of "Change the Beat" (Fab 5 Freddy, 1982) and are described as public domain
 (see samples/CREDITS.txt).
 
-**User 1-4** start empty (an empty slot is silent and the screen says EMPTY). Fill them by:
+**User 1-6** start empty (an empty slot is silent and the screen says EMPTY). Fill them by:
 
 - **Recording** from the Move's audio input: **hold an empty User slot's pad** and it records for as long as you hold it (up to four
   seconds); let go and it is kept. (To record again into a slot that has a sample, unload it first.) The title becomes REC with the
@@ -220,7 +220,7 @@ their basic tools, which come from the end of "Change the Beat" (Fab 5 Freddy, 1
   recording with no sound in it is thrown away. It is also made **as loud as Ahhh and
   Fresssh**: its average level (where there is sound) is brought to about -14 dBFS, with at most 24 dB of gain, and the peaks that would
   go over are rounded off by a soft limiter, so a voice from the microphone is not quieter than the built-in samples. It is that slot's sample,
-  and is kept as `user1.wav` .. `user4.wav` in the module's `samples/` folder, so it is there next time (and `scripts/install_move.sh`
+  and is kept as `user1.wav` .. `user6.wav` in the module's `samples/` folder, so it is there next time (and `scripts/install_move.sh`
   leaves those files alone). Which input it hears (the mic or the line in) is whatever the Move
   itself is set to listen to. **To unload a User sample**, hold its pad for a second and a half (a bar fills along the screen and the pad goes red): the slot
   is emptied and the clips you kept for it go too. A recording, or a file you picked (the copy this module made as `userN.wav`), is deleted

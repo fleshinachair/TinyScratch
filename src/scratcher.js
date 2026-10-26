@@ -1,7 +1,7 @@
 /*
  * TinyScratch - the main screen.
  *
- *   top      the name of the sample in use, in big letters (and under the vinyl a dot for each of the six slots)
+ *   top      the name of the sample in use, in big letters (and under the vinyl a dot for each of the eight slots)
  *   middle   the waveform (the body, with the peaks around it) and the playhead through it, and the vinyl: its white
  *            line goes once round as the playhead crosses the sample
  *   lane     the clip view: one bar, a column each, like the clip in Ableton. The playhead's path as a line, the cuts
@@ -118,7 +118,7 @@
 
     /* ---- the picture ---- */
 
-    /* the sample in use, as a title in double-size letters, and under the vinyl a dot for each of the six slots: a block for
+    /* the sample in use, as a title in double-size letters, and under the vinyl a dot for each of the eight slots: a block for
      * the one in use, a pixel for each other that has a sample */
     function textBig(ctx, x, y, s) {
         var str = String(s).toUpperCase();
@@ -137,9 +137,9 @@
         } else {
             textBig(ctx, 0, 0, fit(typeof v.n === "string" && v.n ? v.n : "EMPTY", 13));
         }
-        var loaded = typeof v.ld === "string" ? v.ld : "", cur = clamp(Math.round(num(v.s, 0)), 0, 5);
-        for (var i = 0; i < 6; i++) {
-            var x = 109 + i * 3;
+        var loaded = typeof v.ld === "string" ? v.ld : "", cur = clamp(Math.round(num(v.s, 0)), 0, 7);
+        for (var i = 0; i < 8; i++) {
+            var x = 111 + i * 2;
             if (i === cur) ctx.fillRect(x - 1, 23, 3, 3, 1);
             else if (loaded[i] === "1") px(ctx, x, 24);
         }
@@ -310,13 +310,12 @@
         var row = Math.floor(idx / 8), col = idx % 8, v = st.view || {}, cm = num(v.cm, 0);
         if (row === 0) return st.held[idx] ? COL.cutHot : COL.cut;
         if (row === 1) {
-            if (col < 6) {
+            {
                 if (st.hold && st.hold.ok && st.hold.kind === "sample" && st.hold.n === col) return COL.cut;     /* held to unload: red */
                 if (st.recHold === idx && num(v.rc, 0)) return COL.cut;                           /* held to record: red while it records */
                 if (num(v.s, 0) === col) return COL.white;
                 return typeof v.ld === "string" && v.ld[col] === "1" ? COL.sample : COL.sampleEmpty;
             }
-            if (col === 6) return COL.off;                                            /* (not used) */
             return COL.off;                                                           /* (the last two pads of this row are not used) */
         }
         var n = (3 - row) * 8 + col + 1, cf = typeof v.cf === "string" ? v.cf : "", kp = typeof v.kp === "string" ? v.kp : "";
@@ -526,7 +525,7 @@
             return;
         }
         if (row === 1) {
-            if (col < 6) {
+            {
                 setNow(ctx, "sample", String(col));
                 if (v) v.s = col;
                 var ld = v && typeof v.ld === "string" ? v.ld : "";
@@ -537,7 +536,7 @@
                     st.recHold = idx;
                 }
             }
-            return;                                                             /* (the last two pads of this row are not used: hold an empty slot to record) */
+            return;                                                             /* (hold an empty slot to record) */
         }
         var n = (3 - row) * 8 + col + 1;                       /* the top row is clips 1-8, the one below 9-14, then Generate and Auto */
         if (n === CLIP_PADS + 1) { setNow(ctx, "generate", "1"); if (v) v.cm = CLIP_TRY; return; }

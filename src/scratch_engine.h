@@ -13,7 +13,7 @@
 #include <stdint.h>
 
 #define TS_SAMPLE_RATE   44100.0f
-#define TS_SLOTS         6          /* Ahhh, Fresssh, User 1..4 */
+#define TS_SLOTS         8          /* Ahhh, Fresssh, User 1..6: the eight pads of the sample row */
 #define TS_MAX_SECONDS   10         /* longest sample; scratching works best with 1 to 2 s */
 #define TS_REC_SECONDS   4          /* the longest recording from the audio input (it is cropped to its sound when it is kept) */
 #define TS_REC_MIN       2048       /* a recording shorter than this (about 46 ms) is thrown away */

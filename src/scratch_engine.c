@@ -1612,7 +1612,7 @@ int ts_engine_load_dir(ts_engine_t *e, const char *dir)
     int mask = 0;
     if (!e->slot[0].loaded && load_file(e, 0, dir, "ahhh.wav") == TS_WAV_OK) mask |= 1;
     if (!e->slot[1].loaded && load_file(e, 1, dir, "fresssh.wav") == TS_WAV_OK) mask |= 2;
-    for (int u = 0; u < 4; u++) {                                              /* user1.wav .. user4.wav: User 1 .. 4 */
+    for (int u = 0; u < TS_SLOTS - 2; u++) {                                   /* user1.wav .. user6.wav: User 1 .. 6 */
         char nm[16];
         snprintf(nm, sizeof nm, "user%d.wav", u + 1);
         if (!e->slot[2 + u].loaded && load_file(e, 2 + u, dir, nm) == TS_WAV_OK) mask |= 1 << (2 + u);
@@ -1626,7 +1626,7 @@ int ts_engine_load_dir(ts_engine_t *e, const char *dir)
         while ((de = readdir(d)) != NULL && n < 64) {
             const char *nm = de->d_name;
             if (!is_wav(nm) || strlen(nm) >= TS_NAME_LEN || !strcmp(nm, "ahhh.wav") || !strcmp(nm, "fresssh.wav") || unloaded_listed(e, nm)) continue;
-            if (strlen(nm) == 9 && !strncmp(nm, "user", 4) && nm[4] >= '1' && nm[4] <= '4' && !strcmp(nm + 5, ".wav")) continue;      /* those have their slots */
+            if (strlen(nm) == 9 && !strncmp(nm, "user", 4) && nm[4] >= '1' && nm[4] <= '0' + TS_SLOTS - 2 && !strcmp(nm + 5, ".wav")) continue;      /* those have their slots */
             strcpy(names[n++], nm);
         }
         closedir(d);

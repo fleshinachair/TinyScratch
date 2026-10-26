@@ -124,8 +124,8 @@ fixtures.forEach((v, i) => {
     for (let y = 0; y < 10; y++) rows += a.count(0, y, 40, y) > 0 ? 1 : 0;
     check(rows >= 9, `the letters are ten rows tall (${rows})`);
     // the dots: the slot in use is a block, the others that have a sample a single dot, empty ones nothing
-    check(a.count(108, 23, 110, 25) === 9 && a.on(112, 24) && !a.on(118, 24) && !a.on(121, 24), "slot 1 in use is a block, slot 2 (which has a sample) a dot, empty slots nothing");
-    check(b.count(111, 23, 113, 25) === 9 && b.on(109, 24) && b.count(108, 23, 108, 25) === 0, "moving to slot 2 moves the block");
+    check(a.count(110, 23, 112, 25) === 9 && a.on(113, 24) && !a.on(119, 24) && !a.on(125, 24), "slot 1 in use is a block, slot 2 (which has a sample) a dot, empty slots nothing (eight slots)");
+    check(b.count(112, 23, 114, 25) === 9 && b.on(111, 24) && b.count(110, 23, 110, 25) === 0, "moving to slot 2 moves the block");
     const none = draw(box, Object.assign({}, base, { n: "", ld: "000000" }));
     check(none.count(0, 0, 105, 9) > 25, "no sample: it says so");
     const empty = draw(box, Object.assign({}, base, { n: "EMPTY", s: 3, ld: "100000", w: "00".repeat(128), wr: "00".repeat(128) }));
@@ -228,9 +228,9 @@ fixtures.forEach((v, i) => {
     check(last.size === 32, "all 32 pads painted after a few ticks (" + last.size + ")");
     check(sent.every((p) => p.length === 4 && p[0] === 0x09 && p[1] === 0x90 && p[2] >= 68 && p[2] <= 99 && p[3] >= 0 && p[3] < 128), "LED packets are [0x09, 0x90, 68..99, palette]");
     for (let i = 0; i < 8; i++) check(last.get(68 + i) === C.cut, `cut pad ${i + 1} is ${last.get(68 + i)} (want ${C.cut}): the bottom row`);
-    const second = [C.sample, C.white, C.sampleEmpty, C.sampleEmpty, C.sampleEmpty, C.sampleEmpty];
-    for (let c = 0; c < 6; c++) check(last.get(76 + c) === second[c], `sample pad ${c + 1}: ${last.get(76 + c)} (want ${second[c]}: ${c === 1 ? "in use" : (c === 0 ? "loaded" : "empty")})`);
-    check(last.get(82) === C.off && last.get(83) === C.off && last.get(90) === C.gen && last.get(91) === C.clipAuto, `the two unused pads ${last.get(82)} ${last.get(83)}, Generate ${last.get(90)}, Auto (the last clip pad) ${last.get(91)}`);
+    const second = [C.sample, C.white, C.sampleEmpty, C.sampleEmpty, C.sampleEmpty, C.sampleEmpty, C.sampleEmpty, C.sampleEmpty];
+    for (let c = 0; c < 8; c++) check(last.get(76 + c) === second[c], `sample pad ${c + 1}: ${last.get(76 + c)} (want ${second[c]}: ${c === 1 ? "in use" : (c === 0 ? "loaded" : "empty")})`);
+    check(last.get(82) === C.sampleEmpty && last.get(83) === C.sampleEmpty && last.get(90) === C.gen && last.get(91) === C.clipAuto, `User 5 and 6 (empty) ${last.get(82)} ${last.get(83)}, Generate ${last.get(90)}, Auto (the last clip pad) ${last.get(91)}`);
     const noteOf = (n) => (n <= 8 ? 91 + n : 75 + n);                      // clips 1-8 are the top row, 9-16 the row below it
     for (let n = 1; n <= 16; n++) {
         const want = n === 16 ? C.clipAuto : (n === 15 ? C.gen : (n > 8 ? C.off : (n === 3 ? C.white : C.clip)));
@@ -245,7 +245,7 @@ fixtures.forEach((v, i) => {
     for (let t = 0; t < 40; t++) { ctx.t += 20; b2.canvas_overlay.tick(hostCtx(ctx)); }
     const l2 = new Map();
     for (const p of sent.slice(-400)) l2.set(p[2], p[3]);
-    check(l2.get(78) === C.white && l2.get(77) === C.sample && l2.get(82) === C.off && l2.get(83) === C.off && l2.get(90) === C.gen && l2.get(91) === C.clipAuto && l2.get(noteOf(6)) === C.white && l2.get(noteOf(3)) === C.clip,
+    check(l2.get(78) === C.white && l2.get(77) === C.sample && l2.get(82) === C.sampleEmpty && l2.get(83) === C.sampleEmpty && l2.get(90) === C.gen && l2.get(91) === C.clipAuto && l2.get(noteOf(6)) === C.white && l2.get(noteOf(3)) === C.clip,
         "sample 3 picked, clip 6: the pads follow the view");
     const settle = (v) => {
         b2.canvas_overlay.onValues(ctx, { values: { view: JSON.stringify(Object.assign({}, view, v)) } });
@@ -363,9 +363,12 @@ fixtures.forEach((v, i) => {
     check(has(ctx, "sample", "2") && !has(ctx, "pad_cuts"), "second row, third pad: sample 3 (User 1), and it is not a cut");
     ctx.sets.length = 0;
     pad(68 + 8 + 6, true);
-    check(ctx.sets.length === 0, "second row, seventh: not used");
+    check(has(ctx, "sample", "6") && !has(ctx, "generate") && !has(ctx, "clip_pad"), "second row, seventh: sample 7 (User 5)");
+    pad(68 + 8 + 6, false);
+    ctx.sets.length = 0;
     pad(68 + 8 + 7, true);
-    check(!has(ctx, "record") && !has(ctx, "generate") && !has(ctx, "clip_pad") && !has(ctx, "sample", "7"), "second row, eighth: not used (no Record pad: hold an empty slot)");
+    check(has(ctx, "sample", "7") && !has(ctx, "generate") && !has(ctx, "clip_pad"), "second row, eighth: sample 8 (User 6)");
+    pad(68 + 8 + 7, false);
     pad(68 + 16 + 6, true);
     check(has(ctx, "generate", "1") && !has(ctx, "clip_pad"), "the pad before the last of the clip rows (second row from the top) is Generate");
     pad(68 + 16 + 7, true);
@@ -604,7 +607,7 @@ fixtures.forEach((v, i) => {
         snap[68 + 8 + 7] = 11;                               // the Move lights the last pad of a row green
         cf.t += 5; bf.canvas_overlay.tick(hostCtx(cf));
         const put = sentF.slice(n0).filter((p) => p[2] === 68 + 8 + 7);
-        check(put.length >= 1 && put[0][3] === bf.__tinyscratch.COL.off, "a pad the Move lit is put back in the same tick (" + JSON.stringify(put) + ")");
+        check(put.length >= 1 && put[0][3] === bf.__tinyscratch.COL.sampleEmpty, "a pad the Move lit is put back in the same tick (" + JSON.stringify(put) + ")");
         // a press repaints that pad and the other end of its row straight away
         const n1 = sentF.length;
         bf.canvas_overlay.onMidi(cf, { data: [0x90, 68 + 16 + 0, 100] });
