@@ -1718,9 +1718,10 @@ static uint32_t clip_fnv(const ts_clip_t *c)
 static void test_tempo(void)
 {
     printf("tempo\n");
-    CHECK(ts_steps_per_beat(120) == 4 && ts_steps_per_beat(90) == 4 && ts_steps_per_beat(82) == 4 && ts_steps_per_beat(81.9f) == 6 && ts_steps_per_beat(75) == 6 && ts_steps_per_beat(56) == 6 &&
-          ts_steps_per_beat(55.9f) == 8 && ts_steps_per_beat(50) == 8 && ts_steps_per_beat(0) == 4 && ts_steps_per_beat(NAN) == 4, "steps to the beat: 4 from 82 bpm (so 90 is as it always was), 6 from 56, 8 below; nonsense gives 4");
-    /* clips made before the tempo was looked at, for a few seeds and styles: unchanged at 99 bpm and up */
+    CHECK(ts_steps_per_beat(120) == 4 && ts_steps_per_beat(90) == 4 && ts_steps_per_beat(75) == 4 && ts_steps_per_beat(66) == 4 && ts_steps_per_beat(65.9f) == 6 && ts_steps_per_beat(55) == 6 &&
+          ts_steps_per_beat(45) == 6 && ts_steps_per_beat(44.9f) == 8 && ts_steps_per_beat(40) == 8 && ts_steps_per_beat(0) == 4 && ts_steps_per_beat(NAN) == 4,
+          "steps to the beat: 4 from 66 bpm (so 90 and 75 are as they always were), 6 from 45, 8 below; nonsense gives 4");
+    /* clips made before the tempo was looked at, for a few seeds and styles: unchanged at 66 bpm and up */
     static const uint32_t before[15] = { 1953970742u, 557623256u, 1711664955u, 4219920907u, 4086795089u, 4086795089u, 1724656640u, 2335758686u,
                                           2335758686u, 3515860986u, 236595325u, 236595325u, 4199836569u, 3654799649u, 3654799649u };
     ts_engine_t *e = ts_engine_create(44100.0f);
@@ -1732,17 +1733,18 @@ static void test_tempo(void)
         for (int sl = -1; sl < 2; sl++) {
             if (sl >= 0 && !have) continue;
             uint32_t seed = 7919u * (uint32_t)(k + 3);
-            for (int bi = 0; bi < 5; bi++) {
-                float bpm = bi == 0 ? 120.0f : (bi == 1 ? 140.0f : (bi == 2 ? 99.0f : (bi == 3 ? 90.0f : 82.0f)));
+            for (int bi = 0; bi < 6; bi++) {
+                const float bpms[6] = { 120.0f, 140.0f, 99.0f, 90.0f, 75.0f, 66.0f };
+                float bpm = bpms[bi];
                 ts_clip_generate_for(&c, cfg[k][0], seed, cfg[k][1], sl >= 0 ? &e->slot[sl] : NULL, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f, 0.0f);
                 same &= clip_fnv(&c) == before[k * 3 + (sl + 1)];
                 n_checked++;
             }
         }
-    CHECK(same && n_checked >= 15, "at 82, 90, 99, 120 and 140 bpm the clips are exactly what they were (%d checked)", n_checked);
-    /* at 75 bpm the openings of the fader fall on the triplet grid; the sounds a second are close to those at 120 */
+    CHECK(same && n_checked >= 15, "from 66 to 140 bpm the clips are exactly what they were (%d checked)", n_checked);
+    /* at 55 bpm the openings of the fader fall on the triplet grid; the sounds a second are close to those at 120 */
     double near = 0.0, edges = 0.0, on16 = 0.0, tones[3] = { 0, 0, 0 }, beats[3] = { 0, 0, 0 };
-    const float bp[3] = { 120.0f, 75.0f, 50.0f };
+    const float bp[3] = { 120.0f, 55.0f, 40.0f };
     for (int bi = 0; bi < 3; bi++)
         for (uint32_t seed = 1; seed <= 40; seed++) {
             ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, NULL, 0.0f, bp[bi], 0.0f, 0.0f);
@@ -1758,26 +1760,29 @@ static void test_tempo(void)
                 }
             }
         }
-    double rate120 = tones[0] / beats[0] * 120.0 / 60.0, rate75 = tones[1] / beats[1] * 75.0 / 60.0, rate50 = tones[2] / beats[2] * 50.0 / 60.0;
-    CHECK(edges > 100 && near / edges > 0.9 && on16 / edges < 0.8, "at 75 bpm the fader's openings are on the triplet grid (%.0f%%), not on the sixteenths (%.0f%%)", 100 * near / edges, 100 * on16 / edges);
-    CHECK(rate75 > 0.7 * rate120 && rate75 < 1.3 * rate120 && rate50 > 0.65 * rate120 && rate50 < 1.3 * rate120,
-          "the sounds a second hold up at slow tempi (120 bpm: %.1f, 75: %.1f, 50: %.1f) instead of falling in step", rate120, rate75, rate50);
-    /* a forward at a slow tempo runs at the sample's own speed: a one second sample, 75 bpm (0.8 s a beat) */
+    double rate120 = tones[0] / beats[0] * 120.0 / 60.0, rate55 = tones[1] / beats[1] * 55.0 / 60.0, rate40 = tones[2] / beats[2] * 40.0 / 60.0;
+    CHECK(edges > 100 && near / edges > 0.9 && on16 / edges < 0.8, "at 55 bpm the fader's openings are on the triplet grid (%.0f%%), not on the sixteenths (%.0f%%)", 100 * near / edges, 100 * on16 / edges);
+    CHECK(rate55 > 0.6 * rate120 && rate55 < 1.3 * rate120 && rate40 > 0.5 * rate120 && rate40 < 1.3 * rate120,
+          "the sounds a second hold up at slow tempi (120 bpm: %.1f, 55: %.1f, 40: %.1f) instead of falling in step", rate120, rate55, rate40);
+    /* a forward at a slow tempo runs at the sample's own speed: a one second sample, half a second of it at a time */
     load_sample(e, 3, "one.wav", SMP_SINE, 0.7f, 44100);
-    int found = 0, speed_ok = 1;
-    for (uint32_t seed = 1; seed <= 30; seed++) {
-        ts_clip_generate_for(&c, GS_ANY, seed * 104729u, 4, &e->slot[3], 1.0f, 75.0f, 0.0f, 0.0f);
-        for (int i = 0; i + 3 * (TS_CLIP_RES / 4) < c.n; i += TS_CLIP_RES / 16) {
-            int j = i + 3 * (TS_CLIP_RES / 4), op = 0;
-            for (int q = i; q < j; q++) op += c.gate[q] != 0;
-            if ((int)c.pos[j] - (int)c.pos[i] < (int)(0.55 * 65535) || op < (j - i) * 7 / 10) continue;
-            double secs = (j - i) / (double)TS_CLIP_RES * 60.0 / 75.0, spd = ((double)c.pos[j] - (double)c.pos[i]) / 65535.0 / secs;     /* sample lengths a second */
-            found++;
-            speed_ok &= spd > 0.6 && spd < 1.5;
-            break;
+    for (int ti = 0; ti < 2; ti++) {
+        const float tempo = ti ? 55.0f : 75.0f;
+        int found = 0, speed_ok = 1, w = (int)(0.5 * tempo / 60.0 * TS_CLIP_RES);
+        for (uint32_t seed = 1; seed <= 30; seed++) {
+            ts_clip_generate_for(&c, GS_ANY, seed * 104729u, 4, &e->slot[3], 1.0f, tempo, 0.0f, 0.0f);
+            for (int i = 0; i + w < c.n; i += TS_CLIP_RES / 16) {
+                int j = i + w, op = 0;
+                for (int q = i; q < j; q++) op += c.gate[q] != 0;
+                if ((int)c.pos[j] - (int)c.pos[i] < (int)(0.33 * 65535) || op < (j - i) * 7 / 10) continue;
+                double secs = (j - i) / (double)TS_CLIP_RES * 60.0 / tempo, spd = ((double)c.pos[j] - (double)c.pos[i]) / 65535.0 / secs;     /* sample lengths a second */
+                found++;
+                speed_ok &= spd > 0.55 && spd < 1.5;
+                break;
+            }
         }
+        CHECK(found > 20 && speed_ok, "forwards at %.0f bpm run at about the sample's own speed (%d clips with one)", tempo, found);
     }
-    CHECK(found > 20 && speed_ok, "forwards at 75 bpm run at about the sample's own speed (%d clips with one)", found);
     ts_engine_destroy(e);
 }
 
