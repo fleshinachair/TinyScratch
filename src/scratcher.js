@@ -38,7 +38,7 @@
     /* Move palette indices (Schwung shared/constants.mjs) */
     /* Move palette indices: the numbers are indices into the Move's own colour table, which is not the order of Schwung's names for
      * them (checked against what the Move really lit: 120 white, 127 red, 7 yellow, 123 grey, 11 and 13 greens, 23 purple, 3 orange). */
-    var COL = { off: 0, white: 120, cut: 127, cutHot: 120, clip: 23, clipNow: 13, sample: 7, sampleEmpty: 123, clipAuto: 11, clipNo: 127, gen: 3, rec: 123 };
+    var COL = { off: 0, white: 120, cut: 127, cutHot: 120, clip: 23, clipNow: 13, sample: 7, sampleEmpty: 123, clipAuto: 11, clipNo: 127, gen: 3 };
 
     /* The dials on the Pads screen, as on the module's first page: the first one opens this screen, so it does nothing here. Everything
      * else (the sample, the clip, Generate) is on the pads; Style and Length are what Generate makes. Turntable, Drag, Gain and Record
@@ -317,7 +317,7 @@
                 return typeof v.ld === "string" && v.ld[col] === "1" ? COL.sample : COL.sampleEmpty;
             }
             if (col === 6) return COL.off;                                            /* (not used) */
-            return num(v.rc, 0) ? COL.cut : COL.rec;                                  /* the last pad of this row is Record: red while it records */
+            return COL.off;                                                           /* (the last two pads of this row are not used) */
         }
         var n = (3 - row) * 8 + col + 1, cf = typeof v.cf === "string" ? v.cf : "", kp = typeof v.kp === "string" ? v.kp : "";
         if (n === CLIP_PADS + 1) return cm === CLIP_TRY ? COL.white : COL.gen;         /* Generate */
@@ -536,12 +536,8 @@
                     if (v) v.rc = 1;
                     st.recHold = idx;
                 }
-            } else if (col === 7) {                                                 /* the last pad: Record, on and off */
-                var on = v && num(v.rc, 0) ? 0 : 1;
-                setNow(ctx, "record", String(on));
-                if (v) v.rc = on;
             }
-            return;
+            return;                                                             /* (the last two pads of this row are not used: hold an empty slot to record) */
         }
         var n = (3 - row) * 8 + col + 1;                       /* the top row is clips 1-8, the one below 9-14, then Generate and Auto */
         if (n === CLIP_PADS + 1) { setNow(ctx, "generate", "1"); if (v) v.cm = CLIP_TRY; return; }

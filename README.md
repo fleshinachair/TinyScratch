@@ -163,7 +163,7 @@ the bottom-left, eight to a row, so a clip recorded from the pads plays back the
 | row | pads |
 |---|---|
 | top two | **clips 1 to 14** of the selected sample: 1-8 on the top row, 9-14 below it (tap an empty one to keep the clip you just generated there), then **Generate** and **Auto** (a random clip every bar; tap it again to turn it off) as the last two pads |
-| second | **Ahhh, Fresssh, User 1, 2, 3, 4**, one pad not used, then **Record** (tap to start, tap to stop) |
+| second | **Ahhh, Fresssh, User 1, 2, 3, 4** (hold an empty one to record into it; hold a User sample to unload it), then two pads not used |
 | bottom | 8 cut pads: with a clip running, hold one to cut the sound out; stopped, hold one to play the clip |
 
 Notes outside 36-99 keep the rule above. Turn Pad Grid off for plain notes.
@@ -211,14 +211,13 @@ their basic tools, which come from the end of "Change the Beat" (Fab 5 Freddy, 1
 **User 1-4** start empty (an empty slot is silent and the screen says EMPTY). Fill them by:
 
 - **Recording** from the Move's audio input: **hold an empty User slot's pad** and it records for as long as you hold it (up to four
-  seconds); let go and it is kept. Or pick a User slot and tap the **Record** pad (the last pad of the second row, red while it
-  records), then tap it again or let it stop by itself. The title becomes REC with the seconds so far and a bar for the input level.
+  seconds); let go and it is kept. (To record again into a slot that has a sample, unload it first.) The title becomes REC with the
+  seconds so far and a bar for the input level.
   A recording is **cropped to its sound** before it is kept: the silence before and after it goes (a few milliseconds are left before
   the first sound so its attack is whole), the first 40 ms and the last 60 ms are not listened to at all (the press and the let-go of the
   pad, which the Move's microphone, right beside the pads, hears), and one with no sound in it is thrown away. It is that slot's sample,
   and is kept as `user1.wav` .. `user4.wav` in the module's `samples/` folder, so it is there next time (and `scripts/install_move.sh`
-  leaves those files alone). If Ahhh or Fresssh
-  is selected, Record takes the first empty User slot. Which input it hears (the mic or the line in) is whatever the Move
+  leaves those files alone). Which input it hears (the mic or the line in) is whatever the Move
   itself is set to listen to. **To unload a User sample**, hold its pad for a second and a half (a bar fills along the screen and the pad goes red): the slot
   is emptied and the clips you kept for it go too. A recording, or a file you picked (the copy this module made as `userN.wav`), is deleted
   with it; a file you copied into the module's `samples/` folder yourself is never deleted, just listed in `unloaded.txt` so it is not
