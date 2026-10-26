@@ -32,7 +32,7 @@ static const char *const k_recipe_file = "/data/UserData/schwung/modules/sound_g
 
 enum { K_ENUM, K_FLOAT, K_INT, K_CANVAS, K_STRING, K_FILEPATH };
 enum { P_SAMPLE, P_TURNTABLE, P_DRAG, P_GAIN, P_NOTE_GATE, P_VEL_VOL, P_NORMALISE,
-       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_SAMPLE_FILE,
+       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_SAMPLE_FILE,
        P_PAD_RAW, P_PAD_CUTS,
        P_VIEW, P_WAVE, P_FULL, P_STATUS,
        P_COUNT };
@@ -75,6 +75,7 @@ static const pdef_t k_params[P_COUNT] = {
     [P_GEN_STYLE]   = { "gen_style", "Style", K_ENUM, o_genstyle, 12, 0, 11, 0, 0, NULL },
     [P_GEN_BARS]    = { "gen_bars", "Length", K_ENUM, o_genbars, 3, 0, 2, 1, 0, NULL },
     [P_GEN_FWD]     = { "gen_fwd", "Forwards", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.05f, NULL },
+    [P_SWING]       = { "swing", "Swing", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.02f, NULL },
     [P_CLIP_DEPTH]  = { "clip_depth", "Clip Depth", K_FLOAT, NULL, 0, 0.0f, 2.0f, 1.0f, 0.02f, NULL },
     [P_CLIP_OFFSET] = { "clip_offset", "Clip Offset", K_FLOAT, NULL, 0, -0.5f, 0.5f, 0.0f, 0.01f, NULL },
     [P_CLIP_PAD]    = { "clip_pad", "Clip Pad", K_INT, NULL, 0, 0, 16, 0, 1, NULL },
@@ -108,8 +109,8 @@ static const pdef_t k_params[P_COUNT] = {
  * here: Clip Depth and Clip Offset shape how far and where the clip moves the playhead, Style and Length are what Generate makes.
  * The first dial opens the Pads screen (and does nothing while you are on it). What the Pads screen writes (the raw pads, the cuts,
  * the sample, the clip) is set from the screen itself, which can set any parameter: it is not listed. */
-static const int pg_root[] = { P_VIEW, P_WAVE, P_FULL, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SAMPLE_FILE };
-static const int kn_root[] = { P_FULL, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD };
+static const int pg_root[] = { P_VIEW, P_WAVE, P_FULL, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_SAMPLE_FILE };
+static const int kn_root[] = { P_FULL, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING };
 /* the one other page: how heavy the playhead is, the level, the note gate and velocity. (The Turntable has no dial: the clips move the
  * playhead. Recording and unloading a sample are on the
  * pads. Lock, Normalise, Cut From and
@@ -139,6 +140,7 @@ static float pget(const ts_params_t *p, int i)
     case P_GEN_STYLE: return (float)p->gen_style;
     case P_GEN_BARS: return (float)p->gen_bars;
     case P_GEN_FWD: return p->gen_fwd;
+    case P_SWING: return p->swing;
     case P_CLIP_DEPTH: return p->clip_depth;
     case P_CLIP_OFFSET: return p->clip_offset;
     default: return 0.0f;
@@ -163,6 +165,7 @@ static void pset(ts_params_t *p, int i, float v)
     case P_GEN_STYLE: p->gen_style = (int)lrintf(v); break;
     case P_GEN_BARS: p->gen_bars = (int)lrintf(v); break;
     case P_GEN_FWD: p->gen_fwd = v; break;
+    case P_SWING: p->swing = v; break;
     case P_CLIP_DEPTH: p->clip_depth = v; break;
     case P_CLIP_OFFSET: p->clip_offset = v; break;
     default: break;                                     /* the screen, the status string and the Save button are not values */

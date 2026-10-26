@@ -63,6 +63,7 @@ typedef struct {
     int   gen_style;            /* what Generate makes: 0 any, or one of the styles above */
     int   gen_bars;             /* 0, 1, 2: a clip of 1, 2 or 4 bars */
     float gen_fwd;              /* 0..1: how many of Any's bars have a forward (the record let go through the word); 0 = none */
+    float swing;                /* 0..1: the second sixteenth of each pair played late, as clips play (1 = triplets); 0 = straight */
     float clip_depth;           /* 0..2: how far a clip moves the playhead (1 = as written; the movement is scaled, then offset) */
     float clip_offset;          /* -0.5..0.5: shifts the whole clip along the sample */
 } ts_params_t;
@@ -179,6 +180,9 @@ void ts_engine_pad_cuts(ts_engine_t *e, unsigned mask);
 
 /* Clips. Position 0..1 and whether the sound is cut in, at a beat of the song (a clip loops over its length). */
 float ts_clip_pos(const ts_engine_t *e, int clip, double beat);
+/* Swing: where in a clip to read at a moment of the song. Each eighth note is split long-short instead of half and half: the first
+ * sixteenth takes 0.5 + swing/6 of it (two thirds at 1, a triplet feel). The playhead path and the fader move together; no clip changes. */
+double ts_swing_time(double beat, float swing);
 int   ts_clip_cut(const ts_engine_t *e, int clip, double beat);
 int   ts_clip_auto(const ts_engine_t *e, long long bar);      /* which clip (1..) auto plays in this bar of the song */
 int   ts_engine_load_clips(ts_engine_t *e, const char *path);  /* clips.bin: the clip count, or TS_WAV_ERR_*; file I/O */

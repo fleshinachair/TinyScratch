@@ -1706,6 +1706,40 @@ static void test_attacks(void)
 }
 
 /* the module as it ships: no hand-written clips on any pad */
+/* Swing: as a clip plays, each eighth is split long-short; the clip itself does not change */
+static void test_swing(void)
+{
+    printf("swing\n");
+    CHECK(ts_swing_time(1.25, 0.0f) == 1.25 && ts_swing_time(7.0, 1.0f) == 7.0 && fabs(ts_swing_time(7.5, 1.0f) - 7.5) < 1e-9, "no swing: as it was; the beats and the eighths stay where they are");
+    CHECK(fabs(ts_swing_time(2.0 + 1.0 / 3.0, 1.0f) - 2.25) < 1e-9 && fabs(ts_swing_time(2.0 + 0.5 * 0.5833333333, 0.5f) - 2.25) < 1e-6,
+          "full swing: the second sixteenth comes two thirds of the way through the eighth (a triplet); half swing, 0.583 of it");
+    int mono = 1;
+    for (int i = 1; i < 400; i++) mono &= ts_swing_time(i * 0.01, 0.7f) > ts_swing_time((i - 1) * 0.01, 0.7f);
+    CHECK(mono, "time only moves forward, whatever the swing");
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    load_sample(e, 0, "dc.wav", SMP_DC, 0.5f, 44100);
+    ts_params_t p = e->p;
+    p.clip = 2; p.drag = 0.0f; p.note_gate = 1; p.swing = 1.0f; p.pads = 0;
+    ts_engine_set_params(e, &p);
+    static float blk[128];
+    double beat = 4.0;
+    int follows = 1;
+    for (int b = 0; b < 200; b++) {
+        ts_engine_sync_beat(e, beat);
+        ts_engine_render(e, blk, 128);
+        double want = (double)e->slot[0].lo + (double)(e->slot[0].hi - e->slot[0].lo) * (double)ts_clip_pos(e, 2, ts_swing_time(e->mclock, 1.0f));
+        follows &= fabs(e->target - want) < 1e-6;
+        beat += 128.0 * 120.0 / (60.0 * 44100.0);
+    }
+    CHECK(follows, "a clip plays at the swung time");
+    char js[8192];
+    ts_engine_view(e, js, sizeof js);
+    CHECK(strstr(js, "\"sw\":1.00") != NULL, "the view says the swing");
+    p.swing = 9.0f; ts_engine_set_params(e, &p);
+    CHECK(e->p.swing == 1.0f, "...clamped");
+    ts_engine_destroy(e);
+}
+
 static void test_empty_pads(void)
 {
     printf("as shipped: empty pads\n");
@@ -2783,7 +2817,7 @@ static void test_plugin_pickers(void)
      * the sample, the clip and everything Generate does are on the pads, so they are on no dial; the rest is on the More page */
     const char *root_end = strstr(hier, "\"knobs\"");                           /* the root level's params come before its knobs */
     int at_root = root_end != NULL;
-    const char *names[] = { "\"pads_screen\"", "\"gen_style\"", "\"gen_bars\"", "\"gen_fwd\"", "\"sample_file\"" };
+    const char *names[] = { "\"pads_screen\"", "\"gen_style\"", "\"gen_bars\"", "\"gen_fwd\"", "\"swing\"", "\"sample_file\"" };
     for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
         const char *at = strstr(hier, names[i]);
         at_root &= at != NULL && at < root_end;
@@ -2796,11 +2830,11 @@ static void test_plugin_pickers(void)
     dials /= 2;
     for (size_t i = 0; i < sizeof names / sizeof names[0] && !bad_dial; i++) {
         const char *at = strstr(root_end, names[i]);
-        int wanted = i != 4;                                                               /* (the first dial opens the Pads screen; the browser is not a dial) */
+        int wanted = i != 5;                                                               /* (the first dial opens the Pads screen; the browser is not a dial) */
         bad_dial |= wanted != (at != NULL && at < knobs_end);
     }
-    CHECK(dials == 4 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
-          "the root has four dials (the opener, Style, Length and Forwards), none of them the sample or clip, and the LFO and Sync pages are gone (%d dials)", dials);
+    CHECK(dials == 5 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
+          "the root has five dials (the opener, Style, Length, Forwards and Swing), none of them the sample or clip, and the LFO and Sync pages are gone (%d dials)", dials);
     api->destroy_instance(h);
 }
 
@@ -2910,6 +2944,7 @@ int main(int argc, char **argv)
     test_attacks();
     test_delete_any();
     test_empty_pads();
+    test_swing();
     test_pad_mutes_clip();
     test_pad_runs_clip();
     test_unload_files();

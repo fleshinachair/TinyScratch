@@ -206,6 +206,15 @@ static const ts_clip_t *clip_at(const ts_engine_t *e, int clip)
     return bank_clip(e, e->p.sample, clip);
 }
 
+double ts_swing_time(double beat, float swing)
+{
+    if (!(swing > 0.0f) || !isfinite(beat)) return beat;
+    double a = 0.5 + (double)clampf(swing, 0.0f, 1.0f) / 6.0;                     /* the first sixteenth's share of the eighth */
+    double n = floor(beat / 0.5), f = beat / 0.5 - n;
+    double x = f < a ? 0.5 * f / a : 0.5 + 0.5 * (f - a) / (1.0 - a);
+    return (n + x) * 0.5;
+}
+
 float ts_clip_pos(const ts_engine_t *e, int clip, double beat)
 {
     const ts_clip_t *k = clip_at(e, clip);
@@ -1296,6 +1305,7 @@ void ts_params_default(ts_params_t *p)
     p->gen_style = 0;
     p->gen_bars = 1;                     /* two bars */
     p->gen_fwd = 0.0f;                   /* no forwards unless asked for */
+    p->swing = 0.0f;                     /* straight */
     p->clip_depth = 1.0f;
     p->clip_offset = 0.0f;
 }
@@ -1316,6 +1326,7 @@ void ts_params_sanitize(ts_params_t *p)
     p->gen_style = clampi(p->gen_style, 0, TS_GEN_STYLES - 1);
     p->gen_bars = clampi(p->gen_bars, 0, 2);
     p->gen_fwd = isfinite(p->gen_fwd) ? clampf(p->gen_fwd, 0.0f, 1.0f) : 0.0f;
+    p->swing = isfinite(p->swing) ? clampf(p->swing, 0.0f, 1.0f) : 0.0f;
     p->clip_depth = isfinite(p->clip_depth) ? clampf(p->clip_depth, 0.0f, 2.0f) : 1.0f;
     p->clip_offset = isfinite(p->clip_offset) ? clampf(p->clip_offset, -0.5f, 0.5f) : 0.0f;
 }
@@ -1917,7 +1928,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         if (e->hand_hold > 0) e->hand_hold--;
         if (e->hand_hold > 0 || !live) e->target = e->man;
         else if (clip > 0) {
-            double v = (double)ts_clip_pos(e, clip, e->mclock) * (double)p->clip_depth + (double)p->clip_offset;     /* the Depth and Offset dials */
+            double v = (double)ts_clip_pos(e, clip, ts_swing_time(e->mclock, p->swing)) * (double)p->clip_depth + (double)p->clip_offset;     /* Swing, Depth and Offset */
             v = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
             e->target = native ? v : (double)s->lo + (double)(s->hi - s->lo) * v;
         }
@@ -1932,8 +1943,9 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         /* open: the clip says so while it runs, and a held cutting note or pad shuts it (the pads are the fader on top of the clip);
          * with no clip a held note opens the sound, and Note Gate off means "always heard". */
         int open;
-        if (running && clip > 0) open = ts_clip_cut(e, clip, e->mclock) && !(p->note_gate && held);        /* the pads are the fader: hold one to cut the clip out */
-        else if (live && clip > 0) open = ts_clip_cut(e, clip, e->mclock);          /* a pad held with the transport stopped runs the clip, cuts and all */
+        const double ct = ts_swing_time(e->mclock, p->swing);                      /* (the clip's own time, swung) */
+        if (running && clip > 0) open = ts_clip_cut(e, clip, ct) && !(p->note_gate && held);        /* the pads are the fader: hold one to cut the clip out */
+        else if (live && clip > 0) open = ts_clip_cut(e, clip, ct);                  /* a pad held with the transport stopped runs the clip, cuts and all */
         else open = !p->note_gate || held;
         float want = open ? 1.0f : 0.0f;
         if (e->gate < want) { e->gate += ramp; if (e->gate > want) e->gate = want; }
@@ -1996,12 +2008,12 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     jw(&j, "\",\"ld\":\"");
     for (int i = 0; i < TS_SLOTS; i++) jw(&j, "%c", e->slot[i].loaded ? '1' : '0');
     jw(&j, "\",\"x\":%d,\"tx\":%d,\"p\":%.4f,\"tt\":%.3f,\"vl\":%.2f,\"dr\":%.2f,\"gn\":%.1f,\"ng\":%d,\"vv\":%d,\"no\":%d,\"lk\":%d,"
-           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"w\":\"",
+           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"w\":\"",
        x, tx, e->pos, (double)p->turntable, (double)e->vel_out, (double)p->drag, (double)p->gain_db, p->note_gate, p->vel_to_vol, p->normalise, p->lock,
        p->cut_from, e->gate > 0.5f, e->notes_held + e->pad_held, e->transport, e->lane_col, p->clip ? e->clip_now : 0, p->clip, e->running, e->last_note, e->pad_raw > 0, lane_beats, e->nclips,
        e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
        e->try_valid, e->try_valid ? e->try_recipe.style : 0, e->view_seq,
-       (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd);
+       (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing);
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->pk[c] : 0);       /* the waveform: peak, then body */
     jw(&j, "\",\"wr\":\"");
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->rms[c] : 0);
@@ -2033,8 +2045,9 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
         for (int c = 0; c < TS_LANE && j.len >= 0; c++) {
             double beat = start + ((double)c + 0.5) * w / (double)TS_LANE;
             int clip = p->clip == TS_CLIP_AUTO ? ts_clip_auto(e, (long long)floor(beat / (double)TS_LANE_BEATS)) : p->clip;     /* in auto, the next bar's clip when the window reaches it */
-            jw(&j, "%02x", clip > 0 ? clampi((int)(ts_clip_pos(e, clip, beat) * 255.0f + 0.5f), 0, 255) : 0);
-            gates[c] = clip > 0 && ts_clip_cut(e, clip, beat) ? '1' : '0';
+            double sb = ts_swing_time(beat, p->swing);
+            jw(&j, "%02x", clip > 0 ? clampi((int)(ts_clip_pos(e, clip, sb) * 255.0f + 0.5f), 0, 255) : 0);
+            gates[c] = clip > 0 && ts_clip_cut(e, clip, sb) ? '1' : '0';
         }
         gates[TS_LANE] = 0;
         jw(&j, "\",\"zg\":\"%s\"", gates);
