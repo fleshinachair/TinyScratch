@@ -198,11 +198,7 @@ void ts_clip_generate(ts_clip_t *out, int style, uint32_t seed, int bars);
 /* The same, for a sample: each bar's strokes start where the sample has an attack (the start of its sound, the start of a word), the way a
  * DJ places the record, and the positions are the sample's own (the clip is "native": tag 3). With no sample it is the plain one above. */
 void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm, float fin, float echo);     /* fwd: 0..1, forwards in Any */
-/* The song's tempo shapes "Any": a hand moves at about the same real speed whatever the tempo, so a slow song gets more notes to the beat.
- * From 66 bpm up the phrase is on sixteenths (4 to the beat); from 45 to 66 on sixteenth triplets (6 to the beat), and below 45 on
- * thirty-seconds (8 to the beat). The switch points are low on purpose: sixteenths at 90 and 75 bpm (4 to 5 sounds a second) were
- * right, and triplets there (6 to 7 a second, strokes at nearly twice the sample's own speed) were far too busy. A bar is always four beats, so a clip still fits the song. */
-int ts_steps_per_beat(float bpm);
+/* (bpm is the song's tempo; only Finish uses it, to play the sound through at its own speed. Any is on sixteenths at every tempo.) */
 int  ts_engine_generate(ts_engine_t *e);               /* a new "try" clip from the Generate settings; plays it; returns its style */
 int  ts_engine_keep(ts_engine_t *e, int pad);          /* the try clip on a clip pad of the selected sample (0: the first free one); the pad, or -1 */
 void ts_engine_select_sample(ts_engine_t *e, int sample);   /* another sample: its own clip pads, and the clip it last had selected */
