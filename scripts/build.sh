@@ -30,6 +30,7 @@ echo "== cross compiler: ${CROSSCC[*]}"
 cp samples/*.wav "$OUT/samples/"
 cp src/scratcher.js src/waveform.js "$OUT/"          # the screens (canvas scripts)
 cp clips/recipes.txt "$OUT/recipes.txt"              # the clips every new instance starts with (more are kept on the Move)
+cp clips/kept.bin "$OUT/kept.bin"                    # ...and their saved data, so they sound exactly as they were made
 
 # sanity: ELF, 64-bit, little-endian, machine 0xB7 (aarch64), exports the entry point
 magic=$(od -An -tx1 -N4 "$OUT/dsp.so" | tr -d ' \n')

@@ -1118,12 +1118,12 @@ static void test_clip_files(void)
           "Ahhh, pad 1: the playhead is the data, and the clip loops over its own length (8 beats)");
     CHECK(ts_clip_cut(e, 1, 0.5) == 1 && ts_clip_cut(e, 1, 1.5) == 0 && ts_clip_cut(e, 1, 8.5) == 1, "...and the cuts are the notes");
     CHECK(ts_clip_pos(e, 3, 1.0) == 0.0f && ts_clip_cut(e, 3, 1.0) == 0, "(pad 3 has nothing)");
-    CHECK(ts_engine_clear_clip(e, 1) == -1 && ts_engine_clear_clip(e, 2) == -1 && bank_clip(e, 0, 1) && bank_clip(e, 0, 2) && !e->removed[0][0],
-          "imported clips are read-only: they cannot be deleted");
-    {
-        char vjs[8192], ro[64];
-        ts_engine_view(e, vjs, sizeof vjs);
-        CHECK(json_str(vjs, "ro", ro, sizeof ro) && !strncmp(ro, "1100000000000000", 16), "...and the view says which pads those are (%s)", ro);
+    {                                                                          /* no clip is read-only: an imported one can be deleted, from its pad only, and it stays gone */
+        ts_engine_t *e2 = ts_engine_create(44100.0f);
+        ts_engine_load_clips(e2, path);
+        CHECK(ts_engine_clear_clip(e2, 1) == 0 && !bank_clip(e2, 0, 1) && bank_clip(e2, 0, 2) && e2->removed[0][0] && bank_clip(e2, 1, 1),
+              "an imported clip can be deleted: from that pad of that sample only");
+        ts_engine_destroy(e2);
     }
     ts_params_t p = e->p;
     p.sample = 1;
@@ -3002,6 +3002,31 @@ static void test_recipes_library(void)
     remove(path);
 }
 
+/* the library every new install starts with (clips/recipes.txt and clips/kept.bin): three clips each on Ahhh and Fresssh, as kept, deletable */
+static void test_shipped_clips(void)
+{
+    printf("shipped clips\n");
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_engine_load_dir(e, "samples");
+    ts_engine_set_recipes_path(e, "clips/recipes.txt");
+    int n = ts_engine_load_recipes(e);
+    int all = 1, data = 1;
+    for (int sm = 0; sm < 2; sm++)
+        for (int pad = 1; pad <= 3; pad++) {
+            const ts_clip_t *c = bank_clip(e, sm, pad);
+            all &= c != NULL && e->kept[e->bank[sm][pad - 1] - 1].used;
+            data &= c != NULL && c->n > 0;
+        }
+    CHECK(n == 6 && all && data, "a new install has three kept clips on pads 1-3 of Ahhh and of Fresssh (%d)", n);
+    CHECK(!e->recipes_dirty, "...all from their saved data (kept.bin), none made again");
+    ts_engine_set_recipes_path(e, TDIR "/rec/shipped_check.txt");               /* (so that deleting writes nowhere near the shipped files) */
+    ts_params_t p = e->p;
+    p.sample = 1;
+    ts_engine_set_params(e, &p);
+    CHECK(ts_engine_clear_clip(e, 2) == 0 && !bank_clip(e, 1, 2) && bank_clip(e, 1, 1) && bank_clip(e, 1, 3) && bank_clip(e, 0, 2), "any of them can be deleted, from its own pad only");
+    ts_engine_destroy(e);
+}
+
 static void test_plugin_generate(void)
 {
     printf("plugin generate\n");
@@ -3257,6 +3282,7 @@ int main(int argc, char **argv)
     test_tempo();
     test_pad_mutes_clip();
     test_cues();
+    test_shipped_clips();
     test_pad_runs_clip();
     test_unload_files();
     test_load_file_and_zoom();

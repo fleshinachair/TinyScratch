@@ -326,8 +326,6 @@ int ts_engine_load_clips(ts_engine_t *e, const char *path)
     if (err) { TS_FREE(tmp); return TS_WAV_ERR_FORMAT; }
     memset(e->clip_data, 0, sizeof(ts_clip_t) * TS_POOL);
     memcpy(e->clip_data, tmp, sizeof(ts_clip_t) * (size_t)count);
-    memset(e->ro, 0, sizeof e->ro);
-    for (int c = 0; c < count; c++) e->ro[c] = 1;                                 /* these are somebody's work: they can be played, not changed or deleted */
     memset(e->bank, 0, sizeof e->bank);
     memset(e->kept, 0, sizeof e->kept);                                          /* (the ones you kept come from the library afterwards) */
     int next[TS_SLOTS] = { 0 };
@@ -1184,7 +1182,7 @@ void ts_engine_clip_pad(ts_engine_t *e, int n)
 static int drop_pad(ts_engine_t *e, int sample, int pad, int all)
 {
     int idx = e->bank[sample][pad - 1] - 1;
-    if (idx < 0 || (!all && !e->kept[idx].used) || e->ro[idx]) return -1;       /* (an imported clip is read-only) */
+    if (idx < 0 || (!all && !e->kept[idx].used)) return -1;
     e->bank[sample][pad - 1] = 0;                                               /* off its pad first */
     __sync_synchronize();
     if (e->kept[idx].used) {
@@ -1216,7 +1214,7 @@ static int restore_kept_from(ts_engine_t *e, int sample, int pad, int style, uin
     if (find_recipe(e, sample, clampi(style, 0, TS_GEN_STYLES - 1), bars, seed) > 0) return -2;            /* it is there already */
     if (pad >= 1 && pad <= TS_CLIP_PADS && e->bank[sample][pad - 1] > 0) {     /* a clip you kept takes its pad back from a built-in one (they come and go with clips.bin) */
         int idx = e->bank[sample][pad - 1] - 1;
-        if (!e->kept[idx].used && !e->ro[idx]) { e->bank[sample][pad - 1] = 0; e->removed[sample][pad - 1] = 1; }
+        if (!e->kept[idx].used) { e->bank[sample][pad - 1] = 0; e->removed[sample][pad - 1] = 1; }
     }
     if (pad < 1 || pad > TS_CLIP_PADS || e->bank[sample][pad - 1] != 0) pad = first_free_pad(e, sample);     /* its pad is taken: the next free one */
     if (pad < 0) return -1;
@@ -1338,7 +1336,7 @@ int ts_engine_load_recipes(ts_engine_t *e)
         unsigned long seed;
         if (line[0] == '-') {                                                   /* "- sample pad": a built-in or imported clip taken off its pad */
             if (sscanf(line, "- %d %d", &sample, &pad) == 2 && sample >= 0 && sample < TS_SLOTS && pad >= 1 && pad <= TS_NUM_CLIPS &&
-                e->bank[sample][pad - 1] > 0 && !e->kept[e->bank[sample][pad - 1] - 1].used && !e->ro[e->bank[sample][pad - 1] - 1]) {
+                e->bank[sample][pad - 1] > 0 && !e->kept[e->bank[sample][pad - 1] - 1].used) {
                 e->bank[sample][pad - 1] = 0;
                 e->removed[sample][pad - 1] = 1;
             }
@@ -2257,8 +2255,6 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     for (int k = 0; k < TS_NUM_CLIPS && j.len >= 0; k++) jw(&j, "%c", bank_clip(e, p->sample, k + 1) ? '1' : '0');
     jw(&j, "\",\"kp\":\"");
     for (int k = 0; k < TS_NUM_CLIPS && j.len >= 0; k++) jw(&j, "%c", (e->bank[p->sample][k] > 0 && e->kept[e->bank[p->sample][k] - 1].used) ? '1' : '0');
-    jw(&j, "\",\"ro\":\"");                                                  /* and which are read-only (imported) */
-    for (int k = 0; k < TS_NUM_CLIPS && j.len >= 0; k++) jw(&j, "%c", (e->bank[p->sample][k] > 0 && e->ro[e->bank[p->sample][k] - 1]) ? '1' : '0');
     jw(&j, "\",\"zm\":%d", e->zoom);
     if (e->zoom > 0) {                       /* the zoomed view: the next few beats of the clip, round the clock, a column each */
         const double w = e->zoom == 1 ? 4.0 : (e->zoom == 2 ? 2.0 : 1.0), start = e->mclock - 0.25 * w;

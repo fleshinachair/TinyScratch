@@ -37,24 +37,24 @@ if ! "${SSH[@]}" true; then
 fi
 echo "== installing to $RUSER@$HOST:$DEST"
 # the samples folder is ours: it is rewritten whole, so nothing from an older build is left to load as a User slot. The
-# exception is what you recorded on the Move (user1.wav .. user4.wav), which is kept.
-"${SSH[@]}" "mkdir -p $DEST/samples && for f in $DEST/samples/*.wav; do case \"\$f\" in */user[1-4].wav) ;; *) rm -f \"\$f\" ;; esac; done; rm -f $DEST/deck.js $DEST/clips.bin"
+# exception is what you recorded on the Move (user1.wav .. user6.wav), which is kept.
+"${SSH[@]}" "mkdir -p $DEST/samples && for f in $DEST/samples/*.wav; do case \"\$f\" in */user[1-6].wav) ;; *) rm -f \"\$f\" ;; esac; done; rm -f $DEST/deck.js $DEST/clips.bin"
 "${SCP[@]}" "$SRC/dsp.so" "$SRC/module.json" "$SRC/scratcher.js" "$SRC/waveform.js" "$RUSER@$HOST:$DEST/"
 "${SCP[@]}" "$SRC"/samples/*.wav "$RUSER@$HOST:$DEST/samples/"
 files=(dsp.so module.json scratcher.js waveform.js)
 # clips imported from a Live Pack you own (tools/import_clips.py): your own copy, kept out of the repository (local/ is gitignored).
-# They are read-only on the Move: they can be played, not deleted.
+# (Like every clip, they can be deleted on the Move.)
 if [ -f local/clips.bin ]; then
     "${SCP[@]}" local/clips.bin "$RUSER@$HOST:$DEST/"
     files+=(clips.bin)
 else
     echo "   (no local/clips.bin: only the built-in clips. python tools/import_clips.py <a Live Pack .alp> makes it)"
 fi
-# the default clips are recipes (clips/recipes.txt). The Move keeps the library you have made there, so it is only sent
-# when the Move has none yet.
+# the default clips are recipes (clips/recipes.txt) and their saved data (clips/kept.bin). The Move keeps the library you have made
+# there, so they are only sent when the Move has none yet.
 if ! "${SSH[@]}" "[ -f $DEST/recipes.txt ]"; then
-    "${SCP[@]}" "$SRC/recipes.txt" "$RUSER@$HOST:$DEST/"
-    files+=(recipes.txt)
+    "${SCP[@]}" "$SRC/recipes.txt" "$SRC/kept.bin" "$RUSER@$HOST:$DEST/"
+    files+=(recipes.txt kept.bin)
 fi
 for f in "$SRC"/samples/*.wav; do files+=("samples/$(basename "$f")"); done
 if [ "$AUDITION" = 1 ] && ls samples_audition/*.wav >/dev/null 2>&1; then

@@ -708,25 +708,6 @@ fixtures.forEach((v, i) => {
         bt.canvas_overlay.onMidi(c, { data: [0x90, auto, 100] }); bt.canvas_overlay.onMidi(c, { data: [0x80, auto, 0] });
         check(c.sets.filter(([k]) => k === "clip").slice(-1)[0][1] === "17", "...and again on");
     }
-    // an imported clip is read-only: held, it says so and stays
-    {
-        const bt = load(() => true), c = makeCtx({ values: {} });
-        const vw = Object.assign({}, fixtures[0], { s: 0, cm: 0, cf: "1100000000000000", kp: "0000000000000000", ro: "1100000000000000" });
-        const feed = () => bt.canvas_overlay.onValues(c, { values: { view: JSON.stringify(vw) } });
-        bt.canvas_overlay.onOpen(c);
-        feed();
-        c.sets.length = 0;
-        c.clear(); bt.canvas_overlay.draw(hostCtx(c));
-        const idle = c.count(0, 56, 127, 57);
-        bt.canvas_overlay.onMidi(c, { data: [0x90, 68 + 24, 100] });
-        c.t += 700; feed();
-        c.clear(); bt.canvas_overlay.draw(hostCtx(c));
-        check(c.count(0, 56, 127, 57) === idle, "no countdown for a read-only clip");
-        c.t += 1500; feed();
-        c.clear(); bt.canvas_overlay.draw(hostCtx(c));
-        check(!has(c, "clip_delete") && c.count(0, 57, 127, 63) > 30, "held to the end: nothing is deleted, and the screen says why");
-        bt.canvas_overlay.onMidi(c, { data: [0x80, 68 + 24, 0] });
-    }
     // with no clip playing the bottom row of pads are cues: another colour, and ticks on the waveform where each drops the needle
     {
         const T = box.__tinyscratch, base = Object.assign({}, fixtures[0], { cu: "10203040506070" + "7f", cq: -1 });

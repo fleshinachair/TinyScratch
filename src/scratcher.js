@@ -497,7 +497,7 @@
         var now = ctx.now();
         if (now - st.hold.since >= HOLD_MS) {
             var h = st.hold;
-            if (!h.ok) st.toast = { text: h.kind === "sample" ? "AHHH AND FRESSSH STAY" : "THIS CLIP IS READ-ONLY", until: now + TOAST_MS };
+            if (!h.ok) st.toast = { text: "AHHH AND FRESSSH STAY", until: now + TOAST_MS };
             else if (h.kind === "sample") {
                 setNow(ctx, "sample", String(h.n));
                 setNow(ctx, "clear", "1");
@@ -561,8 +561,7 @@
         setNow(ctx, "clip_pad", String(n));
         if (v) v.cm = n;
         var cf = v && typeof v.cf === "string" ? v.cf : "";
-        var ro = v && typeof v.ro === "string" ? v.ro : "";
-        if (cf[n - 1] === "1") st.hold = { kind: "clip", n: n, idx: idx, since: ctx.now(), ok: ro[n - 1] !== "1" };     /* held: the clip is deleted (not an imported one) */
+        if (cf[n - 1] === "1") st.hold = { kind: "clip", n: n, idx: idx, since: ctx.now(), ok: true };     /* held: the clip is deleted */
     }
 
     var hooks = {

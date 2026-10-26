@@ -124,7 +124,6 @@ typedef struct ts_engine {
     int         lane_col;
     int         lane_len;       /* the beats the clip view spans: the clip's length, or a bar */
 
-    uint8_t     ro[TS_POOL];                   /* 1: imported from clips.bin: read-only, it cannot be deleted */
     ts_clip_t   clip_data[TS_POOL + 2];        /* every clip; the last two are the "try" clip, built in the one not playing, then switched to */
     int         bank[TS_SLOTS][TS_NUM_CLIPS];  /* each sample has its own clip pads: a clip's place in clip_data, plus one; 0 is an empty pad */
     int         bank_last[TS_SLOTS];           /* the clip each sample last had selected (a pad, 0 off, auto, try) */
@@ -209,7 +208,7 @@ int  ts_engine_generate(ts_engine_t *e);               /* a new "try" clip from 
 int  ts_engine_keep(ts_engine_t *e, int pad);          /* the try clip on a clip pad of the selected sample (0: the first free one); the pad, or -1 */
 void ts_engine_select_sample(ts_engine_t *e, int sample);   /* another sample: its own clip pads, and the clip it last had selected */
 void ts_engine_clip_pad(ts_engine_t *e, int n);        /* a clip pad: play it; empty while the try clip is playing: keep it there; else nothing plays */
-int  ts_engine_clear_clip(ts_engine_t *e, int slot);   /* delete a clip (0: the selected one); -1 for an empty pad or an imported (read-only) clip. The other pads stay where they are */
+int  ts_engine_clear_clip(ts_engine_t *e, int slot);   /* delete a clip (0: the selected one); -1 for an empty pad. The other pads stay where they are */
 int  ts_engine_restore_kept(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars);   /* (made with Forwards at 75%) */   /* the pad, -1 for an error, -2 if that sample already has it */
 /* The kept clips are a library in a file, so the next instance (on any track) has them: one line per clip, "sample pad style bars seed". */
 void ts_engine_set_recipes_path(ts_engine_t *e, const char *path);
