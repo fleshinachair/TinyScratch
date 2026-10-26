@@ -1776,25 +1776,54 @@ void ts_engine_clear_slot(ts_engine_t *e, int slot)
     if (e && slot >= 2 && slot < TS_SLOTS) e->clear_req = slot + 1;
 }
 
-/* A recording is cropped to its sound before it is kept: the silence before and after it goes (a few milliseconds are left before the
- * first sound so its attack is whole, a little more after the last), and in a recording long enough the first 40 ms and the last 60 ms
- * are not listened to at all: that is where the press and the let-go of a pad are, which the Move's microphone, right beside the pads,
- * hears. The part kept is [*a, *b); empty if there is no sound. */
+/* A recording is cropped to its sound before it is kept. The first 60 ms and the last 100 ms are not listened to at all (the press and the
+ * let-go of a pad, which the Move's microphone, right beside the pads, hears). The rest is read in 10 ms steps: a step is sound if it is
+ * louder than a tenth of the loudest step; steps of sound less than 60 ms apart are one stretch; and a short stretch (under 40 ms) at
+ * either end with a gap after it is a click, not the voice, and is dropped. What is kept runs from 5 ms before the first stretch to 20 ms
+ * after the last. [*a, *b); empty if there is no sound. */
 static void rec_crop(const float *x, int n, float sr, int *a, int *b)
 {
-    int head = (int)(0.04f * sr), tail = (int)(0.06f * sr), s = 0, t = n;
+    int head = (int)(0.06f * sr), tail = (int)(0.10f * sr), s = 0, t = n;
     *a = *b = 0;
     if (!x || n <= 0) return;
     if (n > head + tail + TS_REC_MIN) { s = head; t = n - tail; }
-    float peak = 0.0f;
-    for (int i = s; i < t; i++) peak = fmaxf(peak, fabsf(x[i]));
-    float thr = fmaxf(0.06f * peak, 0.002f);
-    int first = s, last = t - 1;
-    while (first < t && fabsf(x[first]) < thr) first++;
-    if (first >= t) return;                                                      /* nothing but silence */
-    while (last > first && fabsf(x[last]) < thr) last--;
+    const int w = (int)(0.01f * sr) > 1 ? (int)(0.01f * sr) : 1;
+    int nw = (t - s) / w;
+    if (nw < 1) { nw = 1; }
+    float env[(TS_REC_SECONDS * 192000) / 441 + 8];
+    if (nw > (int)(sizeof env / sizeof env[0])) nw = (int)(sizeof env / sizeof env[0]);
+    float top = 0.0f;
+    for (int k = 0; k < nw; k++) {
+        double sq = 0.0;
+        int i0 = s + k * w, i1 = i0 + w < t ? i0 + w : t;
+        for (int i = i0; i < i1; i++) sq += (double)x[i] * x[i];
+        env[k] = i1 > i0 ? (float)sqrt(sq / (i1 - i0)) : 0.0f;
+        top = fmaxf(top, env[k]);
+    }
+    float thr = fmaxf(0.1f * top, 0.003f);
+    int r0[256], r1[256], nr = 0;                                                  /* the stretches of sound, in steps, [r0, r1) */
+    for (int k = 0; k < nw; k++) {
+        if (env[k] < thr) continue;
+        if (nr > 0 && k - r1[nr - 1] < 6) { r1[nr - 1] = k + 1; continue; }       /* (less than 60 ms from the last: the same stretch) */
+        if (nr < 256) { r0[nr] = k; r1[nr] = k + 1; nr++; }
+    }
+    if (nr == 0) return;                                                          /* nothing but silence */
+    int f = 0, l = nr - 1;
+    while (f < l && r1[f] - r0[f] < 4) f++;                                       /* a click at the start */
+    while (l > f && r1[l] - r0[l] < 4) l--;                                       /* ...and at the end */
+    int first = s + r0[f] * w, last = s + r1[l] * w;
     *a = first - (int)(0.005f * sr) > s ? first - (int)(0.005f * sr) : s;
-    *b = last + 1 + (int)(0.02f * sr) < t ? last + 1 + (int)(0.02f * sr) : t;
+    *b = last + (int)(0.02f * sr) < t ? last + (int)(0.02f * sr) : t;
+}
+
+/* A cut in the middle of a wave is a click of its own: the kept recording fades in over 3 ms and out over 10 ms. */
+static void rec_fade(float *x, int n, float sr)
+{
+    int fi = (int)(0.003f * sr), fo = (int)(0.01f * sr);
+    if (fi > n / 4) fi = n / 4;
+    if (fo > n / 4) fo = n / 4;
+    for (int i = 0; i < fi; i++) x[i] *= (float)i / (float)fi;
+    for (int i = 0; i < fo; i++) x[n - 1 - i] *= (float)i / (float)fo;
 }
 
 /* A recording is made as loud as Ahhh and Fresssh before it is kept. Those two sit at about -14 dBFS on average with their peaks 12 to 13 dB
@@ -1869,6 +1898,7 @@ void ts_engine_service(ts_engine_t *e)
             if (buf) {
                 memcpy(buf, e->rec_buf + c0, (size_t)n * sizeof(float));
                 rec_loudness(buf, n);
+                rec_fade(buf, n, e->sr);
                 ts_slot_t t;
                 memset(&t, 0, sizeof t);
                 analyse(&t, buf, n);

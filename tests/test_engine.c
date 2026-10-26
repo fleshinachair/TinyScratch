@@ -2080,7 +2080,7 @@ static void test_recording(void)
     CHECK(e->slot[3].loaded && e->slot[3].len == 5120 && e->pend_ready == 0 && strcmp(e->slot[3].name, "USER 2") == 0,
           "...the audio thread swaps it in (%d frames, %s)", e->slot[3].len, e->slot[3].name);
     {
-        float g1 = e->slot[3].data[100] / (0.5f * sinf(0.05f * 100.0f)), g2 = e->slot[3].data[133] / (0.5f * sinf(0.05f * 133.0f));
+        float g1 = e->slot[3].data[300] / (0.5f * sinf(0.05f * 300.0f)), g2 = e->slot[3].data[333] / (0.5f * sinf(0.05f * 333.0f));      /* (past the 3 ms fade in) */
         double sq = 0.0;
         for (int i = 0; i < e->slot[3].len; i++) sq += (double)e->slot[3].data[i] * e->slot[3].data[i];
         double rms = sqrt(sq / e->slot[3].len);
@@ -2116,7 +2116,7 @@ static void test_recording(void)
     render_n(e, buf, 128);
     int parked = 0;
     for (int i = 0; i < TS_SLOTS + 2; i++) parked += e->garbage[i] != NULL;
-    CHECK(e->slot[3].len == 176400 - 1764 - 2646 && parked == 1, "recording over a sample replaces it (less the first 40 ms and the last 60 ms: the pad's press and let-go); the old data waits for the service call, not freed on the audio thread (%d)", e->slot[3].len);
+    CHECK(e->slot[3].len == 176400 - 2646 - 4410 && parked == 1, "recording over a sample replaces it (less the first 60 ms and the last 100 ms: the pad's press and let-go); the old data waits for the service call, not freed on the audio thread (%d)", e->slot[3].len);
     ts_engine_service(e);
     parked = 0;
     for (int i = 0; i < TS_SLOTS + 2; i++) parked += e->garbage[i] != NULL;
@@ -2148,6 +2148,29 @@ static void test_recording(void)
         ts_engine_service(e);
         render_n(e, buf, 128);
         CHECK(e->slot[3].len == len, "a recording of nothing but the taps is thrown away; the sample already there stays");
+    }
+
+    /* clicks a little way in from either end (past what is skipped), with silence between them and the voice, are dropped; the ends fade */
+    {
+        ts_engine_rec_start(e);
+        static float blk4[128];
+        int total = 0;
+        for (int b = 0; b < 414; b++) {                                         /* 1.2 s: a click at 0.15 s, the voice 0.4-0.8 s, a click at 1.0 s */
+            for (int i = 0; i < 128; i++, total++) {
+                double t = total / 44100.0;
+                float cv = (t >= 0.4 && t < 0.8) ? 0.5f * sinf(0.07f * (float)total) : 0.0003f * sinf(0.3f * (float)total);
+                if ((t >= 0.150 && t < 0.153) || (t >= 1.000 && t < 1.003)) cv = 0.7f;
+                blk4[i] = cv;
+            }
+            ts_engine_feed_input(e, blk4, 128);
+        }
+        ts_engine_rec_stop(e);
+        ts_engine_service(e);
+        render_n(e, buf, 128);
+        int len = e->slot[3].len;
+        const float *d = e->slot[3].data;
+        CHECK(len > (int)(0.40 * 44100) && len < (int)(0.44 * 44100), "the clicks either side of the voice are dropped (%.3f s kept)", len / 44100.0);
+        CHECK(d && fabsf(d[0]) < 1e-6f && fabsf(d[len - 1]) < 1e-6f, "and the ends fade in and out, so the cut itself does not click");
     }
 
     /* a quiet voice with sharp peaks comes out as loud as Ahhh and Fresssh, its peaks rounded off, never past full scale */

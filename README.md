@@ -213,9 +213,11 @@ their basic tools, which come from the end of "Change the Beat" (Fab 5 Freddy, 1
 - **Recording** from the Move's audio input: **hold an empty User slot's pad** and it records for as long as you hold it (up to four
   seconds); let go and it is kept. (To record again into a slot that has a sample, unload it first.) The title becomes REC with the
   seconds so far and a bar for the input level.
-  A recording is **cropped to its sound** before it is kept: the silence before and after it goes (a few milliseconds are left before
-  the first sound so its attack is whole), the first 40 ms and the last 60 ms are not listened to at all (the press and the let-go of the
-  pad, which the Move's microphone, right beside the pads, hears), and one with no sound in it is thrown away. It is also made **as loud as Ahhh and
+  A recording is **cropped to its sound** before it is kept: the first 60 ms and the last 100 ms are not listened to at all (the press
+  and the let-go of the pad, which the Move's microphone, right beside the pads, hears); the rest is read in 10 ms steps, the silence
+  before and after the sound goes (5 ms are left before it so its attack is whole, 20 ms after), and a short burst at either end with a
+  gap after it (a click, under 40 ms) is dropped. The ends fade in over 3 ms and out over 10 ms so the cut itself does not click, and a
+  recording with no sound in it is thrown away. It is also made **as loud as Ahhh and
   Fresssh**: its average level (where there is sound) is brought to about -14 dBFS, with at most 24 dB of gain, and the peaks that would
   go over are rounded off by a soft limiter, so a voice from the microphone is not quieter than the built-in samples. It is that slot's sample,
   and is kept as `user1.wav` .. `user4.wav` in the module's `samples/` folder, so it is there next time (and `scripts/install_move.sh`
