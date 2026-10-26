@@ -1,0 +1,7 @@
+ahhh.wav, fresssh.wav
+
+The two classic scratch sounds "Ahhh" and "Fresssh": the basic tools of a scratch DJ. They first appeared at the end of
+"Change the Beat" by Fab 5 Freddy (1982) and are considered public domain. Credit: Fab 5 Freddy, "Change the Beat".
+
+Any clip data imported with tools/import_clips.py is someone else's work, is NOT part of this repository, and stays in
+local/ (gitignored).

@@ -1,0 +1,4 @@
+build/
+# public-domain audition samples: fetched by scripts/fetch_audition_samples.sh, pushed by scripts/install_move.sh
+samples_audition/
+local/
