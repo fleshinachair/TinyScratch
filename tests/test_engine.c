@@ -58,6 +58,7 @@ static void t_free(void *p)
 #define TS_CALLOC(n) t_calloc(n)
 #define TS_FREE(p) t_free(p)
 
+#define TS_BUILTINS_ON_PADS 1          /* the tests are written round the eight hand-written clips on Ahhh's and Fresssh's pads */
 #include "../src/scratch_engine.c"
 #include "../src/schwung_plugin.c"
 
@@ -1704,6 +1705,23 @@ static void test_attacks(void)
     ts_engine_destroy(e);
 }
 
+/* the module as it ships: no hand-written clips on any pad */
+static void test_empty_pads(void)
+{
+    printf("as shipped: empty pads\n");
+    ts_builtins_on_pads = 0;
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    load_sample(e, 0, "ahhh.wav", SMP_SINE, 0.7f, 44100);
+    int any = 0;
+    for (int s = 0; s < TS_SLOTS; s++) for (int pad = 1; pad <= TS_NUM_CLIPS; pad++) any |= e->bank[s][pad - 1] != 0;
+    CHECK(!any && e->nclips == 0, "every sample starts with empty pads");
+    CHECK(ts_clip_auto(e, 3) == 0, "...so Auto has nothing to play");
+    ts_engine_generate(e);
+    CHECK(ts_engine_keep(e, 0) == 1 && PADKEPT(e, 1) && e->nclips == 1, "the first clip you keep goes on pad 1");
+    ts_engine_destroy(e);
+    ts_builtins_on_pads = 1;
+}
+
 static void test_delete_any(void)
 {
     printf("deleting any clip\n");
@@ -2891,6 +2909,7 @@ int main(int argc, char **argv)
     test_unload_drops_clips();
     test_attacks();
     test_delete_any();
+    test_empty_pads();
     test_pad_mutes_clip();
     test_pad_runs_clip();
     test_unload_files();

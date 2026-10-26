@@ -55,9 +55,9 @@ picks among the clips on the selected sample's pads. With two to choose from it 
 shuffle, so none comes twice running and all are heard before any comes round again. It depends only on the bar number,
 so it stays with the song when the transport jumps. **An empty pad plays nothing**: select one and the scratching stops.
 
-**Where the clips come from.** There are eight built-in one-bar clips (a baby, a slow stroke, chirps, flares, an orbit, a
-transform, three strokes to the bar, a backwards one), on the pads of Ahhh and Fresssh (a User sample starts with empty pads), and
-the clips you keep from the generator (below). A fresh install also starts with a handful of kept clips (`clips/recipes.txt`) on the pads after the built-in ones.
+**Where the clips come from.** Every sample starts with empty pads: the clips are the ones you generate and keep (below). (The eight
+hand-written one-bar clips of earlier versions are no longer on the pads; they remain in the code for the tests.) A fresh install starts with
+a handful of kept clips (`clips/recipes.txt`).
 Longer, hand-made clips can be imported from an Ableton Live Pack you own: `python tools/import_clips.py "your pack.alp"`
 reads every MIDI clip that has playhead (Turntable) automation and notes into `local/clips.bin` (each goes on the pads of the
 sample it was made for, by its name). That file is someone else's work, so it stays out of the repository (`local/` is
@@ -130,8 +130,8 @@ All of it is on the pads, apart from the two settings (**Style**, **Length** and
   sample. The other pads stay where they are (pads do not shuffle up, so what you have learned stays put) and the next clip you keep
   takes the first free pad. (The Move's Delete button is read by the host itself and is never passed to a screen, so it cannot be used.)
 - **A kept clip is kept exactly**: its own playhead path and fader are saved beside the recipes (`kept.bin`), so it sounds the same
-  whatever the generator becomes later; only a clip with no saved data is made again from its recipe. A kept clip keeps its pad: if a
-  built-in clip comes back onto it (when imported clips are taken away), the kept clip wins and the built-in one goes.
+  whatever the generator becomes later; only a clip with no saved data is made again from its recipe. A kept clip keeps its pad: a built-in
+  or imported clip never pushes it off.
 - **Kept clips are a library**: a kept clip is stored as a tiny recipe (sample, pad, style, seed, length) in `recipes.txt` in the
   module's folder, so every new instance of the module, on any track, starts with the same clips on the same pads, and
   `scripts/install_move.sh` leaves the file alone. (An instance that is already running picks up changes the next time it loads.)

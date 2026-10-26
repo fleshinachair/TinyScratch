@@ -171,6 +171,14 @@ static void recount_clips(ts_engine_t *e)
     e->auto_bar = -1;
 }
 
+/* The eight hand-written clips are not on any pad any more: every sample starts with empty pads, for the clips you generate and keep. They
+ * stay in the code (built in the pool, on no pad) because the tests are written round them; the test build puts them back on the pads of
+ * Ahhh and Fresssh with TS_BUILTINS_ON_PADS. */
+#ifndef TS_BUILTINS_ON_PADS
+#define TS_BUILTINS_ON_PADS 0
+#endif
+static int ts_builtins_on_pads = TS_BUILTINS_ON_PADS;
+
 static void clips_builtin(ts_engine_t *e)
 {
     memset(e->clip_data, 0, sizeof e->clip_data);
@@ -187,7 +195,7 @@ static void clips_builtin(ts_engine_t *e)
             k->gate[i] = (uint8_t)builtin_cut(c + 1, units);
         }
     }
-    for (int s = 0; s < 2; s++) for (int c = 0; c < TS_BUILTIN_CLIPS; c++) e->bank[s][c] = c + 1;      /* Ahhh and Fresssh have them; a User sample starts with empty pads */
+    if (ts_builtins_on_pads) for (int s = 0; s < 2; s++) for (int c = 0; c < TS_BUILTIN_CLIPS; c++) e->bank[s][c] = c + 1;
     recount_clips(e);
 }
 
