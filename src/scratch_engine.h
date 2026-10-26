@@ -65,6 +65,7 @@ typedef struct {
     float gen_fwd;              /* 0..1: how many of Any's bars have a forward (the record let go through the word); 0 = none */
     float swing;                /* 0..1: the second sixteenth of each pair played late, as clips play (1 = triplets); 0 = straight */
     float gen_fin;              /* 0..1: how often a clip ends with the whole sample playing through at its own speed, then a pull back; 0 = never */
+    float gen_echo;             /* 0..1: how often a bar of Any holds an echo scratch (a stab repeated four times, each at a lower level); 0 = never */
     float clip_depth;           /* 0..2: how far a clip moves the playhead (1 = as written; the movement is scaled, then offset) */
     float clip_offset;          /* -0.5..0.5: shifts the whole clip along the sample */
 } ts_params_t;
@@ -81,7 +82,7 @@ typedef struct {
 } ts_slot_t;
 
 /* A generated clip is kept as its recipe: the same recipe makes the same clip. */
-typedef struct { int used, style, bars; uint32_t seed; int fwd; int bpm; int fin; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100; bpm: the song's tempo */
+typedef struct { int used, style, bars; uint32_t seed; int fwd; int bpm; int fin; int echo; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100; bpm: the song's tempo */
 
 typedef struct ts_engine {
     float       sr;
@@ -185,6 +186,8 @@ float ts_clip_pos(const ts_engine_t *e, int clip, double beat);
  * sixteenth takes 0.5 + swing/6 of it (two thirds at 1, a triplet feel). The playhead path and the fader move together; no clip changes. */
 double ts_swing_time(double beat, float swing);
 int   ts_clip_cut(const ts_engine_t *e, int clip, double beat);
+/* The fader's level, 0..1: a clip's gate is 0 shut, 1 fully open, and 2 to 7 the lower levels an echo scratch steps down through. */
+float ts_clip_level(const ts_engine_t *e, int clip, double beat);
 int   ts_clip_auto(const ts_engine_t *e, long long bar);      /* which clip (1..) auto plays in this bar of the song */
 int   ts_engine_load_clips(ts_engine_t *e, const char *path);  /* clips.bin: the clip count, or TS_WAV_ERR_*; file I/O */
 
@@ -194,7 +197,7 @@ int   ts_engine_load_clips(ts_engine_t *e, const char *path);  /* clips.bin: the
 void ts_clip_generate(ts_clip_t *out, int style, uint32_t seed, int bars);
 /* The same, for a sample: each bar's strokes start where the sample has an attack (the start of its sound, the start of a word), the way a
  * DJ places the record, and the positions are the sample's own (the clip is "native": tag 3). With no sample it is the plain one above. */
-void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm, float fin);     /* fwd: 0..1, forwards in Any */
+void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm, float fin, float echo);     /* fwd: 0..1, forwards in Any */
 /* The song's tempo shapes "Any": a hand moves at about the same real speed whatever the tempo, so a slow song gets more notes to the beat.
  * From 99 bpm up the phrase is on sixteenths (4 to the beat); from 73 to 99 on sixteenth triplets (6 to the beat), and below 73 on
  * thirty-seconds (8 to the beat): the steps a second stay close to those at 120 (the switch points are where the two rates either side

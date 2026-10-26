@@ -1454,7 +1454,7 @@ static void test_generator(void)
         int none = 0, all = 0;                                                    /* the Forwards setting: 0 none, 1 every bar */
         for (uint32_t seed = 1; seed <= 40; seed++) {
             for (int pass = 0; pass < 2; pass++) {
-                ts_clip_generate_for(&ph, GS_ANY, seed * 7919u, 4, NULL, pass ? 1.0f : 0.0f, 120.0f, 0.0f);
+                ts_clip_generate_for(&ph, GS_ANY, seed * 7919u, 4, NULL, pass ? 1.0f : 0.0f, 120.0f, 0.0f, 0.0f);
                 int found = 0;
                 for (int i = 0; i + 3 * (TS_CLIP_RES / 4) < ph.n; i += TS_CLIP_RES / 16) {
                     int j = i + 3 * (TS_CLIP_RES / 4), op = 0;
@@ -1685,7 +1685,7 @@ static void test_attacks(void)
     static ts_clip_t c;
     int tagged = 1, at_attack = 1, both = 0;
     for (uint32_t seed = 1; seed <= 60; seed++) {
-        ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, &e->slot[3], 0.75f, 120.0f, 0.0f);
+        ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, &e->slot[3], 0.75f, 120.0f, 0.0f, 0.0f);
         tagged &= c.tag == 3;
         int hit0 = 0, hit1 = 0;
         for (int bar = 0; bar < 4; bar += 2) {                                 /* (a phrase starts on bars 1 and 3) */
@@ -1699,7 +1699,7 @@ static void test_attacks(void)
     }
     CHECK(tagged && at_attack, "every phrase starts on one of the attacks, in the sample's own positions");
     CHECK(both > 5, "and a four-bar clip visits both of them now and then (%d of 60)", both);
-    ts_clip_generate_for(&c, GS_BABY, 5, 2, NULL, 0.0f, 120.0f, 0.0f);
+    ts_clip_generate_for(&c, GS_BABY, 5, 2, NULL, 0.0f, 120.0f, 0.0f, 0.0f);
     CHECK(c.tag == 0, "with no sample it is the plain generator (not native)");
     ts_engine_destroy(e);
 }
@@ -1734,7 +1734,7 @@ static void test_tempo(void)
             uint32_t seed = 7919u * (uint32_t)(k + 3);
             for (int bi = 0; bi < 3; bi++) {
                 float bpm = bi == 0 ? 120.0f : (bi == 1 ? 140.0f : 99.0f);
-                ts_clip_generate_for(&c, cfg[k][0], seed, cfg[k][1], sl >= 0 ? &e->slot[sl] : NULL, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f);
+                ts_clip_generate_for(&c, cfg[k][0], seed, cfg[k][1], sl >= 0 ? &e->slot[sl] : NULL, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f, 0.0f);
                 same &= clip_fnv(&c) == before[k * 3 + (sl + 1)];
                 n_checked++;
             }
@@ -1745,7 +1745,7 @@ static void test_tempo(void)
     const float bp[3] = { 120.0f, 75.0f, 60.0f };
     for (int bi = 0; bi < 3; bi++)
         for (uint32_t seed = 1; seed <= 40; seed++) {
-            ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, NULL, 0.0f, bp[bi], 0.0f);
+            ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, NULL, 0.0f, bp[bi], 0.0f, 0.0f);
             beats[bi] += c.len;
             double step = TS_CLIP_RES / (double)ts_steps_per_beat(bp[bi]);
             for (int i = 0; i < c.n; i++) {
@@ -1766,7 +1766,7 @@ static void test_tempo(void)
     load_sample(e, 3, "one.wav", SMP_SINE, 0.7f, 44100);
     int found = 0, speed_ok = 1;
     for (uint32_t seed = 1; seed <= 30; seed++) {
-        ts_clip_generate_for(&c, GS_ANY, seed * 104729u, 4, &e->slot[3], 1.0f, 75.0f, 0.0f);
+        ts_clip_generate_for(&c, GS_ANY, seed * 104729u, 4, &e->slot[3], 1.0f, 75.0f, 0.0f, 0.0f);
         for (int i = 0; i + 3 * (TS_CLIP_RES / 4) < c.n; i += TS_CLIP_RES / 16) {
             int j = i + 3 * (TS_CLIP_RES / 4), op = 0;
             for (int q = i; q < j; q++) op += c.gate[q] != 0;
@@ -1791,7 +1791,7 @@ static void test_finish(void)
     int ends = 0, speed_ok = 1, shut = 1, none_at_0 = 0, n = 40;
     for (uint32_t seed = 1; seed <= (uint32_t)n; seed++) {
         for (int pass = 0; pass < 2; pass++) {
-            ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 2, &e->slot[3], 0.0f, 120.0f, pass ? 1.0f : 0.0f);
+            ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 2, &e->slot[3], 0.0f, 120.0f, pass ? 1.0f : 0.0f, 0.0f);
             const int q = TS_CLIP_RES / 4, last_bar = 16 * q;
             int a = last_bar + 10 * q, b = last_bar + 13 * q, op = 0;         /* three sixteenths of the play-out, clear of the turns at its ends */
             for (int i = a; i < b; i++) op += c.gate[i] != 0;
@@ -1811,6 +1811,61 @@ static void test_finish(void)
     CHECK(speed_ok, "...at the sample's own speed (0.125 sample lengths a sixteenth at 120 bpm for a one second sample)");
     CHECK(shut, "...and the pull back after it has the fader shut");
     CHECK(none_at_0 < n / 4, "Finish at 0 leaves clips as they were (%d of %d end that way anyway)", none_at_0, n);
+    ts_engine_destroy(e);
+}
+
+/* Echo: a stab four times over, each at a lower level of the fader (a gate of 1, 2, 3, 4 steps down through 1.0, 0.7, 0.5, 0.35) */
+static void test_echo(void)
+{
+    printf("echo\n");
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    static ts_clip_t c;
+    int echo_clips = 0, levels_ok = 1, plain_ok = 1, n = 40;
+    for (uint32_t seed = 1; seed <= (uint32_t)n; seed++) {
+        ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, NULL, 0.0f, 120.0f, 0.0f, 0.0f);
+        for (int i = 0; i < c.n; i++) plain_ok &= c.gate[i] <= 1;               /* no echo: the fader is open or shut, as it was */
+        ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, NULL, 0.0f, 120.0f, 0.0f, 1.0f);
+        /* the notes in order: a level for each opening; an echo is four in a row at levels 1, 2, 3, 4 */
+        int seq[256], ns = 0, prev = 0;
+        for (int i = 0; i < c.n; i++) {
+            if (c.gate[i] && !prev && ns < 256) seq[ns++] = c.gate[i];
+            else if (c.gate[i] && prev && c.gate[i] != prev && ns > 0 && ns < 256) seq[ns - 1] = c.gate[i] > seq[ns - 1] ? c.gate[i] : seq[ns - 1];
+            prev = c.gate[i];
+        }
+        int found = 0;
+        for (int k = 0; k + 3 < ns; k++) found |= seq[k] == 1 && seq[k + 1] == 2 && seq[k + 2] == 3 && seq[k + 3] == 4;
+        echo_clips += found;
+        for (int i = 0; i < c.n; i++) levels_ok &= c.gate[i] <= 4;
+    }
+    CHECK(plain_ok, "with Echo at 0 the fader is only open or shut (no clip changes)");
+    CHECK(echo_clips >= 30 && levels_ok, "with Echo at 100%% clips hold a stab repeated at falling levels, 1, 2, 3, 4 (%d of %d)", echo_clips, n);
+    /* playback: a lower level is a quieter sound */
+    load_sample(e, 0, "dc.wav", SMP_DC, 0.5f, 44100);
+    memset(&e->clip_data[0], 0, sizeof e->clip_data[0]);
+    ts_clip_t *k = &e->clip_data[0];
+    k->len = 4; k->n = 4 * TS_CLIP_RES; k->tag = 3;
+    for (int i = 0; i < k->n; i++) { k->pos[i] = 30000; k->gate[i] = i < TS_CLIP_RES ? 1 : (i < 2 * TS_CLIP_RES ? 3 : (i < 3 * TS_CLIP_RES ? 4 : 0)); }
+    memset(e->bank, 0, sizeof e->bank);
+    e->bank[0][0] = 1;
+    recount_clips(e);
+    CHECK(ts_clip_level(e, 1, 0.5) == 1.0f && fabsf(ts_clip_level(e, 1, 1.5) - 0.5f) < 1e-6f && fabsf(ts_clip_level(e, 1, 2.5) - 0.35f) < 1e-6f && ts_clip_level(e, 1, 3.5) == 0.0f &&
+          ts_clip_cut(e, 1, 1.5) == 3, "the clip's level at a moment: 1.0, 0.5, 0.35, shut");
+    ts_params_t p = e->p;
+    p.clip = 1; p.drag = 0.0f; p.note_gate = 1; p.normalise = 0; p.pads = 0; p.turntable = 0.5f;
+    ts_engine_set_params(e, &p);
+    static float blk[128];
+    double beat = 4.0;
+    float amp[4] = { 0, 0, 0, 0 };
+    for (int b = 0; b < 1200; b++) {
+        ts_engine_sync_beat(e, beat);
+        ts_engine_render(e, blk, 128);
+        double pos = fmod(e->mclock, 4.0);
+        int beat_i = (int)pos;
+        if (b > 10 && fabs(pos - beat_i - 0.5) < 0.05) amp[beat_i] = fmaxf(amp[beat_i], fabsf(blk[127]));
+        beat += 128.0 * 120.0 / (60.0 * 44100.0);
+    }
+    CHECK(amp[0] > 0.1f && fabsf(amp[1] / amp[0] - 0.5f) < 0.06f && fabsf(amp[2] / amp[0] - 0.35f) < 0.06f && amp[3] < 0.01f,
+          "and it plays that much quieter (%.2f, %.2f, %.2f, %.2f)", amp[0], amp[1], amp[2], amp[3]);
     ts_engine_destroy(e);
 }
 
@@ -2785,10 +2840,10 @@ static void test_recipes_library(void)
     if (f) { size_t n = fread(text, 1, sizeof text - 1, f); text[n] = 0; fclose(f); }
     int sa = -1, a = 0, b = 0, c = 0, sa2 = -1, a2 = 0, b2 = 0, c2 = 0;
     unsigned long s1 = 0, s2 = 0;
-    int fw1 = -1, fw2 = -1, bp1 = -1, bp2 = -1, fn1 = -1, fn2 = -1;
-    int got = sscanf(text, "%d %d %d %d %lu %d %d %d\n%d %d %d %d %lu %d %d %d", &sa, &a, &b, &c, &s1, &fw1, &bp1, &fn1, &sa2, &a2, &b2, &c2, &s2, &fw2, &bp2, &fn2);
-    CHECK(f && got == 16 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && fw1 == 0 && fw2 == 0 && bp1 == 120 && bp2 == 120 && fn1 == 0 && fn2 == 0 && !e->recipes_dirty,
-          "the service call writes it: one line per clip (sample, pad, style, bars, seed, forwards, tempo, finish) (%s)", text);
+    int fw1 = -1, fw2 = -1, bp1 = -1, bp2 = -1, fn1 = -1, fn2 = -1, ec1 = -1, ec2 = -1;
+    int got = sscanf(text, "%d %d %d %d %lu %d %d %d %d\n%d %d %d %d %lu %d %d %d %d", &sa, &a, &b, &c, &s1, &fw1, &bp1, &fn1, &ec1, &sa2, &a2, &b2, &c2, &s2, &fw2, &bp2, &fn2, &ec2);
+    CHECK(f && got == 18 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && fw1 == 0 && fw2 == 0 && bp1 == 120 && bp2 == 120 && fn1 == 0 && fn2 == 0 && ec1 == 0 && ec2 == 0 && !e->recipes_dirty,
+          "the service call writes it: one line per clip (sample, pad, style, bars, seed, forwards, tempo, finish, echo) (%s)", text);
     static ts_clip_t keep9, keep12;
     memcpy(&keep9, PADCLIP(e, 9), sizeof keep9);
     memcpy(&keep12, PADCLIP(e, 12), sizeof keep12);
@@ -3001,7 +3056,7 @@ static void test_plugin_pickers(void)
      * the sample, the clip and everything Generate does are on the pads, so they are on no dial; the rest is on the More page */
     const char *root_end = strstr(hier, "\"knobs\"");                           /* the root level's params come before its knobs */
     int at_root = root_end != NULL;
-    const char *names[] = { "\"pads_screen\"", "\"gen_style\"", "\"gen_bars\"", "\"gen_fwd\"", "\"swing\"", "\"gen_fin\"", "\"sample_file\"" };
+    const char *names[] = { "\"pads_screen\"", "\"gen_style\"", "\"gen_bars\"", "\"gen_fwd\"", "\"swing\"", "\"gen_fin\"", "\"gen_echo\"", "\"sample_file\"" };
     for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
         const char *at = strstr(hier, names[i]);
         at_root &= at != NULL && at < root_end;
@@ -3014,11 +3069,11 @@ static void test_plugin_pickers(void)
     dials /= 2;
     for (size_t i = 0; i < sizeof names / sizeof names[0] && !bad_dial; i++) {
         const char *at = strstr(root_end, names[i]);
-        int wanted = i != 6;                                                               /* (the first dial opens the Pads screen; the browser is not a dial) */
+        int wanted = i != 7;                                                               /* (the first dial opens the Pads screen; the browser is not a dial) */
         bad_dial |= wanted != (at != NULL && at < knobs_end);
     }
-    CHECK(dials == 6 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
-          "the root has six dials (the opener, Style, Length, Forwards, Swing and Finish), none of them the sample or clip, and the LFO and Sync pages are gone (%d dials)", dials);
+    CHECK(dials == 7 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
+          "the root has seven dials (the opener, Style, Length, Forwards, Swing, Finish and Echo), none of them the sample or clip, and the LFO and Sync pages are gone (%d dials)", dials);
     api->destroy_instance(h);
 }
 
@@ -3130,6 +3185,7 @@ int main(int argc, char **argv)
     test_empty_pads();
     test_swing();
     test_finish();
+    test_echo();
     test_tempo();
     test_pad_mutes_clip();
     test_pad_runs_clip();

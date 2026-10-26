@@ -49,7 +49,8 @@
         { key: "gen_bars", v: "gb", min: 0, max: 2, steps: true, detents: 3 },
         { key: "gen_fwd", v: "gf", min: 0, max: 1, step: 0.05 },                      /* how often Any lets the record go through the word */
         { key: "swing", v: "sw", min: 0, max: 1, step: 0.02 },                        /* every clip, as it plays: the second sixteenth of a pair late */
-        { key: "gen_fin", v: "fn", min: 0, max: 1, step: 0.05 }                       /* how often a clip ends with the whole sample played through */
+        { key: "gen_fin", v: "fn", min: 0, max: 1, step: 0.05 },                      /* how often a clip ends with the whole sample played through */
+        { key: "gen_echo", v: "ec", min: 0, max: 1, step: 0.05 }                      /* how often a bar holds an echo scratch: a stab four times, each lower */
     ];
 
     /* ---- a 3x5 font, so a sample name and a waveform fit on 128x64 ---- */
@@ -447,6 +448,7 @@
         case "gen_fwd": return "FORWARDS " + Math.round(val * 100) + "%";
         case "swing": return "SWING " + Math.round(val * 100) + "%";
         case "gen_fin": return "FINISH " + Math.round(val * 100) + "%";
+        case "gen_echo": return "ECHO " + Math.round(val * 100) + "%";
         default: return String(k.key).toUpperCase();
         }
     }

@@ -27,10 +27,10 @@ Transcription Methodology, TTM).
 | **Gain** (More page) | -24 to +12 dB |
 | **Clip Depth** / **Clip Offset** (More page) | how far the clip moves the playhead (0-200%) and where along the sample it moves it (-0.5 to +0.5): turn a clip into a smaller or a shifted version of itself |
 | **Style** / **Length** | what the Generate pad makes: one of the styles (or Any) and 1, 2 or 4 bars |
-| **Pads** (knob 1) | opens the full-screen version, where the pads are coloured and the dials are Style, Length, Forwards, Swing and Finish (below; Back leaves) |
+| **Pads** (knob 1) | opens the full-screen version, where the pads are coloured and the dials are Style, Length, Forwards, Swing, Finish and Echo (below; Back leaves) |
 
-**The dials.** The module's first menu has the Pads screen (knob 1, which opens it), then five dials: **Style**, **Length**,
-**Forwards**, **Swing** and **Finish**, and **Load Sample** (the Move's file browser). The same five dials work on the Pads screen (dials 2 to 6). **Forwards**
+**The dials.** The module's first menu has the Pads screen (knob 1, which opens it), then six dials: **Style**, **Length**,
+**Forwards**, **Swing**, **Finish** and **Echo**, and **Load Sample** (the Move's file browser). The same six dials work on the Pads screen (dials 2 to 7). **Forwards**
 (0 to 100%, 0 to begin with) is how often a clip made by Any lets the record go through most of the sample, so the word is heard (and,
 at a quarter of that, how often a clip ends by running on to the sample's end); at 0 there are none. It only changes what Generate makes
 next: a clip you kept stays as it is. **Swing** (0 to 100%, 0 to begin with) is how every clip *plays*: each pair of sixteenths is played
@@ -39,6 +39,10 @@ the "Swing" versions of the example clips. It changes no clip; at 0 everything p
 **Finish** (0 to 100%, 0 to begin with) is how often a clip made by Generate **ends with the whole sample played through** at its own
 speed (from where the sound starts to where it ends, so its tail is heard), then a quick shut pull back, the way a DJ ends a phrase. It
 changes what Generate makes next, not clips you kept; a clip loops, so the play-out comes round every time it does.
+**Echo** (0 to 100%, 0 to begin with) is how often a bar of a clip made by "Any" holds an **echo scratch**: a short stab, the record taken back,
+and again, four times over two beats, each stab at a lower level of the fader (full, 70%, 50%, 35%), the way a DJ turns the channel fader
+down a notch each time. It puts the fader's levels between open and shut into the clip (a clip's fader is stored as a level, 0 to 7), and
+at 0 no clip changes: they are exactly what they were.
 Touch one and its name and current value show on the bottom line (white on black) for as long as your finger is on it, so you
 can check it is the right one before you turn it; turn it and the new value shows for a moment; Style and Length are always shown there (for instance
 `CRAB 2B`). Choosing the sample and the clip, and everything about Generate, is on the pads, so none of that is on a dial.
