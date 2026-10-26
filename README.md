@@ -1,15 +1,19 @@
 # TinyScratch
 
-A turntable-scratch instrument for the Ableton Move (a Schwung sound generator).
+**A scratch generator for the Ableton Move** (a Schwung sound generator): it makes new, human-sounding turntable scratches for a
+sample at the press of a pad, and plays them in time with your song.
 
 A playhead moves forwards and backwards over a short sample, and a MIDI note "cuts" the sound in, like a
 crossfader. Faster movement of the playhead is a higher pitch, slower is lower. That is the whole idea; combine
 a movement with a pattern of cuts, ideally at different lengths (16th notes over a 1/3 bar movement), and you have a
-baby, a flare, a chirp, an orbit or a transformer. TinyScratch plays those for you (the clips), or you play them.
+baby, a flare, a chirp, an orbit or a transformer. The **generator** is the heart of TinyScratch: press Generate and it writes a fresh
+phrase of strokes and fader cuts for the sample you have loaded, in a style you choose (or "Any"), with a human feel; keep the ones you
+like on a pad. You can also play the scratches yourself with the pads.
 
-**Heavily inspired by the Live Scratcher module by Andrew Norris.** TinyScratch is written from scratch: it contains none of that
-module's code and none of its clips. The vocabulary of the clip generator comes from scratch notation (the Turntablist
-Transcription Methodology, TTM).
+**The look and the way of working are inspired by the Live Scratcher module by Andrew Norris** (a sample, clips on the pads, a fader you
+cut with). TinyScratch is an independent project, written from scratch: **none of that module's code is used, and none of its clips are
+included.** The scratch generator is TinyScratch's own: its vocabulary comes from scratch notation (the Turntablist
+Transcription Methodology, TTM), and it was tuned against published measurements of real scratching and overall statistics of example clips, not by copying anyone's clips or code.
 
     scripts/test.sh                   engine + plugin tests (UBSan, leak and overrun checks) and the screen test
     scripts/build.sh                  aarch64 dsp.so + build/tinyscratch-<version>.tar.gz
