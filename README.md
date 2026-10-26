@@ -78,10 +78,10 @@ gitignored); `scripts/install_move.sh` sends it to the Move when it is there. (A
 ### Generating clips: a recipe generator
 
 **It follows the song's tempo.** A hand moves at about the same real speed whatever the tempo, so on a slow song a clip written in
-sixteenths drags (the strokes are slow and low). **Generate reads the song's tempo** and builds "Any" to suit it: from 99 bpm up the phrase
-and the fader are on sixteenths (4 steps to the beat, exactly as before), from 73 to 99 on sixteenth triplets (6 to the beat), below 73 on
-thirty-seconds (8 to the beat), so the steps a second stay close to where they are at 120 (measured: 5.3 sounds a second at 120 bpm, 4.9 at
-75, 4.6 at 57) and a bar is still four beats, so the clip fits the song. Forwards are timed from the tempo too, so the word plays at the
+sixteenths drags (the strokes are slow and low). **Generate reads the song's tempo** and builds "Any" to suit it: from 82 bpm up the phrase
+and the fader are on sixteenths (4 steps to the beat, exactly as before, so 90 bpm is unchanged), from 56 to 82 on sixteenth triplets (6 to
+the beat), below 56 on thirty-seconds (8 to the beat), so a very slow song does not drag (measured: 5.3 sounds a second at 120 bpm, 4.9 at
+75, 4.6 at 57). The switch points are low on purpose: triplets at 90 bpm were nearly twice as busy as the clips that sounded right. A bar is still four beats, so the clip fits the song. Forwards are timed from the tempo too, so the word plays at the
 sample's own speed. The tempo it was made at is saved with a kept clip's recipe. This is for "Any"; the named styles (Baby, Cuts, ...)
 stay on sixteenths. A clip made at one tempo is not changed when the tempo changes: generate again.
 

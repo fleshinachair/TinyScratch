@@ -897,7 +897,7 @@ static void gen_phrase(gen_t *g, int bars, const float *bases)
 int ts_steps_per_beat(float bpm)
 {
     if (!isfinite(bpm) || bpm <= 0.0f) return 4;
-    return bpm >= 99.0f ? 4 : (bpm >= 73.0f ? 6 : 8);
+    return bpm >= 82.0f ? 4 : (bpm >= 56.0f ? 6 : 8);
 }
 
 static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16, float fw_p, int m, float fw_nat, float fin_p, float pps, float hi, float echo_p)
