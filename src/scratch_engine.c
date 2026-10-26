@@ -865,7 +865,7 @@ int ts_steps_per_beat(float bpm)
     return bpm >= 99.0f ? 4 : (bpm >= 73.0f ? 6 : 8);
 }
 
-static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16, float fw_p, int m, float fw_nat)
+static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16, float fw_p, int m, float fw_nat, float fin_p, float pps, float hi)
 {
     if (!out) return;
     bars = bars <= 1 ? 1 : (bars >= 4 ? 4 : 2);
@@ -934,6 +934,31 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         g_seg(&g, o + 15.0f, o + 16.0f, to, bases[0], SH_FAST);
         g_gate(&g, o + 15.0f, o + 15.9f, 0);
     }
+    /* Finish: the clip ends with the whole sample played through at its own speed, from where the sound starts to where it ends, so its tail
+     * is heard; then the quick silent pull back. The record gets back to the start of the sound just before (a short shut jump). Its own
+     * random numbers, so a clip with Finish at 0 is exactly what it was. */
+    if (fin_p > 0.0f && last != GS_STAB && last != GS_CRAB) {
+        gen_t t = g;
+        t.rng = mix32(seed ^ 0xF1415EEDu) | 1u;
+        if (grnd(&t) < fin_p) {
+            float o = 16.0f * (float)(bars - 1);
+            float from = bases[bars - 1], span = fmaxf(hi - from, 0.2f);
+            float x = clampf(span / fmaxf(pps, 0.01f), 3.0f, 8.0f);              /* sixteenths the sound takes at the sample's own speed */
+            float to = clampf(from + x * pps, from + 0.15f, 0.98f), zs = 15.0f - x;
+            int i0 = (int)((o + zs - 1.0f) * (float)GP);
+            float cur = i0 >= 0 && i0 < out->n ? (float)out->pos[i0] / 65535.0f : from;
+            g_seg(&g, o + zs - 1.0f, o + zs, cur, from, SH_FAST);                /* back to the start of the sound, shut */
+            g_gate(&g, o + zs - 1.0f, o + zs - 0.05f, 0);
+            g_seg(&g, o + zs, o + 15.0f, from, to, SH_LIN);                      /* the sample, at its own speed */
+            g_gate(&g, o + zs, o + 15.0f, 1);
+            g_seg(&g, o + 15.0f, o + 16.0f, to, bases[0], SH_FAST);              /* and the pull back */
+            g_gate(&g, o + 15.0f, o + 15.9f, 0);
+            if (g.nfw < 14) {                                                    /* (Any lays its fader on the grid after this: the play-out and the pull are told to it as a forward) */
+                g.fw_t[g.nfw] = o + zs; g.fw_d[g.nfw] = x; g.fw_kind[g.nfw] = 1; g.nfw++;
+                g.fw_t[g.nfw] = o + 15.0f; g.fw_d[g.nfw] = 1.0f; g.fw_kind[g.nfw] = 2; g.nfw++;
+            }
+        }
+    }
     /* The record turns a little ahead of the grid: the whole path moves earlier by a quarter of a sixteenth or so (it loops, so it wraps),
      * then the grid styles get their fader, on the grid. */
     {
@@ -980,10 +1005,16 @@ static float gen_audible(const ts_clip_t *c)
     return gap ? a * 0.5f : a;                                                   /* (counts as too quiet: thrown again) */
 }
 
-void ts_clip_generate(ts_clip_t *out, int style, uint32_t seed, int bars) { ts_clip_generate_for(out, style, seed, bars, NULL, 0.75f, 120.0f); }
+void ts_clip_generate(ts_clip_t *out, int style, uint32_t seed, int bars) { ts_clip_generate_for(out, style, seed, bars, NULL, 0.75f, 120.0f, 0.0f); }
 
-void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm)
+void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm, float fin)
 {
+    float fin_p = isfinite(fin) ? clampf(fin, 0.0f, 1.0f) : 0.0f;
+    float pps = 0.15f, hi = 0.95f;                                               /* the sample's own speed, in sample lengths to a sixteenth; where its sound ends */
+    if (slot && slot->loaded && slot->len > 0 && isfinite(bpm) && bpm > 0.0f) {
+        pps = clampf(15.0f / (((float)slot->len / TS_SAMPLE_RATE) * bpm), 0.02f, 0.5f);
+        hi = clampf(slot->hi, 0.3f, 0.99f);
+    }
     float fw_p = isfinite(fwd) ? clampf(fwd, 0.0f, 1.0f) : 0.0f;
     if (!out) return;
     float onsets[8];
@@ -1001,7 +1032,7 @@ void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, co
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;
     for (int attempt = 0; attempt < 8; attempt++) {                             /* a seed that comes out mostly silent is thrown again: same seed, same clip, always */
-        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on, fw16, fw_p, m, fw_nat);
+        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on, fw16, fw_p, m, fw_nat, fin_p, pps, hi);
         float a = gen_audible(out);
         if (a >= need[style]) return;
         if (a > best_a) { best_a = a; best = *out; }
@@ -1020,11 +1051,12 @@ int ts_engine_generate(ts_engine_t *e)
     int style = clampi(e->p.gen_style, 0, TS_GEN_STYLES - 1), bars = e->p.gen_bars <= 0 ? 1 : (e->p.gen_bars == 1 ? 2 : 4);
     int idx = e->try_valid && e->try_idx == TS_POOL ? TS_POOL + 1 : TS_POOL;               /* the one that is not playing */
     uint32_t seed = gen_seed(e);
-    ts_clip_generate_for(&e->clip_data[idx], style, seed, bars, &e->slot[e->p.sample], e->p.gen_fwd, e->bpm);
+    ts_clip_generate_for(&e->clip_data[idx], style, seed, bars, &e->slot[e->p.sample], e->p.gen_fwd, e->bpm, e->p.gen_fin);
     __sync_synchronize();
     e->try_recipe.used = 1; e->try_recipe.style = style; e->try_recipe.bars = bars; e->try_recipe.seed = seed;
     e->try_recipe.fwd = (int)lrintf(e->p.gen_fwd * 100.0f);
     e->try_recipe.bpm = (int)lrintf(clampf(e->bpm, 20.0f, 400.0f));
+    e->try_recipe.fin = (int)lrintf(e->p.gen_fin * 100.0f);
     e->try_idx = idx;
     e->try_valid = 1;
     e->p.clip = TS_CLIP_TRY;
@@ -1128,7 +1160,7 @@ int ts_engine_clear_clip(ts_engine_t *e, int pad)
 
 /* A kept clip back on its pad: from its saved data if there is any (so a clip you chose sounds the same whatever the generator has become
  * since), otherwise made again from its recipe. */
-static int restore_kept_from(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars, const ts_clip_t *data, int fwd, int bpm)
+static int restore_kept_from(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars, const ts_clip_t *data, int fwd, int bpm, int fin)
 {
     if (!e || sample < 0 || sample >= TS_SLOTS) return -1;
     if (find_recipe(e, sample, clampi(style, 0, TS_GEN_STYLES - 1), bars, seed) > 0) return -2;            /* it is there already */
@@ -1140,8 +1172,8 @@ static int restore_kept_from(ts_engine_t *e, int sample, int pad, int style, uin
     if (pad < 0) return -1;
     static ts_clip_t tmp;                                                       /* (called from the thread that sets parameters, one at a time) */
     if (data) tmp = *data;
-    else ts_clip_generate_for(&tmp, clampi(style, 0, TS_GEN_STYLES - 1), seed, bars, &e->slot[sample], (float)clampi(fwd, 0, 100) / 100.0f, (float)bpm);
-    ts_recipe_t r = { 1, clampi(style, 0, TS_GEN_STYLES - 1), tmp.len / 4, seed, clampi(fwd, 0, 100), bpm };
+    else ts_clip_generate_for(&tmp, clampi(style, 0, TS_GEN_STYLES - 1), seed, bars, &e->slot[sample], (float)clampi(fwd, 0, 100) / 100.0f, (float)bpm, (float)clampi(fin, 0, 100) / 100.0f);
+    ts_recipe_t r = { 1, clampi(style, 0, TS_GEN_STYLES - 1), tmp.len / 4, seed, clampi(fwd, 0, 100), bpm, clampi(fin, 0, 100) };
     if (install_clip(e, sample, pad, &tmp, &r) != 0) return -1;
     e->recipes_dirty = 0;                                                       /* it came from the library */
     return pad;
@@ -1149,7 +1181,7 @@ static int restore_kept_from(ts_engine_t *e, int sample, int pad, int style, uin
 
 int ts_engine_restore_kept(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars)
 {
-    return restore_kept_from(e, sample, pad, style, seed, bars, NULL, 75, 120);
+    return restore_kept_from(e, sample, pad, style, seed, bars, NULL, 75, 120, 0);
 }
 
 /* ---- kept.bin: the kept clips' own data, next to recipes.txt ----
@@ -1262,8 +1294,8 @@ int ts_engine_load_recipes(ts_engine_t *e)
             }
             continue;
         }
-        int fwd = 75, bpm = 120;                                                /* (a line from before the Forwards and tempo columns: as they were then) */
-        int got = sscanf(line, "%d %d %d %d %lu %d %d", &sample, &pad, &style, &bars, &seed, &fwd, &bpm);
+        int fwd = 75, bpm = 120, fin = 0;                                       /* (a line from before the Forwards, tempo and Finish columns: as they were then) */
+        int got = sscanf(line, "%d %d %d %d %lu %d %d %d", &sample, &pad, &style, &bars, &seed, &fwd, &bpm, &fin);
         if (got >= 5) got = 5;
         if (got != 5) {                                                         /* an older library: no sample column, so the first sample's */
             sample = 0;
@@ -1271,7 +1303,7 @@ int ts_engine_load_recipes(ts_engine_t *e)
         }
         if ((bars == 1 || bars == 2 || bars == 4) && style >= 0 && style < TS_GEN_STYLES && sample >= 0 && sample < TS_SLOTS) {
             int have = kept_find(kd, kn, sample, style, bars, (uint32_t)seed, &saved);
-            int r = restore_kept_from(e, sample, pad, style, (uint32_t)seed, bars, have ? &saved : NULL, fwd, clampi(bpm, 20, 400));
+            int r = restore_kept_from(e, sample, pad, style, (uint32_t)seed, bars, have ? &saved : NULL, fwd, clampi(bpm, 20, 400), fin);
             missing |= r > 0 && !have;                                          /* (made again from its recipe: its data is written next time) */
             if (r > 0) n++;
             else if (r == -2) dropped = 1;                                      /* a copy of one it already has: left out */
@@ -1299,7 +1331,7 @@ static void save_recipes(ts_engine_t *e)
         for (int pad = 1; pad <= TS_NUM_CLIPS && ok; pad++) {
             int idx = e->bank[s][pad - 1] - 1;
             if (idx >= 0 && e->kept[idx].used)
-                ok = fprintf(f, "%d %d %d %d %lu %d %d\n", s, pad, e->kept[idx].style, e->kept[idx].bars, (unsigned long)e->kept[idx].seed, e->kept[idx].fwd, e->kept[idx].bpm > 0 ? e->kept[idx].bpm : 120) > 0;
+                ok = fprintf(f, "%d %d %d %d %lu %d %d %d\n", s, pad, e->kept[idx].style, e->kept[idx].bars, (unsigned long)e->kept[idx].seed, e->kept[idx].fwd, e->kept[idx].bpm > 0 ? e->kept[idx].bpm : 120, e->kept[idx].fin) > 0;
         }
     ok = fclose(f) == 0 && ok;
     if (!ok) { remove(tmp); return; }
@@ -1329,6 +1361,7 @@ void ts_params_default(ts_params_t *p)
     p->gen_style = 0;
     p->gen_bars = 1;                     /* two bars */
     p->gen_fwd = 0.0f;                   /* no forwards unless asked for */
+    p->gen_fin = 0.0f;                   /* no play-out at the end unless asked for */
     p->swing = 0.0f;                     /* straight */
     p->clip_depth = 1.0f;
     p->clip_offset = 0.0f;
@@ -1350,6 +1383,7 @@ void ts_params_sanitize(ts_params_t *p)
     p->gen_style = clampi(p->gen_style, 0, TS_GEN_STYLES - 1);
     p->gen_bars = clampi(p->gen_bars, 0, 2);
     p->gen_fwd = isfinite(p->gen_fwd) ? clampf(p->gen_fwd, 0.0f, 1.0f) : 0.0f;
+    p->gen_fin = isfinite(p->gen_fin) ? clampf(p->gen_fin, 0.0f, 1.0f) : 0.0f;
     p->swing = isfinite(p->swing) ? clampf(p->swing, 0.0f, 1.0f) : 0.0f;
     p->clip_depth = isfinite(p->clip_depth) ? clampf(p->clip_depth, 0.0f, 2.0f) : 1.0f;
     p->clip_offset = isfinite(p->clip_offset) ? clampf(p->clip_offset, -0.5f, 0.5f) : 0.0f;
@@ -2112,12 +2146,12 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     jw(&j, "\",\"ld\":\"");
     for (int i = 0; i < TS_SLOTS; i++) jw(&j, "%c", e->slot[i].loaded ? '1' : '0');
     jw(&j, "\",\"x\":%d,\"tx\":%d,\"p\":%.4f,\"tt\":%.3f,\"vl\":%.2f,\"dr\":%.2f,\"gn\":%.1f,\"ng\":%d,\"vv\":%d,\"no\":%d,\"lk\":%d,"
-           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"w\":\"",
+           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"fn\":%.2f,\"w\":\"",
        x, tx, e->pos, (double)p->turntable, (double)e->vel_out, (double)p->drag, (double)p->gain_db, p->note_gate, p->vel_to_vol, p->normalise, p->lock,
        p->cut_from, e->gate > 0.5f, e->notes_held + e->pad_held, e->transport, e->lane_col, p->clip ? e->clip_now : 0, p->clip, e->running, e->last_note, e->pad_raw > 0, lane_beats, e->nclips,
        e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
        e->try_valid, e->try_valid ? e->try_recipe.style : 0, e->view_seq,
-       (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing);
+       (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin);
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->pk[c] : 0);       /* the waveform: peak, then body */
     jw(&j, "\",\"wr\":\"");
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->rms[c] : 0);

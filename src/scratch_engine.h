@@ -64,6 +64,7 @@ typedef struct {
     int   gen_bars;             /* 0, 1, 2: a clip of 1, 2 or 4 bars */
     float gen_fwd;              /* 0..1: how many of Any's bars have a forward (the record let go through the word); 0 = none */
     float swing;                /* 0..1: the second sixteenth of each pair played late, as clips play (1 = triplets); 0 = straight */
+    float gen_fin;              /* 0..1: how often a clip ends with the whole sample playing through at its own speed, then a pull back; 0 = never */
     float clip_depth;           /* 0..2: how far a clip moves the playhead (1 = as written; the movement is scaled, then offset) */
     float clip_offset;          /* -0.5..0.5: shifts the whole clip along the sample */
 } ts_params_t;
@@ -80,7 +81,7 @@ typedef struct {
 } ts_slot_t;
 
 /* A generated clip is kept as its recipe: the same recipe makes the same clip. */
-typedef struct { int used, style, bars; uint32_t seed; int fwd; int bpm; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100; bpm: the song's tempo */
+typedef struct { int used, style, bars; uint32_t seed; int fwd; int bpm; int fin; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100; bpm: the song's tempo */
 
 typedef struct ts_engine {
     float       sr;
@@ -193,7 +194,7 @@ int   ts_engine_load_clips(ts_engine_t *e, const char *path);  /* clips.bin: the
 void ts_clip_generate(ts_clip_t *out, int style, uint32_t seed, int bars);
 /* The same, for a sample: each bar's strokes start where the sample has an attack (the start of its sound, the start of a word), the way a
  * DJ places the record, and the positions are the sample's own (the clip is "native": tag 3). With no sample it is the plain one above. */
-void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm);     /* fwd: 0..1, forwards in Any */
+void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm, float fin);     /* fwd: 0..1, forwards in Any */
 /* The song's tempo shapes "Any": a hand moves at about the same real speed whatever the tempo, so a slow song gets more notes to the beat.
  * From 99 bpm up the phrase is on sixteenths (4 to the beat); from 73 to 99 on sixteenth triplets (6 to the beat), and below 73 on
  * thirty-seconds (8 to the beat): the steps a second stay close to those at 120 (the switch points are where the two rates either side

@@ -538,7 +538,7 @@ fixtures.forEach((v, i) => {
     knob(0, 1); knob(0, 127);
     check(ctx.sets.length === 0, "dial 1 opens this screen from the first page: it sets nothing here");
     ctx.sets.length = 0;
-    for (const n of [5, 6, 7]) { knob(n, 1); knob(n, 127); }
+    for (const n of [6, 7]) { knob(n, 1); knob(n, 127); }
     check(ctx.sets.length === 0, "the dials after the last one are nothing");
     ctx.sets.length = 0;
     knob(1, 1);
@@ -559,8 +559,9 @@ fixtures.forEach((v, i) => {
     ctx.sets.length = 0;
     for (let n = 0; n < 8; n++) for (let i = 0; i < 4; i++) knob(n, 1);
     const written = new Set(ctx.sets.map(([k]) => k));
-    check(["gen_style", "gen_bars", "gen_fwd", "swing"].every((k) => written.has(k)) && written.size === 4,
-        "the four dials do something, and nothing else is written: " + [...written].join(" "));
+    check(["gen_style", "gen_bars", "gen_fwd", "swing", "gen_fin"].every((k) => written.has(k)) && written.size === 5,
+        "the five dials do something, and nothing else is written: " + [...written].join(" "));
+    { ctx.sets.length = 0; knob(5, 1); knob(5, 1); const fn = ctx.sets.filter(([k]) => k === "gen_fin").map(([, v]) => Number(v)); check(fn.length === 2 && Math.abs(fn[1] - fn[0] - 0.05) < 1e-6, "dial 6 is Finish, 5% a detent: " + JSON.stringify(ctx.sets)); }
     { ctx.sets.length = 0; knob(4, 1); knob(4, 1); const sw = ctx.sets.filter(([k]) => k === "swing").map(([, v]) => Number(v)); check(sw.length === 2 && Math.abs(sw[1] - sw[0] - 0.02) < 1e-6, "dial 5 is Swing, 2% a detent: " + JSON.stringify(ctx.sets)); }
     ctx.sets.length = 0;
     knob(3, 1); knob(3, 1);
@@ -872,7 +873,7 @@ fixtures.forEach((v, i) => {
 // 9. the labels and the pad grid agree with the engine's
 {
     check(T.padIndex(67) === 31 && T.padIndex(68) === 0 && T.padIndex(99) === 31 && T.padIndex(36) === 0 && T.padIndex(35) === -1 && T.padIndex(100) === -1, "pad notes: 36-67 and 68-99 are the same 32 pads");
-    check(T.KNOBS.length === 5 && T.KNOBS[0] === null && T.KNOBS[1].key === "gen_style" && T.KNOBS[2].key === "gen_bars" && T.KNOBS[3].key === "gen_fwd" && T.KNOBS[4].key === "swing", "the dials");
+    check(T.KNOBS.length === 6 && T.KNOBS[0] === null && T.KNOBS[1].key === "gen_style" && T.KNOBS[2].key === "gen_bars" && T.KNOBS[3].key === "gen_fwd" && T.KNOBS[4].key === "swing" && T.KNOBS[5].key === "gen_fin", "the dials");
 }
 
 // 10. the waveform screen
