@@ -1797,6 +1797,32 @@ static void rec_crop(const float *x, int n, float sr, int *a, int *b)
     *b = last + 1 + (int)(0.02f * sr) < t ? last + 1 + (int)(0.02f * sr) : t;
 }
 
+/* A recording is made as loud as Ahhh and Fresssh before it is kept. Those two sit at about -14 dBFS on average with their peaks 12 to 13 dB
+ * above that; a voice from the microphone has peaks 18 to 25 dB above its average, so peak normalising alone leaves it 5 to 12 dB quieter.
+ * So its average (where there is sound) is brought to -14 dBFS, at most 24 dB of gain (a quiet recording is not turned into hiss), and the
+ * peaks that would go over are rounded off by a soft limiter: untouched up to 0.6, then bent smoothly towards 0.95, never past it. */
+static float soft_limit(float v)
+{
+    float a = fabsf(v);
+    if (a <= 0.6f) return v;
+    float y = 0.6f + 0.35f * tanhf((a - 0.6f) / 0.35f);
+    return v < 0.0f ? -y : y;
+}
+
+static void rec_loudness(float *x, int n)
+{
+    if (!x || n <= 0) return;
+    double sq = 0.0;
+    float peak = 0.0f;
+    for (int i = 0; i < n; i++) peak = fmaxf(peak, fabsf(x[i]));
+    if (peak < 1e-5f) return;
+    int cnt = 0;
+    for (int i = 0; i < n; i++) if (fabsf(x[i]) > 0.02f * peak) { sq += (double)x[i] * x[i]; cnt++; }      /* (the sound, not the pauses in it) */
+    float rms = cnt > 0 ? (float)sqrt(sq / cnt) : peak;
+    float g = fminf(0.2f / fmaxf(rms, 1e-6f), 15.85f);                             /* -14 dBFS; at most +24 dB */
+    for (int i = 0; i < n; i++) x[i] = soft_limit(g * x[i]);
+}
+
 void ts_engine_service(ts_engine_t *e)
 {
     if (!e) return;
@@ -1842,6 +1868,7 @@ void ts_engine_service(ts_engine_t *e)
             float *buf = (float *)TS_CALLOC((size_t)n * sizeof(float));
             if (buf) {
                 memcpy(buf, e->rec_buf + c0, (size_t)n * sizeof(float));
+                rec_loudness(buf, n);
                 ts_slot_t t;
                 memset(&t, 0, sizeof t);
                 analyse(&t, buf, n);

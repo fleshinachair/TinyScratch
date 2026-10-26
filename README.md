@@ -215,7 +215,9 @@ their basic tools, which come from the end of "Change the Beat" (Fab 5 Freddy, 1
   seconds so far and a bar for the input level.
   A recording is **cropped to its sound** before it is kept: the silence before and after it goes (a few milliseconds are left before
   the first sound so its attack is whole), the first 40 ms and the last 60 ms are not listened to at all (the press and the let-go of the
-  pad, which the Move's microphone, right beside the pads, hears), and one with no sound in it is thrown away. It is that slot's sample,
+  pad, which the Move's microphone, right beside the pads, hears), and one with no sound in it is thrown away. It is also made **as loud as Ahhh and
+  Fresssh**: its average level (where there is sound) is brought to about -14 dBFS, with at most 24 dB of gain, and the peaks that would
+  go over are rounded off by a soft limiter, so a voice from the microphone is not quieter than the built-in samples. It is that slot's sample,
   and is kept as `user1.wav` .. `user4.wav` in the module's `samples/` folder, so it is there next time (and `scripts/install_move.sh`
   leaves those files alone). Which input it hears (the mic or the line in) is whatever the Move
   itself is set to listen to. **To unload a User sample**, hold its pad for a second and a half (a bar fills along the screen and the pad goes red): the slot

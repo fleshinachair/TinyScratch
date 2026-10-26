@@ -2079,7 +2079,14 @@ static void test_recording(void)
     render_n(e, buf, 128);
     CHECK(e->slot[3].loaded && e->slot[3].len == 5120 && e->pend_ready == 0 && strcmp(e->slot[3].name, "USER 2") == 0,
           "...the audio thread swaps it in (%d frames, %s)", e->slot[3].len, e->slot[3].name);
-    CHECK(fabsf(e->slot[3].data[100] - 0.5f * sinf(0.05f * 100.0f)) < 1e-6f && e->slot[3].pk[10] > 0 && e->slot[3].norm > 1.5f, "it is what was fed in, with its overview and its gain");
+    {
+        float g1 = e->slot[3].data[100] / (0.5f * sinf(0.05f * 100.0f)), g2 = e->slot[3].data[133] / (0.5f * sinf(0.05f * 133.0f));
+        double sq = 0.0;
+        for (int i = 0; i < e->slot[3].len; i++) sq += (double)e->slot[3].data[i] * e->slot[3].data[i];
+        double rms = sqrt(sq / e->slot[3].len);
+        CHECK(fabsf(g1 - g2) < 1e-3f && g1 > 0.0f && fabs(rms - 0.2) < 0.02 && e->slot[3].pk[10] > 0 && e->slot[3].norm > 1.5f,
+              "it is what was fed in, brought to the loudness of Ahhh and Fresssh (%.1f dBFS on average), with its overview and its gain", 20.0 * log10(rms));
+    }
     render_n(e, buf, 4096);
     CHECK(rms_of(buf, 4096) > 0.01, "and it plays");
     ts_engine_view(e, js, sizeof js);
@@ -2141,6 +2148,25 @@ static void test_recording(void)
         ts_engine_service(e);
         render_n(e, buf, 128);
         CHECK(e->slot[3].len == len, "a recording of nothing but the taps is thrown away; the sample already there stays");
+    }
+
+    /* a quiet voice with sharp peaks comes out as loud as Ahhh and Fresssh, its peaks rounded off, never past full scale */
+    {
+        ts_engine_rec_start(e);
+        static float blk3[128];
+        int total = 0;
+        for (int b = 0; b < 300; b++) {
+            for (int i = 0; i < 128; i++, total++) blk3[i] = 0.03f * sinf(0.09f * (float)total) + ((total % 997) < 6 ? 0.35f : 0.0f);
+            ts_engine_feed_input(e, blk3, 128);
+        }
+        ts_engine_rec_stop(e);
+        ts_engine_service(e);
+        render_n(e, buf, 128);
+        double sq = 0.0;
+        float pk = 0.0f;
+        for (int i = 0; i < e->slot[3].len; i++) { sq += (double)e->slot[3].data[i] * e->slot[3].data[i]; pk = fmaxf(pk, fabsf(e->slot[3].data[i])); }
+        double rms = sqrt(sq / (e->slot[3].len > 0 ? e->slot[3].len : 1));
+        CHECK(e->slot[3].len > 0 && rms > 0.13 && rms < 0.23 && pk <= 0.951f, "a quiet, peaky recording is kept as loud as Ahhh (%.1f dBFS on average, peak %.2f)", 20.0 * log10(rms), (double)pk);
     }
 
     /* from Ahhh or Fresssh it goes to the first empty User slot; empty or full, nothing breaks */
