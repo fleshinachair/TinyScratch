@@ -980,8 +980,10 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         if (grnd(&t) < fin_p) {
             float o = 16.0f * (float)(bars - 1);
             float from = bases[bars - 1], span = fmaxf(hi - from, 0.2f);
-            float x = clampf(span / fmaxf(pps, 0.01f), 3.0f, 8.0f);              /* sixteenths the sound takes at the sample's own speed */
-            float to = clampf(from + x * pps, from + 0.15f, 0.98f), zs = 15.0f - x;
+            /* sixteenths the sound takes at the sample's own speed: up to three quarters of a bar (half a bar in a one bar clip); a sample
+             * longer than that is still played right to its end, a little faster than its own speed, not cut short */
+            float x = clampf(span / fmaxf(pps, 0.01f), 3.0f, bars >= 2 ? 12.0f : 8.0f);
+            float to = clampf(from + span, from + 0.15f, 0.98f), zs = 15.0f - x;
             int i0 = (int)((o + zs - 1.0f) * (float)GP);
             float cur = i0 >= 0 && i0 < out->n ? (float)out->pos[i0] / 65535.0f : from;
             g_seg(&g, o + zs - 1.0f, o + zs, cur, from, SH_FAST);                /* back to the start of the sound, shut */

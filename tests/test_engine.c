@@ -1811,6 +1811,23 @@ static void test_finish(void)
     CHECK(speed_ok, "...at the sample's own speed (0.125 sample lengths a sixteenth at 120 bpm for a one second sample)");
     CHECK(shut, "...and the pull back after it has the fader shut");
     CHECK(none_at_0 < n / 4, "Finish at 0 leaves clips as they were (%d of %d end that way anyway)", none_at_0, n);
+    /* a long sample (2.2 s, like a recording) is played right to its end: at its own speed where three quarters of a bar allows (75 bpm:
+     * 10 sixteenths), a little faster where it does not (120 bpm: 16 sixteenths of sound in 12) */
+    load_sample(e, 4, "long.wav", SMP_SINE, 0.7f, 97020);
+    for (int pass = 0; pass < 2; pass++) {
+        float bpm = pass ? 120.0f : 75.0f;
+        int reach = 0, open_ok = 1, cnt = 0;
+        for (uint32_t seed = 1; seed <= 30; seed++) {
+            ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 2, &e->slot[4], 0.0f, bpm, 1.0f, 0.0f);
+            const int q = TS_CLIP_RES / 4, lb = 16 * q;
+            int i14 = lb + 14 * q, op = 0;
+            for (int i = lb + 6 * q; i < i14 - q / 2; i++) op += c.gate[i] != 0;
+            cnt++;
+            reach += (float)c.pos[i14 - q / 4] / 65535.0f > 0.88f;
+            open_ok &= op > (i14 - q / 2 - (lb + 6 * q)) * 8 / 10;
+        }
+        CHECK(reach >= cnt - 1 && open_ok, "a 2.2 s sample at %.0f bpm: Finish plays it right to its end, fader open (%d of %d)", (double)bpm, reach, cnt);
+    }
     ts_engine_destroy(e);
 }
 

@@ -37,7 +37,9 @@ next: a clip you kept stays as it is. **Swing** (0 to 100%, 0 to begin with) is 
 long-short instead of even (at 100% a triplet feel: the first takes two thirds of the eighth), the playhead and the fader together, like
 the "Swing" versions of the example clips. It changes no clip; at 0 everything plays exactly as it is. It is saved with the project.
 **Finish** (0 to 100%, 0 to begin with) is how often a clip made by Generate **ends with the whole sample played through** at its own
-speed (from where the sound starts to where it ends, so its tail is heard), then a quick shut pull back, the way a DJ ends a phrase. It
+speed (from where the sound starts to where it ends, so its tail is heard), then a quick shut pull back, the way a DJ ends a phrase. It gets
+up to three quarters of a bar (half a bar in a one bar clip); a sample too long for that at its own speed (a 2 second recording at 120 bpm) is
+still played right to its end, a little faster than its own speed, not cut short. It
 changes what Generate makes next, not clips you kept; a clip loops, so the play-out comes round every time it does.
 **Echo** (0 to 100%, 0 to begin with) is how often a bar of a clip made by "Any" holds an **echo scratch**: a short stab, the record taken back,
 and again, four times over two beats, each stab at a lower level of the fader (full, 70%, 50%, 35%), the way a DJ turns the channel fader
