@@ -1735,6 +1735,24 @@ static void test_swing(void)
     char js[8192];
     ts_engine_view(e, js, sizeof js);
     CHECK(strstr(js, "\"sw\":1.00") != NULL, "the view says the swing");
+    /* Speed: double plays the clip twice as fast against the song (for a slow song), half half as fast */
+    p = e->p; p.swing = 0.0f; p.speed = 2; ts_engine_set_params(e, &p);
+    int dbl = 1;
+    for (int b = 0; b < 200; b++) {
+        ts_engine_sync_beat(e, beat);
+        ts_engine_render(e, blk, 128);
+        double want = (double)e->slot[0].lo + (double)(e->slot[0].hi - e->slot[0].lo) * (double)ts_clip_pos(e, 2, e->mclock * 2.0);
+        dbl &= fabs(e->target - want) < 1e-6;
+        beat += 128.0 * 120.0 / (60.0 * 44100.0);
+    }
+    p = e->p; p.speed = 0; ts_engine_set_params(e, &p);
+    ts_engine_sync_beat(e, beat); ts_engine_render(e, blk, 128);
+    double half = (double)e->slot[0].lo + (double)(e->slot[0].hi - e->slot[0].lo) * (double)ts_clip_pos(e, 2, e->mclock * 0.5);
+    CHECK(dbl && fabs(e->target - half) < 1e-6, "Speed: double reads the clip at twice the song's time, half at half");
+    ts_engine_view(e, js, sizeof js);
+    CHECK(strstr(js, "\"sp\":0") != NULL, "the view says the speed");
+    p = e->p; p.speed = 9; ts_engine_set_params(e, &p);
+    CHECK(e->p.speed == 2, "...clamped");
     p.swing = 9.0f; ts_engine_set_params(e, &p);
     CHECK(e->p.swing == 1.0f, "...clamped");
     ts_engine_destroy(e);
@@ -2894,7 +2912,7 @@ static void test_plugin_pickers(void)
      * the sample, the clip and everything Generate does are on the pads, so they are on no dial; the rest is on the More page */
     const char *root_end = strstr(hier, "\"knobs\"");                           /* the root level's params come before its knobs */
     int at_root = root_end != NULL;
-    const char *names[] = { "\"pads_screen\"", "\"gen_style\"", "\"gen_bars\"", "\"gen_fwd\"", "\"swing\"", "\"sample_file\"" };
+    const char *names[] = { "\"pads_screen\"", "\"gen_style\"", "\"gen_bars\"", "\"gen_fwd\"", "\"swing\"", "\"speed\"", "\"sample_file\"" };
     for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
         const char *at = strstr(hier, names[i]);
         at_root &= at != NULL && at < root_end;
@@ -2907,11 +2925,11 @@ static void test_plugin_pickers(void)
     dials /= 2;
     for (size_t i = 0; i < sizeof names / sizeof names[0] && !bad_dial; i++) {
         const char *at = strstr(root_end, names[i]);
-        int wanted = i != 5;                                                               /* (the first dial opens the Pads screen; the browser is not a dial) */
+        int wanted = i != 6;                                                               /* (the first dial opens the Pads screen; the browser is not a dial) */
         bad_dial |= wanted != (at != NULL && at < knobs_end);
     }
-    CHECK(dials == 5 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
-          "the root has five dials (the opener, Style, Length, Forwards and Swing), none of them the sample or clip, and the LFO and Sync pages are gone (%d dials)", dials);
+    CHECK(dials == 6 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
+          "the root has six dials (the opener, Style, Length, Forwards, Swing and Speed), none of them the sample or clip, and the LFO and Sync pages are gone (%d dials)", dials);
     api->destroy_instance(h);
 }
 

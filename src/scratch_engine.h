@@ -64,6 +64,7 @@ typedef struct {
     int   gen_bars;             /* 0, 1, 2: a clip of 1, 2 or 4 bars */
     float gen_fwd;              /* 0..1: how many of Any's bars have a forward (the record let go through the word); 0 = none */
     float swing;                /* 0..1: the second sixteenth of each pair played late, as clips play (1 = triplets); 0 = straight */
+    int   speed;                /* 0 half, 1 as written, 2 double: how fast clips play against the song (double for a slow song) */
     float clip_depth;           /* 0..2: how far a clip moves the playhead (1 = as written; the movement is scaled, then offset) */
     float clip_offset;          /* -0.5..0.5: shifts the whole clip along the sample */
 } ts_params_t;
