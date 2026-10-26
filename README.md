@@ -27,10 +27,13 @@ Transcription Methodology, TTM).
 | **Gain** (More page) | -24 to +12 dB |
 | **Clip Depth** / **Clip Offset** (More page) | how far the clip moves the playhead (0-200%) and where along the sample it moves it (-0.5 to +0.5): turn a clip into a smaller or a shifted version of itself |
 | **Style** / **Length** | what the Generate pad makes: one of the styles (or Any) and 1, 2 or 4 bars |
-| **Pads** (knob 1) | opens the full-screen version, where the pads are coloured and the two dials are Style and Length (below; Back leaves) |
+| **Pads** (knob 1) | opens the full-screen version, where the pads are coloured and the dials are Style, Length and Forwards (below; Back leaves) |
 
-**The dials.** The module's first menu has the Pads screen (knob 1, which opens it), then two dials: **Style** and **Length**, and
-**Load Sample** (the Move's file browser). The same two dials work on the Pads screen (dials 2 and 3).
+**The dials.** The module's first menu has the Pads screen (knob 1, which opens it), then three dials: **Style**, **Length** and
+**Forwards**, and **Load Sample** (the Move's file browser). The same three dials work on the Pads screen (dials 2 to 4). **Forwards**
+(0 to 100%, 0 to begin with) is how often a clip made by Any lets the record go through most of the sample, so the word is heard (and,
+at a quarter of that, how often a clip ends by running on to the sample's end); at 0 there are none. It only changes what Generate makes
+next: a clip you kept stays as it is.
 Touch one and its name and current value show on the bottom line (white on black) for as long as your finger is on it, so you
 can check it is the right one before you turn it; turn it and the new value shows for a moment; Style and Length are always shown there (for instance
 `CRAB 2B`). Choosing the sample and the clip, and everything about Generate, is on the pads, so none of that is on a dial.
@@ -58,7 +61,7 @@ the clips you keep from the generator (below). A fresh install also starts with 
 Longer, hand-made clips can be imported from an Ableton Live Pack you own: `python tools/import_clips.py "your pack.alp"`
 reads every MIDI clip that has playhead (Turntable) automation and notes into `local/clips.bin` (each goes on the pads of the
 sample it was made for, by its name). That file is someone else's work, so it stays out of the repository (`local/` is
-gitignored); `scripts/install_move.sh` sends it to the Move when it is there. Imported clips go on the pads of the sample they were made for
+gitignored); `scripts/install_move.sh` sends it to the Move when it is there. (At the moment no imported clips are installed: the installer sends `local/clips.bin` only if it is there.) Imported clips go on the pads of the sample they were made for
 (Ahhh, Fresssh), replace the built-in eight, and are **read-only**: they can be played but not deleted.
 
 ### Generating clips: a recipe generator
@@ -81,7 +84,7 @@ used). The sources are Kjetil Falkenberg Hansen and Roberto Bresin, [Analysis of
 | shape of a stroke | speed highest at the start, falling to about a third by the end | a "flick": position ln(1+6t)/ln 7 |
 | stroke size | 0.47 of the sample, 3.2 sample-lengths of travel a bar | 0.47 and 3.3 |
 | where the strokes turn | where the sample is quiet and about to get louder | each phrase starts just inside an attack of the sample |
-| forwards (the record let go through most of the sample, so the word is heard) | on the fourth beat of most bars / on beat 3 (for a beat) or beat 4 (to the bar line), 0.9 a bar on Fresssh, 0.25 on Ahhh | on beat 3 for a beat or on beat 4 to the bar line (never on an odd sixteenth), about three bars in four, at about the sample's own speed (at 120 bpm): 0.84 a bar on Fresssh, the fader held open from the beat, then a quick silent pull |
+| forwards (the record let go through most of the sample, so the word is heard) | on the fourth beat of most bars / on beat 3 (for a beat) or beat 4 (to the bar line), 0.9 a bar on Fresssh, 0.25 on Ahhh | on beat 3 for a beat or on beat 4 to the bar line (never on an odd sixteenth), as many bars as the Forwards dial says (three in four at 75%), at about the sample's own speed (at 120 bpm): 0.84 a bar on Fresssh, the fader held open from the beat, then a quick silent pull |
 
 The named styles (Baby, Cuts, ...) keep their own shapes and use the same fader on the grid and the same turn ahead of the beat. The Live
 Scratcher manual's description of a scratch, a rhythm of cuts (sixteenths) over a movement on another interval, is the same idea.
@@ -116,7 +119,7 @@ in the middle of each stroke), **Crab** (four quick clicks to a sixteenth), **Or
 (Turntablist Transcription Methodology); the Euclidean rhythm and the Markov chain are standard ideas from algorithmic
 composition, written here from scratch.
 
-All of it is on the pads, apart from the two settings (**Style** and **Length**, dials 2 and 3 of the Pads screen).
+All of it is on the pads, apart from the two settings (**Style**, **Length** and **Forwards**, dials 2 to 4 of the Pads screen).
 
 - **Trigger it** with the **Generate** pad (second row, right end) on the Pads screen. Press it again for another one.
 - **Keep it** by tapping an **empty clip pad** while the generated clip is the one playing. It goes on that pad of the
@@ -126,6 +129,9 @@ All of it is on the pads, apart from the two settings (**Style** and **Length**,
   the end and nothing happens). **Any clip can be deleted**, built-in ones too; it is remembered (in `recipes.txt`) and only for that
   sample. The other pads stay where they are (pads do not shuffle up, so what you have learned stays put) and the next clip you keep
   takes the first free pad. (The Move's Delete button is read by the host itself and is never passed to a screen, so it cannot be used.)
+- **A kept clip is kept exactly**: its own playhead path and fader are saved beside the recipes (`kept.bin`), so it sounds the same
+  whatever the generator becomes later; only a clip with no saved data is made again from its recipe. A kept clip keeps its pad: if a
+  built-in clip comes back onto it (when imported clips are taken away), the kept clip wins and the built-in one goes.
 - **Kept clips are a library**: a kept clip is stored as a tiny recipe (sample, pad, style, seed, length) in `recipes.txt` in the
   module's folder, so every new instance of the module, on any track, starts with the same clips on the same pads, and
   `scripts/install_move.sh` leaves the file alone. (An instance that is already running picks up changes the next time it loads.)

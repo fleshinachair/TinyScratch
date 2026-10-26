@@ -46,7 +46,8 @@
     var KNOBS = [
         null,
         { key: "gen_style", v: "gs", min: 0, max: 11, steps: true, detents: 2 },
-        { key: "gen_bars", v: "gb", min: 0, max: 2, steps: true, detents: 3 }
+        { key: "gen_bars", v: "gb", min: 0, max: 2, steps: true, detents: 3 },
+        { key: "gen_fwd", v: "gf", min: 0, max: 1, step: 0.05 }                       /* how often Any lets the record go through the word */
     ];
 
     /* ---- a 3x5 font, so a sample name and a waveform fit on 128x64 ---- */
@@ -387,6 +388,27 @@
         }
     }
 
+    /* Leaving without a goodbye. The host runs this screen's tick only while it is the view in front, and changing slot or leaving the module
+     * can change the view without calling onClose, so nothing of ours runs any more and the pads keep our colours. What the host does call,
+     * every frame, whatever is on the screen, is host_pad_block (it restates that the pads are not blocked). So that call is wrapped, once
+     * per script context (as TinySID does), and each time it comes: if this screen has not been drawn for a moment, the pads go back as the
+     * Move had them. */
+    var LEFT_MS = 400;
+    function wallNow() { return typeof globalThis.__tsClock === "function" ? globalThis.__tsClock() : Date.now(); }
+    function watchPads(st) {
+        globalThis.__tsPadHook = function () {
+            if (!st.released && st.lastDrawWall && wallNow() - st.lastDrawWall > LEFT_MS) releaseLeds(st);
+        };
+        if (typeof globalThis.host_pad_block !== "function" || globalThis.__tsPadWatch) return;
+        var original = globalThis.host_pad_block;
+        globalThis.__tsPadWatch = true;
+        globalThis.host_pad_block = function () {
+            var r = original.apply(this, arguments);
+            try { if (typeof globalThis.__tsPadHook === "function") globalThis.__tsPadHook(); } catch (e) { /* never in the host's way */ }
+            return r;
+        };
+    }
+
     /* The host's own test for "is this screen up": it survives the Move taking the display back (another slot, Menu). */
     function onScreen() {
         return typeof globalThis.shadow_get_display_mode !== "function" || globalThis.shadow_get_display_mode() === 1;
@@ -420,6 +442,7 @@
         case "clip_offset": return "CLIP OFFSET " + sign + val.toFixed(2);
         case "gen_style": return "STYLE " + STYLES[clamp(Math.round(val), 0, 11)];
         case "gen_bars": return "LENGTH " + BARS[clamp(Math.round(val), 0, 2)] + (Math.round(val) ? " BARS" : " BAR");
+        case "gen_fwd": return "FORWARDS " + Math.round(val * 100) + "%";
         default: return String(k.key).toUpperCase();
         }
     }
@@ -542,6 +565,8 @@
             setNow(ctx, "pad_raw", "1");                     /* from here the pads are read raw, whatever octave the Move is in */
             st.rawMs = st.now;
             st.lastDraw = 0;                                 /* (watching for a screen that stops being drawn starts with the first draw) */
+            st.lastDrawWall = 0;
+            watchPads(st);
             st.released = false;
             st.zoom = 0;
             st.hold = null;
@@ -622,6 +647,7 @@
         draw: function (ctx) {
             var st = state(ctx);
             st.lastDraw = ctx.now();
+            st.lastDrawWall = wallNow();
             st.released = false;
             ctx.clear();
             if (!st.view) { text(ctx, 2, 28, "TINYSCRATCH: WAITING FOR AUDIO"); return; }

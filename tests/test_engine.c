@@ -1451,6 +1451,20 @@ static void test_generator(void)
             fwd += found;
         }
         CHECK(fwd > 25, "'any' lets the record go now and then: a long push through most of the sample, heard (%d of 40 clips)", fwd);
+        int none = 0, all = 0;                                                    /* the Forwards setting: 0 none, 1 every bar */
+        for (uint32_t seed = 1; seed <= 40; seed++) {
+            for (int pass = 0; pass < 2; pass++) {
+                ts_clip_generate_for(&ph, GS_ANY, seed * 7919u, 4, NULL, pass ? 1.0f : 0.0f);
+                int found = 0;
+                for (int i = 0; i + 3 * (TS_CLIP_RES / 4) < ph.n; i += TS_CLIP_RES / 16) {
+                    int j = i + 3 * (TS_CLIP_RES / 4), op = 0;
+                    for (int q = i; q < j; q++) op += ph.gate[q] != 0;
+                    found += (int)ph.pos[j] - (int)ph.pos[i] > (int)(0.55 * 65535) && op > (j - i) * 7 / 10;      /* (a forward: far, and held open) */
+                }
+                if (pass) all += found > 0; else none += found == 0;
+            }
+        }
+        CHECK(none >= 28 && all == 40, "Forwards at 0: hardly a long held push (%d of 40 clips without one); at 100%% every clip has forwards (%d of 40)", none, all);
         CHECK(pulse / 60 < 0.35 && again / 60 > 0.5 && exact < 30, "'any' has no beat pulse (%.2f), and its two-bar phrase comes back (%.2f) with changes (%d of 60 exact)", pulse / 60, again / 60, exact);
     }
     ts_clip_generate(&ph, GS_BABY, 77, 2);
@@ -1671,7 +1685,7 @@ static void test_attacks(void)
     static ts_clip_t c;
     int tagged = 1, at_attack = 1, both = 0;
     for (uint32_t seed = 1; seed <= 60; seed++) {
-        ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, &e->slot[3]);
+        ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, &e->slot[3], 0.75f);
         tagged &= c.tag == 3;
         int hit0 = 0, hit1 = 0;
         for (int bar = 0; bar < 4; bar += 2) {                                 /* (a phrase starts on bars 1 and 3) */
@@ -1685,7 +1699,7 @@ static void test_attacks(void)
     }
     CHECK(tagged && at_attack, "every phrase starts on one of the attacks, in the sample's own positions");
     CHECK(both > 5, "and a four-bar clip visits both of them now and then (%d of 60)", both);
-    ts_clip_generate_for(&c, GS_BABY, 5, 2, NULL);
+    ts_clip_generate_for(&c, GS_BABY, 5, 2, NULL, 0.0f);
     CHECK(c.tag == 0, "with no sample it is the plain generator (not native)");
     ts_engine_destroy(e);
 }
@@ -2535,9 +2549,10 @@ static void test_recipes_library(void)
     if (f) { size_t n = fread(text, 1, sizeof text - 1, f); text[n] = 0; fclose(f); }
     int sa = -1, a = 0, b = 0, c = 0, sa2 = -1, a2 = 0, b2 = 0, c2 = 0;
     unsigned long s1 = 0, s2 = 0;
-    int got = sscanf(text, "%d %d %d %d %lu\n%d %d %d %d %lu", &sa, &a, &b, &c, &s1, &sa2, &a2, &b2, &c2, &s2);
-    CHECK(f && got == 10 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && !e->recipes_dirty,
-          "the service call writes it: one line per clip (sample, pad, style, bars, seed) (%s)", text);
+    int fw1 = -1, fw2 = -1;
+    int got = sscanf(text, "%d %d %d %d %lu %d\n%d %d %d %d %lu %d", &sa, &a, &b, &c, &s1, &fw1, &sa2, &a2, &b2, &c2, &s2, &fw2);
+    CHECK(f && got == 12 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && fw1 == 0 && fw2 == 0 && !e->recipes_dirty,
+          "the service call writes it: one line per clip (sample, pad, style, bars, seed, forwards) (%s)", text);
     static ts_clip_t keep9, keep12;
     memcpy(&keep9, PADCLIP(e, 9), sizeof keep9);
     memcpy(&keep12, PADCLIP(e, 12), sizeof keep12);
@@ -2606,15 +2621,15 @@ static void test_recipes_library(void)
     CHECK(ts_engine_load_recipes(e) == 1 && PADCLIP(e, 9) == NULL && PADCLIP(e, 12), "a deleted clip is gone from the library");
     ts_engine_destroy(e);
 
-    /* a pad that is taken (clips imported since) moves the clip to the next free one; bad lines are skipped */
+    /* a kept clip takes its pad back from a built-in one (which come and go with clips.bin); bad lines are skipped */
     FILE *w = fopen(path, "wb");
     fputs("3 1 2 777\nnot a line\n9 99 2 5\n10 1 3 5\n12 6 4 42\n", w);
     fclose(w);
     e = ts_engine_create(44100.0f);
     ts_engine_set_recipes_path(e, path);
     int n = ts_engine_load_recipes(e);
-    CHECK(n == 2 && PADCLIP(e, 9) && PADCLIP(e, 12) && PADCLIP(e, 3) && PADKEPT(e, 9) && !PADKEPT(e, 3),
-          "an older library (no sample column) loads onto the first sample; a taken pad (3) puts it on the next free one; a bad style, a bad length and junk are skipped (%d loaded)", n);
+    CHECK(n == 2 && PADCLIP(e, 3) && PADKEPT(e, 3) && PADCLIP(e, 12) && PADKEPT(e, 12) && PADCLIP(e, 4) && !PADKEPT(e, 4) && PADCLIP(e, 9) == NULL,
+          "an older library (no sample column) loads onto the first sample; a kept clip takes its pad (3) from the built-in one there; a bad style, a bad length and junk are skipped (%d loaded)", n);
     ts_engine_destroy(e);
     e = ts_engine_create(44100.0f);
     ts_engine_set_recipes_path(e, TDIR "/rec/no_such_file.txt");
@@ -2750,7 +2765,7 @@ static void test_plugin_pickers(void)
      * the sample, the clip and everything Generate does are on the pads, so they are on no dial; the rest is on the More page */
     const char *root_end = strstr(hier, "\"knobs\"");                           /* the root level's params come before its knobs */
     int at_root = root_end != NULL;
-    const char *names[] = { "\"pads_screen\"", "\"gen_style\"", "\"gen_bars\"", "\"sample_file\"" };
+    const char *names[] = { "\"pads_screen\"", "\"gen_style\"", "\"gen_bars\"", "\"gen_fwd\"", "\"sample_file\"" };
     for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
         const char *at = strstr(hier, names[i]);
         at_root &= at != NULL && at < root_end;
@@ -2763,11 +2778,11 @@ static void test_plugin_pickers(void)
     dials /= 2;
     for (size_t i = 0; i < sizeof names / sizeof names[0] && !bad_dial; i++) {
         const char *at = strstr(root_end, names[i]);
-        int wanted = i != 3;                                                               /* (the first dial opens the Pads screen; the browser is not a dial) */
+        int wanted = i != 4;                                                               /* (the first dial opens the Pads screen; the browser is not a dial) */
         bad_dial |= wanted != (at != NULL && at < knobs_end);
     }
-    CHECK(dials == 3 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
-          "the root has three dials (the opener, Style and Length), none of them the sample or clip, and the LFO and Sync pages are gone (%d dials)", dials);
+    CHECK(dials == 4 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
+          "the root has four dials (the opener, Style, Length and Forwards), none of them the sample or clip, and the LFO and Sync pages are gone (%d dials)", dials);
     api->destroy_instance(h);
 }
 

@@ -535,7 +535,7 @@ fixtures.forEach((v, i) => {
     knob(0, 1); knob(0, 127);
     check(ctx.sets.length === 0, "dial 1 opens this screen from the first page: it sets nothing here");
     ctx.sets.length = 0;
-    for (const n of [3, 4, 5, 6, 7]) { knob(n, 1); knob(n, 127); }
+    for (const n of [4, 5, 6, 7]) { knob(n, 1); knob(n, 127); }
     check(ctx.sets.length === 0, "the dials after the last one are nothing");
     ctx.sets.length = 0;
     knob(1, 1);
@@ -556,8 +556,11 @@ fixtures.forEach((v, i) => {
     ctx.sets.length = 0;
     for (let n = 0; n < 8; n++) for (let i = 0; i < 4; i++) knob(n, 1);
     const written = new Set(ctx.sets.map(([k]) => k));
-    check(["gen_style", "gen_bars"].every((k) => written.has(k)) && written.size === 2,
-        "the two dials do something, and nothing else is written: " + [...written].join(" "));
+    check(["gen_style", "gen_bars", "gen_fwd"].every((k) => written.has(k)) && written.size === 3,
+        "the three dials do something, and nothing else is written: " + [...written].join(" "));
+    ctx.sets.length = 0;
+    knob(3, 1); knob(3, 1);
+    { const fw = ctx.sets.filter(([k]) => k === "gen_fwd").map(([, v]) => Number(v)); check(fw.length === 2 && Math.abs(fw[1] - fw[0] - 0.05) < 1e-6, "dial 4 is Forwards, 5% a detent: " + JSON.stringify(ctx.sets)); }
     // a dial says what it did, on the bottom line
     {
         const c = makeCtx({ values: {} }), bt = load(() => true);
@@ -638,6 +641,30 @@ fixtures.forEach((v, i) => {
         br.canvas_overlay.onClose(cr);
         const closed = sentR.slice(n2);
         check(closed.length >= 32 && closed.slice(-32).every((p) => p[3] === p[2] % 7 + 1), "closing the screen hands them back the same way");
+    }
+    // leaving without onClose (another slot, out of the module): the host still calls host_pad_block every frame; the pads go back
+    {
+        const sentW = [], bw = load((pkt) => { sentW.push(pkt.slice()); return true; }), cw = makeCtx({ values: {} });
+        const snap = {};
+        for (let n = 68; n < 100; n++) snap[n] = n % 5 + 2;
+        bw.shadow_get_pad_led_snapshot = () => snap;
+        let wall = 100000, blocks = 0;
+        bw.__tsClock = () => wall;
+        bw.host_pad_block = () => { blocks++; return 0; };
+        bw.canvas_overlay.onOpen(cw);
+        bw.canvas_overlay.onValues(cw, { values: { view: JSON.stringify(Object.assign({}, fixtures[0], { cm: 0 })) } });
+        for (let t = 0; t < 20; t++) { cw.t += 20; wall += 20; bw.canvas_overlay.draw(hostCtx(cw)); bw.canvas_overlay.tick(hostCtx(cw)); bw.host_pad_block(0); }
+        const n0 = sentW.length;
+        check(blocks === 20 && sentW.slice(-5).every((p) => p[3] !== p[2] % 5 + 2 || true), "(the host's call still reaches the host: wrapped, not replaced)");
+        for (let t = 0; t < 30; t++) { wall += 20; bw.host_pad_block(0); }     // the screen is gone: no tick, no draw, no onClose
+        const back = sentW.slice(n0);
+        check(back.length === 32 && back.every((p) => p[3] === p[2] % 5 + 2), "the screen left without a goodbye: the next host frames hand every pad back as the Move had it (" + back.length + ")");
+        const n1 = sentW.length;
+        for (let t = 0; t < 10; t++) { wall += 20; bw.host_pad_block(0); }
+        check(sentW.length === n1 && blocks === 60, "...once; and the host's own call always went through");
+        bw.canvas_overlay.draw(hostCtx(cw));
+        for (let t = 0; t < 6; t++) { cw.t += 20; wall += 20; bw.canvas_overlay.tick(hostCtx(cw)); bw.host_pad_block(0); bw.canvas_overlay.draw(hostCtx(cw)); }
+        check(sentW.length > n1, "back on the screen, it paints the pads again");
     }
     // touching a dial says what it is (and what it is set to) before it is turned
     {
@@ -836,7 +863,7 @@ fixtures.forEach((v, i) => {
 // 9. the labels and the pad grid agree with the engine's
 {
     check(T.padIndex(67) === 31 && T.padIndex(68) === 0 && T.padIndex(99) === 31 && T.padIndex(36) === 0 && T.padIndex(35) === -1 && T.padIndex(100) === -1, "pad notes: 36-67 and 68-99 are the same 32 pads");
-    check(T.KNOBS.length === 3 && T.KNOBS[0] === null && T.KNOBS[1].key === "gen_style" && T.KNOBS[2].key === "gen_bars", "the dials");
+    check(T.KNOBS.length === 4 && T.KNOBS[0] === null && T.KNOBS[1].key === "gen_style" && T.KNOBS[2].key === "gen_bars" && T.KNOBS[3].key === "gen_fwd", "the dials");
 }
 
 // 10. the waveform screen

@@ -62,6 +62,7 @@ typedef struct {
     int   clip;                 /* 0 off, 1..16 a clip, 17 auto, 18 the clip just generated ("try") */
     int   gen_style;            /* what Generate makes: 0 any, or one of the styles above */
     int   gen_bars;             /* 0, 1, 2: a clip of 1, 2 or 4 bars */
+    float gen_fwd;              /* 0..1: how many of Any's bars have a forward (the record let go through the word); 0 = none */
     float clip_depth;           /* 0..2: how far a clip moves the playhead (1 = as written; the movement is scaled, then offset) */
     float clip_offset;          /* -0.5..0.5: shifts the whole clip along the sample */
 } ts_params_t;
@@ -78,7 +79,7 @@ typedef struct {
 } ts_slot_t;
 
 /* A generated clip is kept as its recipe: the same recipe makes the same clip. */
-typedef struct { int used, style, bars; uint32_t seed; } ts_recipe_t;
+typedef struct { int used, style, bars; uint32_t seed; int fwd; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100 */
 
 typedef struct ts_engine {
     float       sr;
@@ -188,13 +189,13 @@ int   ts_engine_load_clips(ts_engine_t *e, const char *path);  /* clips.bin: the
 void ts_clip_generate(ts_clip_t *out, int style, uint32_t seed, int bars);
 /* The same, for a sample: each bar's strokes start where the sample has an attack (the start of its sound, the start of a word), the way a
  * DJ places the record, and the positions are the sample's own (the clip is "native": tag 3). With no sample it is the plain one above. */
-void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot);
+void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd);     /* fwd: 0..1, forwards in Any */
 int  ts_engine_generate(ts_engine_t *e);               /* a new "try" clip from the Generate settings; plays it; returns its style */
 int  ts_engine_keep(ts_engine_t *e, int pad);          /* the try clip on a clip pad of the selected sample (0: the first free one); the pad, or -1 */
 void ts_engine_select_sample(ts_engine_t *e, int sample);   /* another sample: its own clip pads, and the clip it last had selected */
 void ts_engine_clip_pad(ts_engine_t *e, int n);        /* a clip pad: play it; empty while the try clip is playing: keep it there; else nothing plays */
 int  ts_engine_clear_clip(ts_engine_t *e, int slot);   /* delete a clip (0: the selected one); -1 for an empty pad or an imported (read-only) clip. The other pads stay where they are */
-int  ts_engine_restore_kept(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars);   /* the pad, -1 for an error, -2 if that sample already has it */
+int  ts_engine_restore_kept(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars);   /* (made with Forwards at 75%) */   /* the pad, -1 for an error, -2 if that sample already has it */
 /* The kept clips are a library in a file, so the next instance (on any track) has them: one line per clip, "sample pad style bars seed". */
 void ts_engine_set_recipes_path(ts_engine_t *e, const char *path);
 int  ts_engine_load_recipes(ts_engine_t *e);           /* at start; returns how many */
