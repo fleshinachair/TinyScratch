@@ -1439,6 +1439,18 @@ static void test_generator(void)
             }
             pulse += fabs(c1 / sq); again += c8 / sq; exact += memcmp(ph.pos, ph.pos + 8 * TS_CLIP_RES, (size_t)8 * TS_CLIP_RES * 2) == 0;
         }
+        int fwd = 0;                                                             /* forwards: a long push, heard, so the word plays */
+        for (uint32_t seed = 1; seed <= 40; seed++) {
+            ts_clip_generate(&ph, GS_ANY, seed * 7919u, 4);
+            int found = 0;
+            for (int i = 0; i + 3 * (TS_CLIP_RES / 4) < ph.n && !found; i += TS_CLIP_RES / 8) {
+                int j = i + 3 * (TS_CLIP_RES / 4), op = 0;
+                for (int q = i; q < j; q++) op += ph.gate[q] != 0;
+                found = (int)ph.pos[j] - (int)ph.pos[i] > (int)(0.5 * 65535) && op > (j - i) * 6 / 10;
+            }
+            fwd += found;
+        }
+        CHECK(fwd > 25, "'any' lets the record go now and then: a long push through most of the sample, heard (%d of 40 clips)", fwd);
         CHECK(pulse / 60 < 0.35 && again / 60 > 0.5 && exact < 30, "'any' has no beat pulse (%.2f), and its two-bar phrase comes back (%.2f) with changes (%d of 60 exact)", pulse / 60, again / 60, exact);
     }
     ts_clip_generate(&ph, GS_BABY, 77, 2);

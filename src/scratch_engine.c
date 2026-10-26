@@ -324,7 +324,7 @@ int ts_engine_load_clips(ts_engine_t *e, const char *path)
 enum { GS_ANY, GS_BABY, GS_CUTS, GS_MILITARY, GS_SCRIBBLE, GS_STAB, GS_CHIRP, GS_TRANSFORM, GS_FLARE, GS_CRAB, GS_ORBIT, GS_DRAG, GS_COUNT };
 #define GP (TS_CLIP_RES / 4)                         /* dense points per sixteenth */
 
-typedef struct { ts_clip_t *c; uint32_t rng; float amp_t; int shape; int bars; } gen_t;          /* amp_t: how tall the strokes are, 0..1, the same all through the clip */
+typedef struct { ts_clip_t *c; uint32_t rng; float amp_t; int shape; int bars; int fw16; int nfw; float fw_t[16], fw_d[16]; int fw_kind[16]; } gen_t;          /* amp_t: how tall the strokes are, 0..1, the same all through the clip */
 
 /* The curve a stroke takes. The hand does not move like a sine: it bites in and settles (a fast start: 60-90% of the strokes in the
  * clips measured), now and then a plain S-curve, and rarely builds slowly. One is the clip's own (g->shape) and most strokes use it. */
@@ -763,14 +763,29 @@ static int slot_onsets(const ts_slot_t *s, float *out, int cap)
  * themselves a beat later), pushes up by about half the sample and pulls back that far or right back to the start (about half the time),
  * and then the same phrase again with some strokes changed (the clips match themselves two bars later, not exactly). Every stroke is a
  * flick; the fader is laid on afterwards, on the grid. */
-typedef struct { int dur; float to; int shape; } pstroke_t;
+typedef struct { int dur; float to; int shape; int fw; } pstroke_t;         /* fw: 1 a forward (let go: the word plays), 2 the quick silent pull after it */
 static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
 {
     static const int w[4] = { 22, 24, 21, 14 };
     int ns = 0, t = 0, up = 1;
     float cur = base;
+    int fw_bar = -1;
     while (t < len16 && ns < cap) {
         int left = len16 - t, r = gi(g, 0, 80), d = 1;
+        /* A forward: late in a bar (Hansen's DJ let the record go on the fourth beat of most bars), the record is let go from the start of
+         * the sound at about its own speed, through most of the sample, so the word is heard, then pulled back quickly with the fader shut. */
+        int in_bar = t % 16;
+        if (up && fw_bar != t / 16 && in_bar >= 7 && in_bar <= 11 && left >= g->fw16 + 1 && ns + 2 < cap && fabsf(cur - base) < 0.06f && grnd(g) < 0.8f) {
+            int fd = g->fw16;
+            if (in_bar + fd > 15) fd = 15 - in_bar;
+            if (fd >= 3) {
+                sl[ns].dur = fd; sl[ns].to = clampf(base + gr(g, 0.78f, 0.9f), base + 0.3f, 0.97f); sl[ns].shape = SH_LIN; sl[ns].fw = 1; ns++;
+                int pd = 16 - (in_bar + fd); if (pd < 1) pd = 1; if (pd > left - fd) pd = left - fd;
+                sl[ns].dur = pd; sl[ns].to = base; sl[ns].shape = SH_FAST; sl[ns].fw = 2; ns++;
+                t += fd + pd; cur = base; fw_bar = (t - 1) / 16;
+                continue;                                                        /* (up again: the next stroke is a push) */
+            }
+        }
         for (int k = 0; k < 4; k++) { if (r < w[k]) { d = k + 1; break; } r -= w[k]; }
         if (d > left) d = left;
         int last = t + d >= len16;
@@ -780,7 +795,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
         if (last) to = base;
         else if (up) to = clampf(cur + span, base + 0.12f, 0.97f);
         else to = grnd(g) < 0.5f ? clampf(base + gr(g, -0.01f, 0.04f), 0.0f, 0.97f) : clampf(cur - span, base, 0.97f);
-        sl[ns].dur = d; sl[ns].to = to; sl[ns].shape = grnd(g) < 0.88f ? SH_FLICK : SH_EASE;
+        sl[ns].dur = d; sl[ns].to = to; sl[ns].shape = grnd(g) < 0.88f ? SH_FLICK : SH_EASE; sl[ns].fw = 0;
         ns++; cur = to; up = !up; t += d;
     }
     return ns;
@@ -796,20 +811,22 @@ static void gen_phrase(gen_t *g, int bars, const float *bases)
         for (int k = 0; k < ns; k++) v[k] = sl[k];
         if (rep > 0)                                                             /* the answer: the same phrase, a few strokes changed */
             for (int k = 0; k + 1 < ns; k++) {
+                if (v[k].fw || v[k + 1].fw) continue;                            /* (a forward stays as it is) */
                 if (grnd(g) < 0.45f) v[k].to = clampf(v[k].to + gr(g, -0.2f, 0.2f), base, 0.97f);
                 if (k + 2 < ns && grnd(g) < 0.12f && v[k].dur + v[k + 1].dur >= 2) { int a = v[k].dur; v[k].dur = v[k + 1].dur; v[k + 1].dur = a; }
             }
         float t = 16.0f * (float)(rep * P), cur = (float)g->c->pos[(int)(t * (float)GP) % g->c->n] / 65535.0f;
         if (rep == 0) cur = base;
         for (int k = 0; k < ns; k++) {
-            float to = k == ns - 1 ? bases[((rep + 1) * P) % bars] : (v[k].to < base && k % 2 ? base : v[k].to);
+            float to = k == ns - 1 ? bases[((rep + 1) * P) % bars] : (v[k].fw ? v[k].to : (v[k].to < base && k % 2 ? base : v[k].to));
             g_seg(g, t, t + (float)v[k].dur, cur, to, v[k].shape);
+            if (v[k].fw && g->nfw < 16) { g->fw_t[g->nfw] = t; g->fw_d[g->nfw] = (float)v[k].dur; g->fw_kind[g->nfw] = v[k].fw; g->nfw++; }
             cur = to; t += (float)v[k].dur;
         }
     }
 }
 
-static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on)
+static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16)
 {
     if (!out) return;
     bars = bars <= 1 ? 1 : (bars >= 4 ? 4 : 2);
@@ -818,6 +835,8 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     gen_t g;
     g.c = out;
     g.bars = bars;
+    g.fw16 = fw16;
+    g.nfw = 0;
     g.rng = mix32(seed) | 1u;
     int n = bars * 16 * GP;
     out->n = n;
@@ -891,6 +910,11 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         if (!grid_style(s)) continue;
         g.rng = mix32(seed ^ ((uint32_t)(grp[bar] * 2 + 1) * 0x9E3779B9u) ^ ((uint32_t)s * 0x85EBCA6Bu) ^ 0x6A7Eu) | 1u;     /* (the same letter, the same notes) */
         g_grid_gate(&g, 16.0f * (float)bar, s);
+        for (int f = 0; f < g.nfw; f++) {                                       /* a forward is one long sound; the pull after it is silent */
+            if (g.fw_t[f] < 16.0f * (float)bar || g.fw_t[f] >= 16.0f * (float)(bar + 1)) continue;
+            if (g.fw_kind[f] == 1) g_gate(&g, g.fw_t[f], g.fw_t[f] + g.fw_d[f] - 0.3f, 1);
+            else g_gate(&g, g.fw_t[f] - 0.3f, g.fw_t[f] + g.fw_d[f], 0);
+        }
         g_mask_turns(&g, 16.0f * (float)bar, s);
     }
 
@@ -919,12 +943,16 @@ void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, co
     if (!out) return;
     float onsets[8];
     int n_on = slot_onsets(slot, onsets, 8);
+    /* how long a forward takes: most of the sound at about the sample's own speed, at 120 bpm (a sixteenth is 1/8 s); fixed, so a recipe
+     * makes the same clip whatever the tempo it is loaded at */
+    int fw16 = 4;
+    if (slot && slot->loaded && slot->len > 0) fw16 = clampi((int)(0.8f * (slot->hi - slot->lo) * (float)slot->len / TS_SAMPLE_RATE / 0.125f + 0.5f), 3, 7);
     static const float need[GS_COUNT] = { 0.42f, 0.45f, 0.40f, 0.40f, 0.50f, 0.28f, 0.42f, 0.38f, 0.45f, 0.45f, 0.45f, 0.45f };
     style = clampi(style, 0, GS_COUNT - 1);
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;
     for (int attempt = 0; attempt < 8; attempt++) {                             /* a seed that comes out mostly silent is thrown again: same seed, same clip, always */
-        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on);
+        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on, fw16);
         float a = gen_audible(out);
         if (a >= need[style]) return;
         if (a > best_a) { best_a = a; best = *out; }
