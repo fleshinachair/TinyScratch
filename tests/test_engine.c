@@ -838,7 +838,7 @@ static void test_clips(void)
     ts_engine_t *e = ts_engine_create(44100.0f);
     load_sample(e, 0, "ramp.wav", SMP_RAMP, 0.8f, 44100);
     ts_params_t p;
-    ts_params_default(&p);
+    ts_params_default(&p); p.swing = 0.0f;
     CHECK(p.clip == TS_CLIP_AUTO && p.lock == 1, "defaults: the clips in turn, locked to the transport");
     {
         char jn[8192];
@@ -1156,7 +1156,7 @@ static void test_clip_files(void)
     ts_engine_load_wav_mem(e, 0, "ahhh.wav", g_wav, gsz);
     ts_engine_load_wav_mem(e, 1, "fresssh.wav", g_wav, gsz);
     ts_engine_load_wav_mem(e, 2, "user.wav", g_wav, gsz);
-    ts_params_default(&p);
+    ts_params_default(&p); p.swing = 0.0f;
     p.drag = 0.0f; p.pads = 0; p.normalise = 0; p.clip = 1; p.sample = 0;
     ts_engine_set_params(e, &p);
     float blk[128];
@@ -2077,7 +2077,7 @@ static void test_load_file_and_zoom(void)
     ts_engine_set_save_dir(e, dir);
     load_sample(e, 0, "ahhh.wav", SMP_SINE, 0.5f, 44100);
     ts_params_t p;
-    ts_params_default(&p);
+    ts_params_default(&p); p.swing = 0.0f;
     p.pads = 0; p.note_gate = 0; p.normalise = 0; p.drag = 0.0f; p.turntable = 0.4f; p.clip = 0; p.sample = 3;
     ts_engine_set_params(e, &p);
     int slot = ts_engine_load_file(e, TDIR "/rec/pick_me.wav");
@@ -2115,7 +2115,7 @@ static void test_load_file_and_zoom(void)
     e = ts_engine_create(44100.0f);
     load_sample(e, 0, "ahhh.wav", SMP_SINE, 0.5f, 44100);
     ts_engine_set_recipes_path(e, "");
-    p = e->p;
+    p = e->p; p.swing = 0.0f;
     p.pads = 0; p.clip = 3; p.sample = 0;
     ts_engine_set_params(e, &p);
     char js[8192], z[600];
@@ -2820,7 +2820,7 @@ static void test_recipes_library(void)
     unsigned long s1 = 0, s2 = 0;
     int fw1 = -1, fw2 = -1, bp1 = -1, bp2 = -1, fn1 = -1, fn2 = -1, ec1 = -1, ec2 = -1;
     int got = sscanf(text, "%d %d %d %d %lu %d %d %d %d\n%d %d %d %d %lu %d %d %d %d", &sa, &a, &b, &c, &s1, &fw1, &bp1, &fn1, &ec1, &sa2, &a2, &b2, &c2, &s2, &fw2, &bp2, &fn2, &ec2);
-    CHECK(f && got == 18 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && fw1 == 0 && fw2 == 0 && bp1 == 120 && bp2 == 120 && fn1 == 0 && fn2 == 0 && ec1 == 0 && ec2 == 0 && !e->recipes_dirty,
+    CHECK(f && got == 18 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && fw1 == 0 && fw2 == 0 && bp1 == 120 && bp2 == 120 && fn1 == 10 && fn2 == 10 && ec1 == 10 && ec2 == 10 && !e->recipes_dirty,
           "the service call writes it: one line per clip (sample, pad, style, bars, seed, forwards, tempo, finish, echo) (%s)", text);
     static ts_clip_t keep9, keep12;
     memcpy(&keep9, PADCLIP(e, 9), sizeof keep9);

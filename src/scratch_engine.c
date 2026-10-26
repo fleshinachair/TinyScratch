@@ -1383,9 +1383,9 @@ void ts_params_default(ts_params_t *p)
     p->gen_style = 0;
     p->gen_bars = 1;                     /* two bars */
     p->gen_fwd = 0.0f;                   /* no forwards unless asked for */
-    p->gen_fin = 0.0f;                   /* no play-out at the end unless asked for */
-    p->gen_echo = 0.0f;                  /* no echo scratches unless asked for */
-    p->swing = 0.0f;                     /* straight */
+    p->gen_fin = 0.10f;                  /* now and then a clip ends with the sound played through */
+    p->gen_echo = 0.10f;                 /* now and then a bar holds an echo scratch */
+    p->swing = 0.30f;                    /* a little loose */
     p->clip_depth = 1.0f;
     p->clip_offset = 0.0f;
 }
@@ -1406,9 +1406,9 @@ void ts_params_sanitize(ts_params_t *p)
     p->gen_style = clampi(p->gen_style, 0, TS_GEN_STYLES - 1);
     p->gen_bars = clampi(p->gen_bars, 0, 2);
     p->gen_fwd = isfinite(p->gen_fwd) ? clampf(p->gen_fwd, 0.0f, 1.0f) : 0.0f;
-    p->gen_fin = isfinite(p->gen_fin) ? clampf(p->gen_fin, 0.0f, 1.0f) : 0.0f;
-    p->gen_echo = isfinite(p->gen_echo) ? clampf(p->gen_echo, 0.0f, 1.0f) : 0.0f;
-    p->swing = isfinite(p->swing) ? clampf(p->swing, 0.0f, 1.0f) : 0.0f;
+    p->gen_fin = isfinite(p->gen_fin) ? clampf(p->gen_fin, 0.0f, 1.0f) : 0.10f;
+    p->gen_echo = isfinite(p->gen_echo) ? clampf(p->gen_echo, 0.0f, 1.0f) : 0.10f;
+    p->swing = isfinite(p->swing) ? clampf(p->swing, 0.0f, 1.0f) : 0.30f;
     p->clip_depth = isfinite(p->clip_depth) ? clampf(p->clip_depth, 0.0f, 2.0f) : 1.0f;
     p->clip_offset = isfinite(p->clip_offset) ? clampf(p->clip_offset, -0.5f, 0.5f) : 0.0f;
 }
