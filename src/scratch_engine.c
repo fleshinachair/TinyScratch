@@ -767,32 +767,39 @@ typedef struct { int dur; float to; int shape; int fw; } pstroke_t;         /* f
 static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
 {
     static const int w[4] = { 22, 24, 21, 14 };
+    /* Forwards are planned first, on a beat: in the example clips the record is let go on beat 3 (sixteenth 8), for exactly a beat, or on
+     * beat 4 (sixteenth 12), to the bar line, then pulled back with the fader shut; never on an odd sixteenth. About three bars in four
+     * have one. The record moves a hair before the beat and the fader opens on it, like every other stroke (the path is moved earlier). */
+    int fw_at[4] = { -1, -1, -1, -1 };
+    for (int b = 0; b < len16 / 16 && b < 4; b++)
+        if (grnd(g) < 0.75f) fw_at[b] = b * 16 + (grnd(g) < 0.55f ? 8 : 12);
     int ns = 0, t = 0, up = 1;
     float cur = base;
-    int fw_bar = -1;
-    while (t < len16 && ns < cap) {
-        int left = len16 - t, r = gi(g, 0, 80), d = 1;
-        /* A forward: late in a bar (Hansen's DJ let the record go on the fourth beat of most bars), the record is let go from the start of
-         * the sound at about its own speed, through most of the sample, so the word is heard, then pulled back quickly with the fader shut. */
-        int in_bar = t % 16;
-        if (up && fw_bar != t / 16 && in_bar >= 7 && in_bar <= 11 && left >= g->fw16 + 1 && ns + 2 < cap && fabsf(cur - base) < 0.06f && grnd(g) < 0.8f) {
-            int fd = g->fw16;
-            if (in_bar + fd > 15) fd = 15 - in_bar;
-            if (fd >= 3) {
-                sl[ns].dur = fd; sl[ns].to = clampf(base + gr(g, 0.78f, 0.9f), base + 0.3f, 0.97f); sl[ns].shape = SH_LIN; sl[ns].fw = 1; ns++;
-                int pd = 16 - (in_bar + fd); if (pd < 1) pd = 1; if (pd > left - fd) pd = left - fd;
-                sl[ns].dur = pd; sl[ns].to = base; sl[ns].shape = SH_FAST; sl[ns].fw = 2; ns++;
-                t += fd + pd; cur = base; fw_bar = (t - 1) / 16;
-                continue;                                                        /* (up again: the next stroke is a push) */
-            }
+    while (t < len16 && ns + 3 < cap) {
+        int bar = t / 16, fa = bar < 4 ? fw_at[bar] : -1;
+        if (fa == t) {                                                           /* the forward: at about the sample's own speed, through most of it */
+            int fd = (t % 16) == 8 ? 4 : 3, pd = (t % 16) == 8 ? gi(g, 1, 2) : 1;
+            if (t + fd + pd > len16) pd = len16 - t - fd;
+            float span = clampf(0.88f * (float)fd / (float)(g->fw16 > 0 ? g->fw16 : 4), 0.4f, 0.93f - base);
+            sl[ns].dur = fd; sl[ns].to = clampf(base + span, base + 0.3f, 0.97f); sl[ns].shape = SH_LIN; sl[ns].fw = 1; ns++;
+            if (pd > 0) { sl[ns].dur = pd; sl[ns].to = base; sl[ns].shape = SH_FAST; sl[ns].fw = 2; ns++; }
+            t += fd + pd; cur = base; up = 1;
+            continue;
         }
+        int left = len16 - t, r = gi(g, 0, 80), d = 1;
         for (int k = 0; k < 4; k++) { if (r < w[k]) { d = k + 1; break; } r -= w[k]; }
         if (d > left) d = left;
+        if (fa > t && t + d >= fa) {                                             /* arrive at the start, at the start of the sound, on the beat */
+            d = fa - t;
+            if (up && d >= 2) d -= 1;                                            /* (a push and then a pull back: the pull lands on the beat) */
+            else if (up) up = 0;                                                 /* (a sixteenth to spare: a short pull, back to the start) */
+        }
         int last = t + d >= len16;
         if (last && up && left >= 2) { d = left - 1; last = 0; }                 /* (the phrase ends on a pull back to the start) */
+        int to_start = !up && fa > t && t + d == fa;
         float span = 0.24f + 0.46f * powf(grnd(g), 0.9f);
         float to;
-        if (last) to = base;
+        if (last || to_start) to = base;
         else if (up) to = clampf(cur + span, base + 0.12f, 0.97f);
         else to = grnd(g) < 0.5f ? clampf(base + gr(g, -0.01f, 0.04f), 0.0f, 0.97f) : clampf(cur - span, base, 0.97f);
         sl[ns].dur = d; sl[ns].to = to; sl[ns].shape = grnd(g) < 0.88f ? SH_FLICK : SH_EASE; sl[ns].fw = 0;

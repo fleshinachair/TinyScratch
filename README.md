@@ -81,7 +81,7 @@ used). The sources are Kjetil Falkenberg Hansen and Roberto Bresin, [Analysis of
 | shape of a stroke | speed highest at the start, falling to about a third by the end | a "flick": position ln(1+6t)/ln 7 |
 | stroke size | 0.47 of the sample, 3.2 sample-lengths of travel a bar | 0.47 and 3.3 |
 | where the strokes turn | where the sample is quiet and about to get louder | each phrase starts just inside an attack of the sample |
-| forwards (the record let go through most of the sample, so the word is heard) | on the fourth beat of most bars / 0.9 a bar on Fresssh, 0.25 on Ahhh, spanning 0.7-0.8 of it | 0.65 a bar, late in the bar, spanning 0.8 at about the sample's own speed (at 120 bpm), the fader held open, then a quick silent pull |
+| forwards (the record let go through most of the sample, so the word is heard) | on the fourth beat of most bars / on beat 3 (for a beat) or beat 4 (to the bar line), 0.9 a bar on Fresssh, 0.25 on Ahhh | on beat 3 for a beat or on beat 4 to the bar line (never on an odd sixteenth), about three bars in four, at about the sample's own speed (at 120 bpm): 0.84 a bar on Fresssh, the fader held open from the beat, then a quick silent pull |
 
 The named styles (Baby, Cuts, ...) keep their own shapes and use the same fader on the grid and the same turn ahead of the beat. The Live
 Scratcher manual's description of a scratch, a rhythm of cuts (sixteenths) over a movement on another interval, is the same idea.
