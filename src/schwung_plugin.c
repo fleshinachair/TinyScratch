@@ -81,7 +81,7 @@ static const pdef_t k_params[P_COUNT] = {
     [P_CLIP_PAD]    = { "clip_pad", "Clip Pad", K_INT, NULL, 0, 0, 16, 0, 1, NULL },
     [P_CLIP_DEL]    = { "clip_delete", "Delete Clip", K_INT, NULL, 0, 0, 16, 0, 1, NULL },
     [P_ZOOM]        = { "zoom", "Zoom", K_INT, NULL, 0, 0, 3, 0, 1, NULL },
-    /* sampling: Record takes the audio input into the selected User slot (2 s at most, or until it is turned off), Clear empties it */
+    /* sampling: Record takes the audio input into the selected User slot (4 s at most, or until it is turned off; cropped to its sound), Clear empties it */
     [P_RECORD]      = { "record", "Record", K_ENUM, o_record, 2, 0, 1, 0, 0, NULL },
     [P_CLEAR]       = { "clear", "Clear Sample", K_ENUM, o_clear, 2, 0, 1, 0, 0, NULL },
     /* Load Sample: the Move's file browser, in the Move's own sample library (UserLibrary/Samples); the chosen file goes into the

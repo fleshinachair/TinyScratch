@@ -228,7 +228,7 @@
         if (extra.toast) return extra.toast;
         if (extra.touchText) return extra.touchText;
         /* a blank User slot is picked: the file browser is on the module's menu, not something a pad can open */
-        if (v && typeof v.ld === "string" && num(v.s, 0) >= 2 && v.ld[num(v.s, 0)] !== "1") return "EMPTY: BACK, LOAD SAMPLE";
+        if (v && typeof v.ld === "string" && num(v.s, 0) >= 2 && v.ld[num(v.s, 0)] !== "1") return "EMPTY: HOLD ITS PAD TO RECORD";
         return "";
     }
 
@@ -312,6 +312,7 @@
         if (row === 1) {
             if (col < 6) {
                 if (st.hold && st.hold.ok && st.hold.kind === "sample" && st.hold.n === col) return COL.cut;     /* held to unload: red */
+                if (st.recHold === idx && num(v.rc, 0)) return COL.cut;                           /* held to record: red while it records */
                 if (num(v.s, 0) === col) return COL.white;
                 return typeof v.ld === "string" && v.ld[col] === "1" ? COL.sample : COL.sampleEmpty;
             }
@@ -417,7 +418,7 @@
 
     function newState(now) {
         var st = { view: null, held: {}, led: [], ledScan: 0, refresh: 0, lastLedMs: -1000, acc: [0, 0, 0, 0, 0, 0, 0, 0], now: now || 0,
-            lastPad: -1, rawMs: -1000, ledOk: 0, ledFail: 0, ledNone: 0, released: false, lastDraw: 0, zoom: 0, jogAcc: 0, lastCc: -1, hold: null, toast: null, touch: -1, moveSeen: [], fight: [] };
+            lastPad: -1, rawMs: -1000, ledOk: 0, ledFail: 0, ledNone: 0, released: false, lastDraw: 0, zoom: 0, jogAcc: 0, lastCc: -1, hold: null, toast: null, touch: -1, recHold: -1, moveSeen: [], fight: [] };
         for (var i = 0; i < 32; i++) { st.led[i] = -1; st.moveSeen[i] = -1; st.fight[i] = 0; }
         return st;
     }
@@ -520,13 +521,21 @@
             setNow(ctx, "pad_cuts", String(mask));
             return;
         }
-        if (!down) return;
+        if (!down) {
+            if (st.recHold === idx) { setNow(ctx, "record", "0"); if (v) v.rc = 0; st.recHold = -1; }     /* let go: the recording stops (and is cropped and kept) */
+            return;
+        }
         if (row === 1) {
             if (col < 6) {
                 setNow(ctx, "sample", String(col));
                 if (v) v.s = col;
                 var ld = v && typeof v.ld === "string" ? v.ld : "";
                 if (col < 2 || ld[col] === "1") st.hold = { kind: "sample", n: col, idx: idx, since: ctx.now(), ok: col >= 2 };       /* held: a User sample is unloaded */
+                else {                                                           /* an empty User slot, held: it records for as long as it is held */
+                    setNow(ctx, "record", "1");
+                    if (v) v.rc = 1;
+                    st.recHold = idx;
+                }
             } else if (col === 7) {                                                 /* the last pad: Record, on and off */
                 var on = v && num(v.rc, 0) ? 0 : 1;
                 setNow(ctx, "record", String(on));

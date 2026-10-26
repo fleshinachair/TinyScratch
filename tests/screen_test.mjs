@@ -737,6 +737,26 @@ fixtures.forEach((v, i) => {
         check(bt.__tinyscratch.padColor({ view: Object.assign({}, vw, { rc: 1 }), held: {}, hold: null }, 15) === bt.__tinyscratch.COL.cut &&
               bt.__tinyscratch.padColor({ view: vw, held: {}, hold: null }, 15) === bt.__tinyscratch.COL.rec, "it is red while it records");
     }
+    // an empty User slot, held, records for as long as it is held
+    {
+        const bt = load(() => true), c = makeCtx({ values: {} });
+        const vw = Object.assign({}, fixtures[0], { s: 0, ld: "110000", cm: 0, rc: 0 });
+        bt.canvas_overlay.onOpen(c);
+        bt.canvas_overlay.onValues(c, { values: { view: JSON.stringify(vw) } });
+        const user2 = 68 + 8 + 3;
+        c.sets.length = 0;
+        bt.canvas_overlay.onMidi(c, { data: [0x90, user2, 100] });
+        const iS = c.sets.findIndex(([k, v]) => k === "sample" && v === "3"), iR = c.sets.findIndex(([k, v]) => k === "record" && v === "1");
+        check(iS >= 0 && iR > iS, "pressing an empty User slot selects it and starts recording into it: " + JSON.stringify(c.sets));
+        check(bt.__tinyscratch.padColor(bt.canvas_overlay.__st || { view: Object.assign({}, vw, { rc: 1, s: 3 }), held: {}, hold: null, recHold: 11 }, 11) === bt.__tinyscratch.COL.cut, "it is red while it records");
+        c.t += 900; bt.canvas_overlay.onValues(c, { values: { view: JSON.stringify(Object.assign({}, vw, { rc: 1, s: 3 })) } });
+        check(!has(c, "record", "0") && !has(c, "clear"), "held: it keeps recording (and nothing is unloaded)");
+        bt.canvas_overlay.onMidi(c, { data: [0x80, user2, 0] });
+        check(has(c, "record", "0"), "let go: it stops");
+        c.sets.length = 0;
+        bt.canvas_overlay.onMidi(c, { data: [0x90, 68 + 8, 100] }); bt.canvas_overlay.onMidi(c, { data: [0x80, 68 + 8, 0] });
+        check(!has(c, "record"), "a loaded slot (Ahhh) does not record");
+    }
     // a User sample held for a moment is unloaded; Ahhh and Fresssh never are
     {
         const bt = load(() => true), c = makeCtx({ values: {} });

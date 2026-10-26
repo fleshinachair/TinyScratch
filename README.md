@@ -210,10 +210,14 @@ their basic tools, which come from the end of "Change the Beat" (Fab 5 Freddy, 1
 
 **User 1-4** start empty (an empty slot is silent and the screen says EMPTY). Fill them by:
 
-- **Recording** from the Move's audio input: pick a User slot with its pad, then tap the **Record** pad (the last pad of the second row, red while it
-  records). The title becomes REC with the seconds so far and a bar for the input level. Tap it again to stop, or let it stop by itself
-  after two seconds. The recording is that slot's sample, and is kept as `user1.wav` .. `user4.wav` in the module's
-  `samples/` folder, so it is there next time (and `scripts/install_move.sh` leaves those files alone). If Ahhh or Fresssh
+- **Recording** from the Move's audio input: **hold an empty User slot's pad** and it records for as long as you hold it (up to four
+  seconds); let go and it is kept. Or pick a User slot and tap the **Record** pad (the last pad of the second row, red while it
+  records), then tap it again or let it stop by itself. The title becomes REC with the seconds so far and a bar for the input level.
+  A recording is **cropped to its sound** before it is kept: the silence before and after it goes (a few milliseconds are left before
+  the first sound so its attack is whole), the first 40 ms and the last 60 ms are not listened to at all (the press and the let-go of the
+  pad, which the Move's microphone, right beside the pads, hears), and one with no sound in it is thrown away. It is that slot's sample,
+  and is kept as `user1.wav` .. `user4.wav` in the module's `samples/` folder, so it is there next time (and `scripts/install_move.sh`
+  leaves those files alone). If Ahhh or Fresssh
   is selected, Record takes the first empty User slot. Which input it hears (the mic or the line in) is whatever the Move
   itself is set to listen to. **To unload a User sample**, hold its pad for a second and a half (a bar fills along the screen and the pad goes red): the slot
   is emptied and the clips you kept for it go too. A recording, or a file you picked (the copy this module made as `userN.wav`), is deleted

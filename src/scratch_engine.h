@@ -15,7 +15,7 @@
 #define TS_SAMPLE_RATE   44100.0f
 #define TS_SLOTS         6          /* Ahhh, Fresssh, User 1..4 */
 #define TS_MAX_SECONDS   10         /* longest sample; scratching works best with 1 to 2 s */
-#define TS_REC_SECONDS   2          /* the longest recording from the audio input */
+#define TS_REC_SECONDS   4          /* the longest recording from the audio input (it is cropped to its sound when it is kept) */
 #define TS_REC_MIN       2048       /* a recording shorter than this (about 46 ms) is thrown away */
 #define TS_NAME_LEN      64
 #define TS_VIEW_COLS     128        /* waveform columns on the screen */

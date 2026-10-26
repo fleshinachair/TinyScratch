@@ -2101,19 +2101,47 @@ static void test_recording(void)
     render_n(e, buf, 128);
     CHECK(e->pend_ready == 0 && e->slot[3].len == 5120 && e->slot[3].data[100] < 0.6f, "a recording under 46 ms is thrown away and the sample already there stays");
 
-    /* it stops by itself after two seconds, and replaces the old one, which the service call frees */
+    /* it stops by itself after four seconds, and replaces the old one, which the service call frees */
     ts_engine_rec_start(e);
-    for (int b = 0; b < 800; b++) ts_engine_feed_input(e, in, 128);
-    CHECK(e->rec_state == 2 && e->rec_len == e->rec_cap && e->rec_cap == 88200, "it stops by itself after two seconds (%d frames)", e->rec_len);
+    for (int b = 0; b < 1500; b++) ts_engine_feed_input(e, in, 128);
+    CHECK(e->rec_state == 2 && e->rec_len == e->rec_cap && e->rec_cap == 176400, "it stops by itself after four seconds (%d frames)", e->rec_len);
     ts_engine_service(e);
     render_n(e, buf, 128);
     int parked = 0;
     for (int i = 0; i < TS_SLOTS + 2; i++) parked += e->garbage[i] != NULL;
-    CHECK(e->slot[3].len == 88200 && parked == 1, "recording over a sample replaces it; the old data waits for the service call, not freed on the audio thread");
+    CHECK(e->slot[3].len == 176400 - 1764 - 2646 && parked == 1, "recording over a sample replaces it (less the first 40 ms and the last 60 ms: the pad's press and let-go); the old data waits for the service call, not freed on the audio thread (%d)", e->slot[3].len);
     ts_engine_service(e);
     parked = 0;
     for (int i = 0; i < TS_SLOTS + 2; i++) parked += e->garbage[i] != NULL;
     CHECK(parked == 0, "...which frees it");
+
+    /* a held recording is cropped to its sound: the silence round it goes, and so do the taps of the pad at its very ends */
+    {
+        ts_engine_rec_start(e);
+        static float blk2[128];
+        int total = 0;
+        for (int b = 0; b < 345; b++) {                                         /* 1 s: 0.3 s quiet, 0.4 s of voice, 0.3 s quiet, a tap at each end */
+            for (int i = 0; i < 128; i++, total++) {
+                double t = total / 44100.0;
+                float sv = (t >= 0.3 && t < 0.7) ? 0.6f * sinf(0.07f * (float)total) : 0.0005f * sinf(0.3f * (float)total);
+                if (t < 0.01 || t > 0.985) sv = 0.8f;                             /* the press and the let-go */
+                blk2[i] = sv;
+            }
+            ts_engine_feed_input(e, blk2, 128);
+        }
+        ts_engine_rec_stop(e);
+        ts_engine_service(e);
+        render_n(e, buf, 128);
+        int len = e->slot[3].len;
+        CHECK(len > (int)(0.4 * 44100) && len < (int)(0.44 * 44100) && fabsf(e->slot[3].data[0]) < 0.05f && fabsf(e->slot[3].data[(int)(0.006 * 44100)]) > 0.0f,
+              "it keeps the voice and a hair round it (%.3f s), not the silence or the taps", len / 44100.0);
+        ts_engine_rec_start(e);                                                   /* only silence (and the taps): nothing is kept */
+        for (int b = 0; b < 100; b++) { for (int i = 0; i < 128; i++) blk2[i] = (b == 0 || b == 99) ? 0.8f : 0.0f; ts_engine_feed_input(e, blk2, 128); }
+        ts_engine_rec_stop(e);
+        ts_engine_service(e);
+        render_n(e, buf, 128);
+        CHECK(e->slot[3].len == len, "a recording of nothing but the taps is thrown away; the sample already there stays");
+    }
 
     /* from Ahhh or Fresssh it goes to the first empty User slot; empty or full, nothing breaks */
     p.sample = 0;

@@ -1776,6 +1776,27 @@ void ts_engine_clear_slot(ts_engine_t *e, int slot)
     if (e && slot >= 2 && slot < TS_SLOTS) e->clear_req = slot + 1;
 }
 
+/* A recording is cropped to its sound before it is kept: the silence before and after it goes (a few milliseconds are left before the
+ * first sound so its attack is whole, a little more after the last), and in a recording long enough the first 40 ms and the last 60 ms
+ * are not listened to at all: that is where the press and the let-go of a pad are, which the Move's microphone, right beside the pads,
+ * hears. The part kept is [*a, *b); empty if there is no sound. */
+static void rec_crop(const float *x, int n, float sr, int *a, int *b)
+{
+    int head = (int)(0.04f * sr), tail = (int)(0.06f * sr), s = 0, t = n;
+    *a = *b = 0;
+    if (!x || n <= 0) return;
+    if (n > head + tail + TS_REC_MIN) { s = head; t = n - tail; }
+    float peak = 0.0f;
+    for (int i = s; i < t; i++) peak = fmaxf(peak, fabsf(x[i]));
+    float thr = fmaxf(0.06f * peak, 0.002f);
+    int first = s, last = t - 1;
+    while (first < t && fabsf(x[first]) < thr) first++;
+    if (first >= t) return;                                                      /* nothing but silence */
+    while (last > first && fabsf(x[last]) < thr) last--;
+    *a = first - (int)(0.005f * sr) > s ? first - (int)(0.005f * sr) : s;
+    *b = last + 1 + (int)(0.02f * sr) < t ? last + 1 + (int)(0.02f * sr) : t;
+}
+
 void ts_engine_service(ts_engine_t *e)
 {
     if (!e) return;
@@ -1814,11 +1835,13 @@ void ts_engine_service(ts_engine_t *e)
     }
 
     if (e->rec_state == 2) {
-        int n = e->rec_len, slot = e->rec_slot;
+        int slot = e->rec_slot, c0 = 0, c1 = 0;
+        rec_crop(e->rec_buf, e->rec_len, e->sr, &c0, &c1);
+        int n = c1 - c0;
         if (n >= TS_REC_MIN && slot >= 2 && slot < TS_SLOTS) {
             float *buf = (float *)TS_CALLOC((size_t)n * sizeof(float));
             if (buf) {
-                memcpy(buf, e->rec_buf, (size_t)n * sizeof(float));
+                memcpy(buf, e->rec_buf + c0, (size_t)n * sizeof(float));
                 ts_slot_t t;
                 memset(&t, 0, sizeof t);
                 analyse(&t, buf, n);
