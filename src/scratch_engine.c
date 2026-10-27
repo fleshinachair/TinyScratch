@@ -209,7 +209,7 @@ static const ts_clip_t *clip_at(const ts_engine_t *e, int clip)
 double ts_swing_time(double beat, float swing)
 {
     if (!(swing > 0.0f) || !isfinite(beat)) return beat;
-    double a = 0.5 + (double)clampf(swing, 0.0f, 1.0f) / 6.0;                     /* the first sixteenth's share of the eighth */
+    double a = 0.5 + (double)clampf(swing, 0.0f, 1.0f) / 4.0;                     /* the first sixteenth's share of the eighth: 0.667 (a triplet) at 67%, 0.75 (a dotted, hard swing) at 100% */
     double n = floor(beat / 0.5), f = beat / 0.5 - n;
     double x = f < a ? 0.5 * f / a : 0.5 + 0.5 * (f - a) / (1.0 - a);
     return (n + x) * 0.5;
@@ -1491,8 +1491,6 @@ void ts_params_default(ts_params_t *p)
     p->cut_from = TS_CUT_NOTE;
     p->pads = 1;
     p->cues = 1;
-    p->antialias = 1;
-    p->fader = 0.5f;
     p->clip = TS_CLIP_AUTO;              /* the clips in turn: a routine from the first press */
     p->gen_style = 0;
     p->gen_bars = 1;                     /* two bars */
@@ -1519,8 +1517,6 @@ void ts_params_sanitize(ts_params_t *p)
     p->cut_from = clampi(p->cut_from, 0, 127);
     p->pads = p->pads ? 1 : 0;
     p->cues = p->cues ? 1 : 0;
-    p->antialias = p->antialias ? 1 : 0;
-    p->fader = isfinite(p->fader) ? clampf(p->fader, 0.0f, 1.0f) : 0.5f;
     p->clip = clampi(p->clip, 0, TS_CLIP_TRY);
     p->gen_style = clampi(p->gen_style, 0, TS_GEN_STYLES - 1);
     p->gen_bars = clampi(p->gen_bars, 0, 2);
@@ -2197,6 +2193,21 @@ static float read_hermite(const float *d, int len, double pos)
     return ((a * f - b) * f + c) * f + x0;
 }
 
+/* How a clip plays looser with Humanise, at the clip's own time sw_t (beats from its start; pass_beat says which pass round it is, so every
+ * pass is different). The timing drifts (up to 60 ms either way, a new drift every beat), each cut lands early or late (up to 25 ms more, every
+ * sixteenth) and softer (down to 55% of its level), and each stroke runs short or long (up to 8% of the sample), all at 100%. The playback and
+ * the clip view both come here, so the picture is what you hear. */
+static void humanise_at(const ts_params_t *p, double bpm, int clip, int len_beats, double pass_beat, double sw_t,
+                        double *t_path, double *t_gate, double *pos_off, float *lv_scale)
+{
+    const double h = (double)p->humanise, bps = bpm / 60.0;
+    const unsigned sd = mix32((unsigned)(long long)floor(pass_beat / (double)len_beats) * 0x9E3779B9u ^ (unsigned)clip * 0x85EBCA6Bu ^ 0x48554Du);
+    *t_path = sw_t + h * 0.060 * bps * hum_noise(sd, sw_t);
+    *t_gate = *t_path + h * 0.025 * bps * hum_noise(sd ^ 0x1111u, sw_t * 4.0);
+    *pos_off = h * 0.08 * hum_noise(sd ^ 0x2222u, sw_t * 2.0);
+    *lv_scale = (float)(1.0 - h * 0.45 * (0.5 + 0.5 * hum_noise(sd ^ 0x3333u, sw_t * 4.0)));
+}
+
 /* A fast stroke: read from the copies, whose highs are off, between the two that fit its speed. v is the samples the playhead moves per
  * output sample; the copy of rate 1/2^l is clean up to a speed of 2^l, so a speed between 2^(l-1) and 2^l is a blend of those two copies. */
 static float read_mip(const float *d, int len, double pos, double v)
@@ -2238,7 +2249,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
     const float drag = p->drag;
     const float tau = (0.003f + 0.08f * drag * drag) * e->sr;                // 3 .. 83 ms
     const float alpha = 1.0f - expf(-1.0f / tau);
-    const float ramp = 1.0f / (0.002f * powf(4.0f, 1.0f - 2.0f * p->fader) * e->sr);       // a cut takes 2 ms at the middle of the Fader Curve; 8 ms smooth, 0.5 ms sharp
+    const float ramp = 1.0f / (0.001f * e->sr);                             // a cut takes 1 ms: a scratch DJ sets the crossfader curve very steep, so it acts as an on-off switch (Hansen)
     const float nrm = p->normalise && s->loaded ? s->norm : 1.0f;
     const float gain = powf(10.0f, p->gain_db / 20.0f) * nrm;
     const float bite_decay = expf(-1.0f / (0.008f * e->sr));                    /* the attack's extra bite falls away in about 8 ms */
@@ -2306,14 +2317,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         const double sw_t = ts_swing_time(e->mclock, p->swing) - t0;
         double t_path = sw_t, t_gate = sw_t, pos_off = 0.0;
         float lv_scale = 1.0f;
-        if (p->humanise > 0.0f && clip > 0 && live) {
-            const double h = (double)p->humanise, bps = (double)e->bpm / 60.0;
-            const unsigned sd = mix32((unsigned)(long long)floor((e->mclock - t0) / (double)ck->len) * 0x9E3779B9u ^ (unsigned)clip * 0x85EBCA6Bu ^ 0x48554Du);
-            t_path = sw_t + h * 0.025 * bps * hum_noise(sd, sw_t);
-            t_gate = t_path + h * 0.012 * bps * hum_noise(sd ^ 0x1111u, sw_t * 4.0);
-            pos_off = h * 0.04 * hum_noise(sd ^ 0x2222u, sw_t * 2.0);
-            lv_scale = (float)(1.0 - h * 0.30 * (0.5 + 0.5 * hum_noise(sd ^ 0x3333u, sw_t * 4.0)));
-        }
+        if (p->humanise > 0.0f && clip > 0 && live) humanise_at(p, (double)e->bpm, clip, ck->len, e->mclock - t0, sw_t, &t_path, &t_gate, &pos_off, &lv_scale);
 
         if (e->hand_hold > 0) e->hand_hold--;
         if (e->hand_hold > 0 || !live) e->target = e->man;
@@ -2331,7 +2335,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         float smp = 0.0f;
         if (len > 0) {
             const double v = fabs((double)e->vel_out);
-            if (p->antialias && v > 1.0 && len >= 64) smp = read_mip(s->data, len, e->pos * (double)(len - 1), v);       /* (at its own speed or slower, as it always was) */
+            if (v > 1.0 && len >= 64) smp = read_mip(s->data, len, e->pos * (double)(len - 1), v);       /* (at its own speed or slower, as it always was) */
             else smp = read_hermite(s->data, len, e->pos * (double)(len - 1));
         }
 
@@ -2350,7 +2354,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
          * playhead (a fast stroke is where a scratch is bright and hard) and for a few milliseconds as the fader opens (the attack); the make-up
          * gain keeps the loudness where it was, so it is edge and not level. At 0 the sound is untouched. */
         if (p->bite > 0.0f) {
-            if (e->gate > 0.0f && e->gate < 0.02f && want > e->gate) e->bite_atk = 1.0f;
+            if (e->gate > 0.0f && e->gate <= 1.5f * ramp && want > e->gate) e->bite_atk = 1.0f;          /* (the first step or so of a cut opening) */
             e->bite_atk *= bite_decay;
             const float fast = fminf(fabsf(e->vel_out) * (1.0f / 1.5f), 1.0f);     /* (1.5 times the sample's own speed is a typical stroke) */
             const float drive = 1.0f + p->bite * (18.0f * fast + 12.0f * e->bite_atk), dm = drive - 1.0f;
@@ -2447,6 +2451,21 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
             for (int i = a; i < b && !on; i++) on = pk->gate[i];
         }
         jw(&j, "%c", on ? '1' : '0');
+    }
+    if (pk && p->humanise > 0.0f) {                                            /* with Humanise on, what is played as well as what is written: the path and the cuts, this pass */
+        const double t0 = p->clip == TS_CLIP_AUTO ? e->auto_start : 0.0;
+        char hg[TS_LANE + 1];
+        jw(&j, "\",\"lhp\":\"");
+        for (int k = 0; k < TS_LANE && j.len >= 0; k++) {
+            const double t = ((double)k + 0.5) * pk->len / TS_LANE;
+            double tp, tg, po;
+            float lvs;
+            humanise_at(p, (double)e->bpm, e->clip_now, pk->len, e->mclock - t0, t, &tp, &tg, &po, &lvs);
+            jw(&j, "%x", clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po), 0.0f, 1.0f) * 15.0f + 0.5f), 0, 15));
+            hg[k] = ts_clip_cut(e, e->clip_now, tg) ? '1' : '0';
+        }
+        hg[TS_LANE] = 0;
+        jw(&j, "\",\"lhg\":\"%s", hg);
     }
     jw(&j, "\",\"cf\":\"");                                                   /* which clip pads have a clip, and which of those you made */
     for (int k = 0; k < TS_NUM_CLIPS && j.len >= 0; k++) jw(&j, "%c", bank_clip(e, p->sample, k + 1) ? '1' : '0');

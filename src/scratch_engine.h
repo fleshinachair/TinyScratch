@@ -59,14 +59,12 @@ typedef struct {
     int   lock;                 /* 1: the clips follow the transport while it runs (and free-run while it is stopped) */
     int   cut_from;             /* lowest cutting note; C3 = 60 */
     int   pads;                 /* 1: the 32 pads are a fixed grid (below) instead of plain notes */
-    int   antialias;            /* 1: a fast stroke reads from a copy of the sample with the highs taken off (so they do not fold back, and the top goes as it does on a record); 0: straight */
-    float fader;                /* 0..1: how fast the fader opens and closes: 0 smooth (8 ms), 0.5 as it was (2 ms), 1 sharp (0.5 ms) */
     int   cues;                 /* 1: with no clip playing, the bottom row of pads are cues: each drops the needle at an attack of the sample and plays it on */
     int   clip;                 /* 0 off, 1..16 a clip, 17 auto, 18 the clip just generated ("try") */
     int   gen_style;            /* what Generate makes: 0 any, or one of the styles above */
     int   gen_bars;             /* 0, 1, 2: a clip of 1, 2 or 4 bars */
     float gen_fwd;              /* 0..1: how many of Any's bars have a forward (the record let go through the word); 0 = none */
-    float swing;                /* 0..1: the second sixteenth of each pair played late, as clips play (1 = triplets); 0 = straight */
+    float swing;                /* 0..1: the second sixteenth of each pair played late, as clips play (0.67 = triplets, 1 = a hard dotted swing); 0 = straight */
     float humanise;             /* 0..1: how loose a clip plays: its timing drifts, each cut lands a little early or late and a little softer, the strokes a little shorter or longer; 0 = exactly as written */
     float bite;                 /* 0..1: soft saturation of the sound as it plays, harder on a fast stroke and for a moment as the fader opens; 0 = none (clean) */
     float gen_fin;              /* 0..1: how often a clip ends with the whole sample playing through at its own speed, then a pull back; 0 = never */
@@ -194,7 +192,8 @@ void ts_engine_pad_cuts(ts_engine_t *e, unsigned mask);
 /* Clips. Position 0..1 and whether the sound is cut in, at a beat of the song (a clip loops over its length). */
 float ts_clip_pos(const ts_engine_t *e, int clip, double beat);
 /* Swing: where in a clip to read at a moment of the song. Each eighth note is split long-short instead of half and half: the first
- * sixteenth takes 0.5 + swing/6 of it (two thirds at 1, a triplet feel). The playhead path and the fader move together; no clip changes. */
+ * sixteenth takes 0.5 + swing/4 of it (two thirds at 67%, a triplet feel; three quarters at 100%, a hard dotted swing). The playhead path and the
+ * fader move together; no clip changes. */
 double ts_swing_time(double beat, float swing);
 int   ts_clip_cut(const ts_engine_t *e, int clip, double beat);
 /* The fader's level, 0..1: a clip's gate is 0 shut, 1 fully open, and 2 to 7 the lower levels an echo scratch steps down through. */

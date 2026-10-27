@@ -422,7 +422,7 @@ static void test_cuts(void)
     CHECK(fabsf(buf[2047] - 0.5f) < 1e-4f && buf[0] < 0.5f, "C3 cuts the sound in");
     int n05 = 0, n95 = 0;
     for (int i = 0; i < 400; i++) { if (buf[i] < 0.05f * 0.5f) n05 = i; if (buf[i] < 0.95f * 0.5f) n95 = i; }
-    CHECK(n95 - n05 > 60 && n95 - n05 < 100, "a cut ramps in 2 ms, not a click and not a smear (%d samples)", n95 - n05);
+    CHECK(n95 - n05 > 30 && n95 - n05 < 50, "a cut ramps in 1 ms, as steep as a scratch fader's on-off switch, not a smear (%d samples)", n95 - n05);
     ts_engine_note(e, 60, 0, 0);
     render_n(e, buf, 2048);
     CHECK(buf[2047] == 0.0f && buf[0] > 0.45f, "and out");
@@ -1835,41 +1835,29 @@ static void test_antialias(void)
     for (int i = 0; i < len; i++) buf[i] = (float)(0.8 * sin(6.283185307179586 * 1000.0 * i / 44100.0));
     CHECK(fabsf(buf[1234] - (float)(0.8 * sin(6.283185307179586 * 1000.0 * 1234 / 44100.0))) < 1e-6f, "the sample itself is left as it was");
     free(buf);
-    ts_params_t p;
-    ts_params_default(&p);
-    CHECK(p.antialias == 1, "it is on to begin with");
 }
 
-/* Fader Curve: how fast the fader opens and closes. 0.5 is the 2 ms it has always been; 1 sharp (0.5 ms); 0 smooth (8 ms) */
-static void test_fader_curve(void)
+/* The fader: a scratch DJ sets the crossfader curve very steep, so it acts as an on-off switch (Hansen). Ours opens and closes in 1 ms, always. */
+static void test_fader(void)
 {
-    printf("fader curve\n");
-    double frames_to_open[3];
-    const float curves[3] = { 0.0f, 0.5f, 1.0f };
-    for (int c = 0; c < 3; c++) {
-        ts_engine_t *e = ts_engine_create(44100.0f);
-        load_sample(e, 0, "dc.wav", SMP_DC, 0.5f, 44100);
-        ts_params_t p = e->p;
-        p.pads = 0; p.clip = 0; p.normalise = 0; p.note_gate = 1; p.vel_to_vol = 0; p.gain_db = 0.0f; p.fader = curves[c];
-        ts_engine_set_params(e, &p);
-        static float out[2048];
-        ts_engine_note(e, 100, 100, 1);
-        render_n(e, out, 2048);
-        int i = 0;
-        while (i < 2048 && out[i] < 0.45f) i++;                                   /* 90% of a half-scale constant */
-        frames_to_open[c] = i;
-        ts_engine_destroy(e);
-    }
-    const double want[3] = { 0.9 * 0.008 * 44100.0, 0.9 * 0.002 * 44100.0, 0.9 * 0.0005 * 44100.0 };
-    int ok = 1;
-    for (int c = 0; c < 3; c++) ok &= fabs(frames_to_open[c] - want[c]) <= 0.1 * want[c] + 2.0;
-    CHECK(ok, "the fader opens in 8 ms, 2 ms and 0.5 ms at 0, the middle and 100%% of Fader Curve (%.0f, %.0f and %.0f frames to 90%%)", frames_to_open[0], frames_to_open[1], frames_to_open[2]);
-    ts_params_t d;
-    ts_params_default(&d);
+    printf("fader\n");
     ts_engine_t *e = ts_engine_create(44100.0f);
+    load_sample(e, 0, "dc.wav", SMP_DC, 0.5f, 44100);
     ts_params_t p = e->p;
-    p.fader = 9.0f; ts_engine_set_params(e, &p);
-    CHECK(d.fader == 0.5f && e->p.fader == 1.0f, "it starts at the middle (as it was) and is clamped to 0..1");
+    p.pads = 0; p.clip = 0; p.normalise = 0; p.note_gate = 1; p.vel_to_vol = 0; p.gain_db = 0.0f;
+    ts_engine_set_params(e, &p);
+    static float out[2048];
+    ts_engine_note(e, 100, 100, 1);
+    render_n(e, out, 1024);
+    int i = 0;
+    while (i < 1024 && out[i] < 0.45f) i++;                                       /* 90% of a half-scale constant */
+    ts_engine_note(e, 100, 0, 0);
+    render_n(e, out, 1024);
+    int j = 0;
+    while (j < 1024 && out[j] > 0.05f) j++;                                       /* ...and down to 10% again */
+    const double open_ms = i / 44.1, shut_ms = j / 44.1;
+    CHECK(open_ms > 0.7 && open_ms < 1.1, "the fader opens in about 1 ms (%.2f ms to 90%%)", open_ms);
+    CHECK(shut_ms > 0.7 && shut_ms < 1.1, "...and shuts as fast (%.2f ms to 10%%)", shut_ms);
     ts_engine_destroy(e);
 }
 
@@ -2273,8 +2261,8 @@ static void test_swing(void)
 {
     printf("swing\n");
     CHECK(ts_swing_time(1.25, 0.0f) == 1.25 && ts_swing_time(7.0, 1.0f) == 7.0 && fabs(ts_swing_time(7.5, 1.0f) - 7.5) < 1e-9, "no swing: as it was; the beats and the eighths stay where they are");
-    CHECK(fabs(ts_swing_time(2.0 + 1.0 / 3.0, 1.0f) - 2.25) < 1e-9 && fabs(ts_swing_time(2.0 + 0.5 * 0.5833333333, 0.5f) - 2.25) < 1e-6,
-          "full swing: the second sixteenth comes two thirds of the way through the eighth (a triplet); half swing, 0.583 of it");
+    CHECK(fabs(ts_swing_time(2.0 + 0.5 * 0.75, 1.0f) - 2.25) < 1e-9 && fabs(ts_swing_time(2.0 + 0.5 * (2.0 / 3.0), 2.0f / 3.0f) - 2.25) < 1e-6 && fabs(ts_swing_time(2.0 + 0.5 * 0.625, 0.5f) - 2.25) < 1e-6,
+          "full swing: the second sixteenth comes three quarters of the way through the eighth (a hard, dotted swing); 67%% is a triplet (two thirds); half swing, 0.625 of it");
     int mono = 1;
     for (int i = 1; i < 400; i++) mono &= ts_swing_time(i * 0.01, 0.7f) > ts_swing_time((i - 1) * 0.01, 0.7f);
     CHECK(mono, "time only moves forward, whatever the swing");
@@ -2358,7 +2346,7 @@ static void test_humanise(void)
     double lo = 1.0, soft = 0.0;
     for (int b = 1; b + 1 < N; b++)                                               /* (steady levels: not the 2 ms ramps of a cut opening or closing) */
         if (g1[b] > 0.05f && fabsf(g1[b] - g1[b - 1]) < 0.005f && fabsf(g1[b] - g1[b + 1]) < 0.005f) { lo = g1[b] < lo ? g1[b] : lo; soft += g1[b] < 0.95f; }
-    CHECK(soft > 0 && lo > 0.6, "the cuts are a little softer, never much (quietest open level %.2f)", lo);
+    CHECK(soft > 0 && lo > 0.5, "the cuts are softer, never below about half (quietest open level %.2f)", lo);
     ts_engine_t *e = ts_engine_create(44100.0f);
     ts_params_t p = e->p;
     p.humanise = 9.0f; ts_engine_set_params(e, &p);
@@ -2367,6 +2355,27 @@ static void test_humanise(void)
     ts_params_default(&d);
     CHECK(d.humanise == 0.0f, "it starts at 0: clips play as written");
     ts_engine_destroy(e);
+    /* the clip view says what is played as well as what was written, so the effect can be seen */
+    for (int hi = 0; hi < 2; hi++) {
+        ts_engine_t *v = ts_engine_create(44100.0f);
+        load_sample(v, 0, "dc.wav", SMP_DC, 0.5f, 44100);
+        ts_params_t q = v->p;
+        q.clip = 2; q.drag = 0.0f; q.note_gate = 1; q.swing = 0.0f; q.pads = 0; q.humanise = hi ? 1.0f : 0.0f;
+        ts_engine_set_params(v, &q);
+        static float blk[128];
+        ts_engine_sync_beat(v, 4.0);
+        ts_engine_render(v, blk, 128);
+        static char js[8192], lnp[256], lhp[256], lng[256], lhg[256];
+        ts_engine_view(v, js, sizeof js);
+        const int has_h = json_str(js, "lhp", lhp, sizeof lhp) && json_str(js, "lhg", lhg, sizeof lhg);
+        json_str(js, "lnp", lnp, sizeof lnp);
+        json_str(js, "lng", lng, sizeof lng);
+        int path_diff = 0, cut_diff = 0;
+        for (int k = 0; has_h && k < 128; k++) { path_diff += lhp[k] != lnp[k]; cut_diff += lhg[k] != lng[k]; }
+        if (hi) CHECK(has_h && strlen(lhp) == 128 && strlen(lhg) == 128 && path_diff > 5 && cut_diff > 0, "with Humanise up the view has the played path and cuts as well as the written ones (%d of 128 columns of path differ, %d of cuts)", path_diff, cut_diff);
+        else CHECK(!has_h, "...and with it at 0 it does not (nothing to show)");
+        ts_engine_destroy(v);
+    }
 }
 
 static void test_empty_pads(void)
@@ -3699,7 +3708,7 @@ int main(int argc, char **argv)
     test_ttm_styles();
     test_auto_whole_clips();
     test_antialias();
-    test_fader_curve();
+    test_fader();
     test_bite();
     test_cues();
     test_shipped_clips();

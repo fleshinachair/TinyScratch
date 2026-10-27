@@ -708,6 +708,16 @@ fixtures.forEach((v, i) => {
         bt.canvas_overlay.onMidi(c, { data: [0x90, auto, 100] }); bt.canvas_overlay.onMidi(c, { data: [0x80, auto, 0] });
         check(c.sets.filter(([k]) => k === "clip").slice(-1)[0][1] === "17", "...and again on");
     }
+    // with Humanise up the clip view draws what is played as the line, and the path as written as a dotted ghost
+    {
+        const ramp = Array.from({ length: 128 }, (_, k) => "0123456789abcdef"[Math.floor(k / 8) % 16]).join("");
+        const shifted = Array.from({ length: 128 }, (_, k) => "0123456789abcdef"[Math.floor(((k + 5) % 128) / 8) % 16]).join("");
+        const cuts = Array.from({ length: 128 }, (_, k) => (Math.floor(k / 8) % 2 ? "1" : "0")).join("");
+        const base = Object.assign({}, fixtures[0], { cm: 3, lb: 4, lnp: ramp, lng: cuts, lcol: -1 });
+        const plain = draw(box, base), human = draw(box, Object.assign({}, base, { lhp: shifted, lhg: cuts.split("").reverse().join("") }));
+        const lane = (c) => c.count(0, 32, 127, 57);
+        check(lane(human) > lane(plain) && human.px.size !== plain.px.size, "with Humanise up the clip view adds the ghost of the written path to the played line (" + lane(plain) + " lit pixels, " + lane(human) + " with it)");
+    }
     // with no clip playing the bottom row of pads are cues: another colour, and ticks on the waveform where each drops the needle
     {
         const T = box.__tinyscratch, base = Object.assign({}, fixtures[0], { cu: "10203040506070" + "7f", cq: -1 });

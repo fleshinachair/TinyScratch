@@ -208,13 +208,20 @@
             if (b % 4 === 0) px(ctx, lx(b * cpb), L.tickY - 2);
         }
         var pos = typeof v.lnp === "string" ? v.lnp : "", gate = typeof v.lng === "string" ? v.lng : "";
+        /* With Humanise on the DSP also says what is played this pass (lhp, lhg): the written path becomes a dotted ghost and the cuts a row of
+         * ticks above, and the line and the blocks are what you hear, so you can see how far it has moved them. */
+        var played = typeof v.lhp === "string" && v.lhp.length >= 128, hpos = played ? v.lhp : pos, hgate = played && typeof v.lhg === "string" ? v.lhg : gate;
         var lo = L.pathLo, hi = L.pathHi, prevY = -1;
-        for (var k = 0; k < 128 && k < pos.length; k++) {
-            var y = lo - (parseInt(pos[k], 16) || 0) * (lo - hi) / 15, x = lx(k);
+        for (var k = 0; k < 128 && k < hpos.length; k++) {
+            var y = lo - (parseInt(hpos[k], 16) || 0) * (lo - hi) / 15, x = lx(k);
+            if (played && k < pos.length) {
+                px(ctx, x, lo - (parseInt(pos[k], 16) || 0) * (lo - hi) / 15);                       /* the path as written, dotted */
+                if (gate[k] === "1" && k % 2 === 0) px(ctx, x, L.blockY - 1);                          /* ...and where its cuts were */
+            }
             if (k > 0 && prevY >= 0) line(ctx, lx(k - 1), prevY, x, y);
             else px(ctx, x, y);
             prevY = y;
-            if (gate[k] === "1") ctx.fillRect(x, L.blockY, Math.max(1, (k < 127 ? lx(k + 1) : x + 1) - x), L.blockH, 1);      /* a cut: the sound is in */
+            if (hgate[k] === "1") ctx.fillRect(x, L.blockY, Math.max(1, (k < 127 ? lx(k + 1) : x + 1) - x), L.blockH, 1);      /* a cut: the sound is in */
         }
         var cur = clamp(Math.round(num(v.lcol, -1)), -1, 127);
         if (cur >= 0) for (var yy = y0 + 1; yy < y0 + L.laneH - 1; yy += 2) px(ctx, lx(cur), yy);

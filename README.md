@@ -65,17 +65,22 @@ clip never changes):
 
 | dial | what it does |
 |---|---|
-| **Swing** (30%) | each pair of sixteenths long-short instead of even (100% is a triplet feel) |
-| **Humanise** (0%) | loosens a clip the way a hand would: the timing drifts a little (up to 25 ms either way), each cut lands a little early or late (up to 12 ms) and a little softer, and each stroke runs a little short or long. Every pass round the clip is different. At 0 it plays exactly as written |
+| **Swing** (30%) | each pair of sixteenths long-short instead of even: 67% is a triplet feel (the first takes two thirds of the eighth), 100% a hard, dotted swing (three quarters) |
+| **Humanise** (0%) | loosens a clip the way a hand would. At 100% the timing drifts by up to 60 ms either way (a new drift every beat), each cut lands up to 25 ms early or late and softer (down to 55% of its level), and each stroke runs up to 8% of the sample short or long. Every pass round the clip is different. At 0 it plays exactly as written. **You can see it:** with Humanise up, the clip view draws what is played as the line and the blocks, and the path as written as a dotted ghost with ticks for its cuts |
 | **Bite** (0%) | soft saturation of the sound as it plays, for a raw edge that cuts through a dense mix. It bites harder on a fast stroke and for a few milliseconds as the fader opens, and it lifts the highs (above about 1.8 kHz) going in, so the clipping makes them harder and the sound brighter (about 4 to 8 dB more of the energy up there on the built-in samples at 100%). It comes out denser and louder (about 3 to 4.5 dB at 100%) with the peaks brought down, which is what lets a sound through a dense mix and what you can hear on a noisy sample such as Ahhh. At 100% it is very aggressive (what it adds is as loud as the sound itself); 50% is about as strong as 100% used to be. At 0 the sound is clean |
 | **Clip Depth** / **Clip Offset** | how far the clip moves the playhead (0-200%) and where along the sample it moves it: a smaller or shifted version of every clip |
 | **Drag** | how quickly the playhead follows: low is "digital", high is "analogue" |
 | **Gain** | -24 to +12 dB |
-| **Anti-Alias** (on) | a fast stroke reads from a copy of the sample with the highs taken off (copies at half, a quarter and an eighth of its rate are made when it loads), so the highs do not fold back as a hiss when the record is pushed at several times its speed, and the top goes as it does on a record. At its own speed or slower nothing changes. The built-in samples are mid-range noise, so it changes them very little (the top end by half a dB); it matters for bright sounds such as hi-hats and sibilants, and for your own recordings |
 
-**Pad Play: how the pads play.** **Note Gate** (on: the red pads are the fader; off: you always hear the playhead), **Vel to Vol**,
-**Cue Pads** (below) and **Fader Curve**: how fast the fader opens and closes, from smooth (8 ms) through the middle (2 ms, as it has
-always been) to sharp (0.5 ms, a harder click and more bite). Lock, Normalise, Cut From and Pad Grid keep their defaults.
+**Pad Play: how the pads play.** **Note Gate** (on: the red pads are the fader; off: you always hear the playhead), **Vel to Vol** and
+**Cue Pads** (below). Lock, Normalise, Cut From and Pad Grid keep their defaults.
+
+**Two things are fixed, not dials, because they follow how the real thing works.** The **fader** opens and closes in 1 ms: a scratch DJ sets
+the crossfader curve very steep, so it acts as an on-off switch (Hansen). And playback is **anti-aliased**: each sample is kept with copies at
+half, a quarter and an eighth of its rate (made when it loads), and a stroke faster than the sample's own speed reads the copy that fits,
+so the highs do not fold back as a hiss when the record is pushed at several times its speed, and the top goes as it does on a record.
+At its own speed or slower nothing changes. The built-in samples are mid-range noise, so it changes them very little (about half a dB at the
+top); it matters for bright sounds such as hi-hats and sibilants, and for your own recordings.
 
 On the Pads screen the dials are the same (3 to 7), and dial 8 is **Swing**, the quickest playback setting to reach.
 
