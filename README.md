@@ -71,9 +71,11 @@ clip never changes):
 | **Clip Depth** / **Clip Offset** | how far the clip moves the playhead (0-200%) and where along the sample it moves it: a smaller or shifted version of every clip |
 | **Drag** | how quickly the playhead follows: low is "digital", high is "analogue" |
 | **Gain** | -24 to +12 dB |
+| **Anti-Alias** (on) | a fast stroke reads from a copy of the sample with the highs taken off (copies at half, a quarter and an eighth of its rate are made when it loads), so the highs do not fold back as a hiss when the record is pushed at several times its speed, and the top goes as it does on a record. At its own speed or slower nothing changes. The built-in samples are mid-range noise, so it changes them very little (the top end by half a dB); it matters for bright sounds such as hi-hats and sibilants, and for your own recordings |
 
-**Pad Play: how the pads play.** **Note Gate** (on: the red pads are the fader; off: you always hear the playhead), **Vel to Vol**, and
-**Cue Pads** (below). Lock, Normalise, Cut From and Pad Grid keep their defaults.
+**Pad Play: how the pads play.** **Note Gate** (on: the red pads are the fader; off: you always hear the playhead), **Vel to Vol**,
+**Cue Pads** (below) and **Fader Curve**: how fast the fader opens and closes, from smooth (8 ms) through the middle (2 ms, as it has
+always been) to sharp (0.5 ms, a harder click and more bite). Lock, Normalise, Cut From and Pad Grid keep their defaults.
 
 On the Pads screen the dials are the same (3 to 7), and dial 8 is **Swing**, the quickest playback setting to reach.
 

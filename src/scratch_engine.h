@@ -59,6 +59,8 @@ typedef struct {
     int   lock;                 /* 1: the clips follow the transport while it runs (and free-run while it is stopped) */
     int   cut_from;             /* lowest cutting note; C3 = 60 */
     int   pads;                 /* 1: the 32 pads are a fixed grid (below) instead of plain notes */
+    int   antialias;            /* 1: a fast stroke reads from a copy of the sample with the highs taken off (so they do not fold back, and the top goes as it does on a record); 0: straight */
+    float fader;                /* 0..1: how fast the fader opens and closes: 0 smooth (8 ms), 0.5 as it was (2 ms), 1 sharp (0.5 ms) */
     int   cues;                 /* 1: with no clip playing, the bottom row of pads are cues: each drops the needle at an attack of the sample and plays it on */
     int   clip;                 /* 0 off, 1..16 a clip, 17 auto, 18 the clip just generated ("try") */
     int   gen_style;            /* what Generate makes: 0 any, or one of the styles above */

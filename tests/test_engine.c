@@ -1805,6 +1805,74 @@ static void test_auto_whole_clips(void)
     ts_builtins_on_pads = 1;
 }
 
+/* Anti-aliasing: a fast stroke reads copies of the sample with the highs taken off, so they do not fold back; a slow one reads the sample itself */
+static void test_antialias(void)
+{
+    printf("anti-aliasing\n");
+    const int len = 44100;
+    float *buf = (float *)calloc(mip_total(len), sizeof(float));
+    CHECK(buf != NULL && mip_total(len) < 2 * (size_t)len, "the copies take less than the sample again (%zu floats for %d)", mip_total(len), len);
+    if (!buf) return;
+    const double tones[3] = { 1000.0, 15000.0, 5000.0 }, speeds[3] = { 2.0, 2.0, 8.0 };
+    double drop_db[3] = { 0, 0, 0 };
+    for (int t = 0; t < 3; t++) {
+        for (int i = 0; i < len; i++) buf[i] = (float)(0.8 * sin(6.283185307179586 * tones[t] * i / 44100.0));
+        memset(buf + len, 0, (mip_total(len) - (size_t)len) * sizeof(float));
+        build_mips(buf, len);
+        double plain = 0, clean = 0;
+        const int n = (int)((len - 400) / speeds[t]);
+        for (int i = 0; i < n; i++) {
+            const double pos = 200.0 + speeds[t] * i;
+            const float a = read_hermite(buf, len, pos), b = read_mip(buf, len, pos, speeds[t]);
+            plain += (double)a * a;
+            clean += (double)b * b;
+        }
+        drop_db[t] = 10.0 * log10((clean + 1e-12) / (plain + 1e-12));
+    }
+    CHECK(fabs(drop_db[0]) < 1.0, "a 1 kHz tone at twice the speed is not dulled (%+.1f dB)", drop_db[0]);
+    CHECK(drop_db[1] < -20.0, "a 15 kHz tone at twice the speed, which would fold back to 14 kHz, is taken off (%+.1f dB)", drop_db[1]);
+    CHECK(drop_db[2] < -20.0, "...and a 5 kHz tone at eight times the speed, which would fold back to 4 kHz (%+.1f dB)", drop_db[2]);
+    for (int i = 0; i < len; i++) buf[i] = (float)(0.8 * sin(6.283185307179586 * 1000.0 * i / 44100.0));
+    CHECK(fabsf(buf[1234] - (float)(0.8 * sin(6.283185307179586 * 1000.0 * 1234 / 44100.0))) < 1e-6f, "the sample itself is left as it was");
+    free(buf);
+    ts_params_t p;
+    ts_params_default(&p);
+    CHECK(p.antialias == 1, "it is on to begin with");
+}
+
+/* Fader Curve: how fast the fader opens and closes. 0.5 is the 2 ms it has always been; 1 sharp (0.5 ms); 0 smooth (8 ms) */
+static void test_fader_curve(void)
+{
+    printf("fader curve\n");
+    double frames_to_open[3];
+    const float curves[3] = { 0.0f, 0.5f, 1.0f };
+    for (int c = 0; c < 3; c++) {
+        ts_engine_t *e = ts_engine_create(44100.0f);
+        load_sample(e, 0, "dc.wav", SMP_DC, 0.5f, 44100);
+        ts_params_t p = e->p;
+        p.pads = 0; p.clip = 0; p.normalise = 0; p.note_gate = 1; p.vel_to_vol = 0; p.gain_db = 0.0f; p.fader = curves[c];
+        ts_engine_set_params(e, &p);
+        static float out[2048];
+        ts_engine_note(e, 100, 100, 1);
+        render_n(e, out, 2048);
+        int i = 0;
+        while (i < 2048 && out[i] < 0.45f) i++;                                   /* 90% of a half-scale constant */
+        frames_to_open[c] = i;
+        ts_engine_destroy(e);
+    }
+    const double want[3] = { 0.9 * 0.008 * 44100.0, 0.9 * 0.002 * 44100.0, 0.9 * 0.0005 * 44100.0 };
+    int ok = 1;
+    for (int c = 0; c < 3; c++) ok &= fabs(frames_to_open[c] - want[c]) <= 0.1 * want[c] + 2.0;
+    CHECK(ok, "the fader opens in 8 ms, 2 ms and 0.5 ms at 0, the middle and 100%% of Fader Curve (%.0f, %.0f and %.0f frames to 90%%)", frames_to_open[0], frames_to_open[1], frames_to_open[2]);
+    ts_params_t d;
+    ts_params_default(&d);
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_params_t p = e->p;
+    p.fader = 9.0f; ts_engine_set_params(e, &p);
+    CHECK(d.fader == 0.5f && e->p.fader == 1.0f, "it starts at the middle (as it was) and is clamped to 0..1");
+    ts_engine_destroy(e);
+}
+
 /* Bite: soft saturation as the sound plays; harder on a fast stroke and at the attack; level-neutral; nothing at 0 */
 static double goertzel(const float *x, int n, double f, double sr)
 {
@@ -3630,6 +3698,8 @@ int main(int argc, char **argv)
     test_pad_mutes_clip();
     test_ttm_styles();
     test_auto_whole_clips();
+    test_antialias();
+    test_fader_curve();
     test_bite();
     test_cues();
     test_shipped_clips();

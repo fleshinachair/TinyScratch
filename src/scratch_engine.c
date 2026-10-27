@@ -1491,6 +1491,8 @@ void ts_params_default(ts_params_t *p)
     p->cut_from = TS_CUT_NOTE;
     p->pads = 1;
     p->cues = 1;
+    p->antialias = 1;
+    p->fader = 0.5f;
     p->clip = TS_CLIP_AUTO;              /* the clips in turn: a routine from the first press */
     p->gen_style = 0;
     p->gen_bars = 1;                     /* two bars */
@@ -1517,6 +1519,8 @@ void ts_params_sanitize(ts_params_t *p)
     p->cut_from = clampi(p->cut_from, 0, 127);
     p->pads = p->pads ? 1 : 0;
     p->cues = p->cues ? 1 : 0;
+    p->antialias = p->antialias ? 1 : 0;
+    p->fader = isfinite(p->fader) ? clampf(p->fader, 0.0f, 1.0f) : 0.5f;
     p->clip = clampi(p->clip, 0, TS_CLIP_TRY);
     p->gen_style = clampi(p->gen_style, 0, TS_GEN_STYLES - 1);
     p->gen_bars = clampi(p->gen_bars, 0, 2);
@@ -1695,6 +1699,52 @@ static void display_name(char *out, size_t cap, const char *in)
     out[n] = 0;
 }
 
+/* Anti-aliasing for fast strokes. Reading a sample at v times its speed moves everything in it up by v, and what goes past half the sample rate
+ * folds back as a hiss: the highs have to come off *before* it is read, not after. So every sample is kept with copies at half, a quarter and
+ * an eighth of its rate (each filtered to just under its own half-rate, by a 47-tap Blackman windowed sinc, with no delay: sample k of copy l
+ * is the original at 2^l k). They sit in the same allocation, one after the other, so a sample is still one buffer to free. */
+#define MIP_LEVELS 3
+static size_t mip_total(int len)
+{
+    size_t t = (size_t)len;
+    for (int l = 1; l <= MIP_LEVELS; l++) t += (size_t)(len >> l);
+    return t + 4;
+}
+
+static size_t mip_off(int len, int l)
+{
+    size_t o = 0;
+    for (int k = 0; k < l; k++) o += (size_t)(len >> k);
+    return o;
+}
+
+static void build_mips(float *buf, int len)
+{
+    enum { TAPS = 47, HALF = 23 };
+    float h[TAPS];
+    double sum = 0.0;
+    for (int j = 0; j < TAPS; j++) {
+        const double n = (double)(j - HALF), w = 0.42 - 0.5 * cos(2.0 * M_PI * j / (TAPS - 1)) + 0.08 * cos(4.0 * M_PI * j / (TAPS - 1));
+        const double s = n == 0.0 ? 0.5 : sin(M_PI * 0.5 * n) / (M_PI * n);                  /* (a cutoff of a quarter of the rate: just under half of the next copy's) */
+        h[j] = (float)(s * w);
+        sum += (double)h[j];
+    }
+    for (int j = 0; j < TAPS; j++) h[j] = (float)((double)h[j] / sum);
+    for (int l = 1; l <= MIP_LEVELS; l++) {
+        const float *src = buf + mip_off(len, l - 1);
+        float *dst = buf + mip_off(len, l);
+        const int sl = len >> (l - 1), dl = len >> l;
+        for (int k = 0; k < dl; k++) {
+            double acc = 0.0;
+            for (int j = 0; j < TAPS; j++) {
+                const int idx = 2 * k + j - HALF;
+                if (idx >= 0 && idx < sl) acc += (double)h[j] * (double)src[idx];
+            }
+            dst[k] = (float)acc;
+        }
+    }
+}
+
 /* The overview the screen draws (peak and body per column), the extent of the sound, and the gain that brings it to -1 dBFS. */
 static void analyse(ts_slot_t *s, const float *buf, int frames)
 {
@@ -1728,10 +1778,11 @@ int ts_engine_load_wav_mem(ts_engine_t *e, int slot, const char *name, const uin
     int cap = (int)(TS_MAX_SECONDS * e->sr);
     int frames = ts_wav_decode(d, n, NULL, cap, e->sr);          /* a dry run sizes it exactly */
     if (frames < 0) return frames;
-    float *buf = (float *)TS_CALLOC((size_t)frames * sizeof(float));
+    float *buf = (float *)TS_CALLOC(mip_total(frames) * sizeof(float));
     if (!buf) return TS_WAV_ERR_IO;
     int r = ts_wav_decode(d, n, buf, frames, e->sr);
     if (r != frames) { TS_FREE(buf); return r < 0 ? r : TS_WAV_ERR_FORMAT; }
+    build_mips(buf, frames);
 
     ts_slot_t *s = &e->slot[slot];
     analyse(s, buf, frames);
@@ -1944,8 +1995,9 @@ int ts_engine_load_file(ts_engine_t *e, const char *path)
     fclose(f);
     int cap = (int)((float)TS_MAX_SECONDS * e->sr);
     int frames = got == (size_t)size ? ts_wav_decode(raw, got, NULL, cap, e->sr) : TS_WAV_ERR_IO;
-    float *data = frames > 0 ? (float *)TS_CALLOC((size_t)frames * sizeof(float)) : NULL;
+    float *data = frames > 0 ? (float *)TS_CALLOC(mip_total(frames) * sizeof(float)) : NULL;
     if (data && ts_wav_decode(raw, got, data, frames, e->sr) != frames) { TS_FREE(data); data = NULL; }
+    if (data) build_mips(data, frames);
     TS_FREE(raw);
     if (!data) return -5;
     ts_slot_t t;
@@ -2095,11 +2147,12 @@ void ts_engine_service(ts_engine_t *e)
         rec_crop(e->rec_buf, e->rec_len, e->sr, &c0, &c1);
         int n = c1 - c0;
         if (n >= TS_REC_MIN && slot >= 2 && slot < TS_SLOTS) {
-            float *buf = (float *)TS_CALLOC((size_t)n * sizeof(float));
+            float *buf = (float *)TS_CALLOC(mip_total(n) * sizeof(float));
             if (buf) {
                 memcpy(buf, e->rec_buf + c0, (size_t)n * sizeof(float));
                 rec_loudness(buf, n);
                 rec_fade(buf, n, e->sr);
+                build_mips(buf, n);
                 ts_slot_t t;
                 memset(&t, 0, sizeof t);
                 analyse(&t, buf, n);
@@ -2144,6 +2197,22 @@ static float read_hermite(const float *d, int len, double pos)
     return ((a * f - b) * f + c) * f + x0;
 }
 
+/* A fast stroke: read from the copies, whose highs are off, between the two that fit its speed. v is the samples the playhead moves per
+ * output sample; the copy of rate 1/2^l is clean up to a speed of 2^l, so a speed between 2^(l-1) and 2^l is a blend of those two copies. */
+static float read_mip(const float *d, int len, double pos, double v)
+{
+    float lv = log2f((float)v);
+    lv = lv < 0.0f ? 0.0f : (lv > (float)MIP_LEVELS ? (float)MIP_LEVELS : lv);
+    int l1 = (int)ceilf(lv);
+    if (l1 < 1) l1 = 1;
+    const int l0 = l1 - 1;
+    const float w = lv - (float)l0;
+    const float a = read_hermite(d + mip_off(len, l0), len >> l0, pos / (double)(1 << l0));
+    if (w <= 0.0f) return a;
+    const float b = read_hermite(d + mip_off(len, l1), len >> l1, pos / (double)(1 << l1));
+    return a + (b - a) * w;
+}
+
 void ts_engine_render(ts_engine_t *e, float *out, int frames)
 {
     if (!e || !out || frames <= 0) return;
@@ -2169,7 +2238,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
     const float drag = p->drag;
     const float tau = (0.003f + 0.08f * drag * drag) * e->sr;                // 3 .. 83 ms
     const float alpha = 1.0f - expf(-1.0f / tau);
-    const float ramp = 1.0f / (0.002f * e->sr);                             // a cut takes 2 ms
+    const float ramp = 1.0f / (0.002f * powf(4.0f, 1.0f - 2.0f * p->fader) * e->sr);       // a cut takes 2 ms at the middle of the Fader Curve; 8 ms smooth, 0.5 ms sharp
     const float nrm = p->normalise && s->loaded ? s->norm : 1.0f;
     const float gain = powf(10.0f, p->gain_db / 20.0f) * nrm;
     const float bite_decay = expf(-1.0f / (0.008f * e->sr));                    /* the attack's extra bite falls away in about 8 ms */
@@ -2260,7 +2329,11 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         e->vel_out = len > 0 ? (float)((e->pos - before) * (double)(len - 1)) : 0.0f;
 
         float smp = 0.0f;
-        if (len > 0) smp = read_hermite(s->data, len, e->pos * (double)(len - 1));
+        if (len > 0) {
+            const double v = fabs((double)e->vel_out);
+            if (p->antialias && v > 1.0 && len >= 64) smp = read_mip(s->data, len, e->pos * (double)(len - 1), v);       /* (at its own speed or slower, as it always was) */
+            else smp = read_hermite(s->data, len, e->pos * (double)(len - 1));
+        }
 
         /* open: the clip says so while it runs, and a held cutting note or pad shuts it (the pads are the fader on top of the clip);
          * with no clip a held note opens the sound, and Note Gate off means "always heard". */
