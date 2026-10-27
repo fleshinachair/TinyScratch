@@ -1845,7 +1845,7 @@ static void test_bite(void)
     const double h_mid = goertzel(mid, N, 1320.0, 44100.0) / goertzel(mid, N, 440.0, 44100.0);
     CHECK(h_clean < 0.01 && h_bite > 0.05 && h_mid > h_clean && h_mid < h_bite, "Bite adds odd harmonics, more as it goes up (third harmonic: %.3f clean, %.3f at 50%%, %.3f at 100%%)", h_clean, h_mid, h_bite);
     const double r_clean = rms_of(clean, N), r_bite = rms_of(biting, N);
-    CHECK(r_clean > 0.2 && fabs(20.0 * log10(r_bite / r_clean)) < 4.0, "...without much change of level (%.1f dB for a pure sine at full Bite, the worst case; the real samples keep within about 2.5)", 20.0 * log10(r_bite / r_clean));
+    CHECK(r_clean > 0.2 && 20.0 * log10(r_bite / r_clean) > -1.0 && 20.0 * log10(r_bite / r_clean) < 6.0, "...a little denser and louder, never quieter, never much louder (%+.1f dB for a pure sine at full Bite; the real samples gain 1 to 2.5)", 20.0 * log10(r_bite / r_clean));
     int sane = 1;
     for (int i = 0; i < N; i++) sane &= isfinite(biting[i]) && fabsf(biting[i]) <= 1.0f;
     CHECK(sane && peak_of(biting, N) > 0.1f, "...and it never goes past full scale");

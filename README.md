@@ -67,7 +67,7 @@ clip never changes):
 |---|---|
 | **Swing** (30%) | each pair of sixteenths long-short instead of even (100% is a triplet feel) |
 | **Humanise** (0%) | loosens a clip the way a hand would: the timing drifts a little (up to 25 ms either way), each cut lands a little early or late (up to 12 ms) and a little softer, and each stroke runs a little short or long. Every pass round the clip is different. At 0 it plays exactly as written |
-| **Bite** (0%) | soft saturation of the sound as it plays, for a raw edge that cuts through a dense mix. It bites harder on a fast stroke and for a few milliseconds as the fader opens, and it keeps the level about where it was (within a couple of dB), so it adds edge and not loudness. At 100% it is aggressive (the distortion is about 8 dB below the sound); the peaks come down as it flattens them, so raise Gain if you want them back. At 0 the sound is clean |
+| **Bite** (0%) | soft saturation of the sound as it plays, for a raw edge that cuts through a dense mix. It bites harder on a fast stroke and for a few milliseconds as the fader opens, and it comes out denser and a little louder (1 to 2.5 dB at 100% on the built-in samples) with the peaks brought down, which is what lets a sound through a dense mix and what you can hear on a noisy sample such as Ahhh. At 100% it is aggressive: what it adds is only about 5 dB below the sound itself. At 0 the sound is clean |
 | **Clip Depth** / **Clip Offset** | how far the clip moves the playhead (0-200%) and where along the sample it moves it: a smaller or shifted version of every clip |
 | **Drag** | how quickly the playhead follows: low is "digital", high is "analogue" |
 | **Gain** | -24 to +12 dB |
