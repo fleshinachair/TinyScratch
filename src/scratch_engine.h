@@ -115,6 +115,7 @@ typedef struct ts_engine {
     int         cue_on;         /* 1: a cue pad is playing the sound on from its cue */
     int         cue_pad;        /* which one (0..7) */
     float       bite_atk;       /* 1 as the fader opens, falling away in a few milliseconds: Bite bites harder at the attack */
+    float       bite_lp;        /* Bite's brightness: the low part of the sound (a one-pole low-pass), so the highs can be lifted before the clipping */
     double      cue_pos;        /* where it has got to, 0..1 */
     int         last_note;      /* the last note that arrived, 0 if none (the screen shows it, to see what the pads send) */
     int         running;        /* 1: the transport runs (Lock on), or Lock is off: clips play */

@@ -1813,12 +1813,23 @@ static double goertzel(const float *x, int n, double f, double sr)
     return sqrt(s1 * s1 + s2 * s2 - c * s1 * s2) / (n * 0.5);
 }
 
-static void bite_run(float bite, float *cap, int n, float *atk_early, float *atk_late)
+static void bite_run(float bite, float *cap, int n, float *atk_early, float *atk_late, int noise)
 {
     ts_engine_t *e = ts_engine_create(44100.0f);
-    load_sample(e, 0, "sine.wav", SMP_SINE, 0.5f, 44100);
+    if (noise) {                                                                  /* a second of band-limited noise (about 1 kHz of it), like Ahhh and Fresssh */
+        static int16_t pcm[44100];
+        uint32_t r = 12345u;
+        float lp = 0.0f;
+        for (int i = 0; i < 44100; i++) {
+            r = r * 1664525u + 1013904223u;
+            lp += 0.15f * ((float)((int)(r >> 16) - 32768) / 32768.0f - lp);
+            pcm[i] = (int16_t)(clampf(lp * 2.5f, -0.95f, 0.95f) * 32767.0f);
+        }
+        size_t sz = make_wav(g_wav, pcm, 44100, 44100, 1, 16, 1);
+        ts_engine_load_wav_mem(e, 0, "noise.wav", g_wav, sz);
+    } else load_sample(e, 0, "sine.wav", SMP_SINE, 0.5f, 44100);
     ts_params_t p = e->p;
-    p.pads = 1; p.clip = 0; p.drag = 0.0f; p.normalise = 0; p.note_gate = 1; p.bite = bite; p.gain_db = 0.0f;
+    p.pads = 1; p.clip = 0; p.drag = 0.0f; p.normalise = noise ? 1 : 0; p.note_gate = 1; p.bite = bite; p.gain_db = 0.0f;       /* (a real sample is normalised before Bite sees it) */
     ts_engine_set_params(e, &p);
     static float blk[128];
     ts_engine_note(e, TS_PAD_FIRST + 0, 100, 1);                                  /* a cue pad: the sound plays at its own speed while it is held */
@@ -1837,9 +1848,9 @@ static void test_bite(void)
     enum { N = 13230 };
     static float clean[N], biting[N], mid[N];
     float a0, a1, b0, b1, m0, m1;
-    bite_run(0.0f, clean, N, &a0, &a1);
-    bite_run(1.0f, biting, N, &b0, &b1);
-    bite_run(0.5f, mid, N, &m0, &m1);
+    bite_run(0.0f, clean, N, &a0, &a1, 0);
+    bite_run(1.0f, biting, N, &b0, &b1, 0);
+    bite_run(0.5f, mid, N, &m0, &m1, 0);
     const double h_clean = goertzel(clean, N, 1320.0, 44100.0) / goertzel(clean, N, 440.0, 44100.0);
     const double h_bite = goertzel(biting, N, 1320.0, 44100.0) / goertzel(biting, N, 440.0, 44100.0);
     const double h_mid = goertzel(mid, N, 1320.0, 44100.0) / goertzel(mid, N, 440.0, 44100.0);
@@ -1850,6 +1861,21 @@ static void test_bite(void)
     for (int i = 0; i < N; i++) sane &= isfinite(biting[i]) && fabsf(biting[i]) <= 1.0f;
     CHECK(sane && peak_of(biting, N) > 0.1f, "...and it never goes past full scale");
     CHECK(a0 == 0.0f && b0 > 0.6f && b1 < 0.05f, "the attack gets extra bite as the fader opens, gone within 40 ms (%.2f after the first 3 ms, %.2f after 47 ms)", b0, b1);
+    /* on a noisy sound (which is what saturation alone cannot change much): the highs are brighter, and the level is louder */
+    static float n_clean[N], n_bite[N];
+    float na0, na1, nb0, nb1;
+    bite_run(0.0f, n_clean, N, &na0, &na1, 1);
+    bite_run(1.0f, n_bite, N, &nb0, &nb1, 1);
+    double dc = 0, db = 0, ec = 0, eb = 0;
+    for (int i = 1; i < N; i++) {
+        dc += (double)(n_clean[i] - n_clean[i - 1]) * (n_clean[i] - n_clean[i - 1]);
+        db += (double)(n_bite[i] - n_bite[i - 1]) * (n_bite[i] - n_bite[i - 1]);
+        ec += (double)n_clean[i] * n_clean[i];
+        eb += (double)n_bite[i] * n_bite[i];
+    }
+    const double bright_db = 10.0 * log10((db / eb) / (dc / ec)), louder_db = 10.0 * log10(eb / ec);
+    CHECK(ec > 0 && bright_db > 3.0, "Bite brightens a noisy sound: more of its energy is in the highs (%+.1f dB)", bright_db);
+    CHECK(louder_db > -0.5 && louder_db < 10.0 && peak_of(n_bite, N) <= 1.0f, "...and it is never quieter, and never wildly louder or over full scale (%+.1f dB, peak %.2f for this noise; the real samples gain 2.7 to 4.5)", louder_db, (double)peak_of(n_bite, N));
     ts_engine_t *e = ts_engine_create(44100.0f);
     ts_params_t p = e->p;
     p.bite = 9.0f; ts_engine_set_params(e, &p);

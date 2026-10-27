@@ -2173,6 +2173,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
     const float nrm = p->normalise && s->loaded ? s->norm : 1.0f;
     const float gain = powf(10.0f, p->gain_db / 20.0f) * nrm;
     const float bite_decay = expf(-1.0f / (0.008f * e->sr));                    /* the attack's extra bite falls away in about 8 ms */
+    const float bite_a = 1.0f - expf(-6.2831853f * 1800.0f / e->sr);            /* the brightness lifts what is above about 1.8 kHz */
     const double spb = (double)e->bpm / (60.0 * (double)e->sr);
     if (e->pad_raw > 0) {                                                   /* the Pads screen has to keep saying it is there */
         e->pad_raw -= frames;
@@ -2279,9 +2280,14 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
             if (e->gate > 0.0f && e->gate < 0.02f && want > e->gate) e->bite_atk = 1.0f;
             e->bite_atk *= bite_decay;
             const float fast = fminf(fabsf(e->vel_out) * (1.0f / 1.5f), 1.0f);     /* (1.5 times the sample's own speed is a typical stroke) */
-            const float drive = 1.0f + p->bite * (9.0f * fast + 6.0f * e->bite_atk), dm = drive - 1.0f;
+            const float drive = 1.0f + p->bite * (18.0f * fast + 12.0f * e->bite_atk), dm = drive - 1.0f;
             const float makeup = expf(0.1151293f * 1.5f * 1.247f * dm / (1.0f + 0.0447f * dm));   /* (the dB a soft clip of these samples loses, up to a drive of 16, and then half as much again: it comes out denser and louder, which is what lets it through a mix, and what you can hear on a noisy sample) */
-            smp = bite_tanh(smp * nrm * drive) * (makeup / drive) / nrm;
+            const float x = smp * nrm;
+            e->bite_lp += bite_a * (x - e->bite_lp);
+            const float bright = x + 1.2f * p->bite * (x - e->bite_lp);         /* the highs lifted going in, so the clipping makes them harder: a brighter, more aggressive edge */
+            smp = bite_tanh(bright * drive) * (makeup / drive) / nrm;
+        } else {
+            e->bite_lp = smp * nrm;                                             /* (kept up, so turning Bite on does not start with a blip) */
         }
         float vol = p->vel_to_vol ? (float)e->last_vel * (1.0f / 127.0f) : 1.0f;
 
