@@ -55,7 +55,7 @@ clip never changes):
 
 | dial | what it does |
 |---|---|
-| **Style** | what Generate makes: **Any** (a phrase that strings styles together, the way a scratcher would) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag |
+| **Style** | what Generate makes: **Any** (an improvised two-bar phrase of strokes of every length, answered by a changed version of itself; it does not pick from the named styles) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear |
 | **Length** | 1, 2 or 4 bars |
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |
@@ -105,7 +105,7 @@ sixteenth grid):
 |---|---|
 | **Baby** | the record rubbed back and forth, smoothly, with no fader at all: open all the way, the turns heard (now and then a shark-tooth stroke) |
 | **Cuts** | the forward cut: pushed forward, then the fader shuts for the pull back |
-| **Military** | forward cuts interspersed with rubs, a beat each |
+| **Military** | forward cuts interspersed with rubs, a marching rhythm that gathers speed: the strokes get shorter through the bar |
 | **Scribble** | a very quick baby on a small part of the record: a fingertip vibrating on a spot, about twelve times a second whatever the tempo, in bursts |
 | **Stab** | a short, quick push at a constant speed, so a higher pitch, the pull back silent |
 | **Chirp** | a quick baby with a click at each turn, so each stroke is a note of its own |
@@ -114,9 +114,10 @@ sixteenth grid):
 | **Orbit** | the 2-click flare, round and smooth |
 | **Crab** | three or four fast clicks (about sixteen a second) in one record gesture, the pull back silent |
 | **Drag** | slow strokes, low in pitch |
+| **Tear** | the record hand alone, the fader open: pushed forward, stopped, pushed forward again, stopped, then the same backwards: four sounds, two forward and two back (Hansen's "clover tear") |
 
 The Hansen & Bresin measurements describe one DJ's improvisation, which is what "Any" follows. The named styles follow the textbook
-techniques. Not yet built: the **tear** (push, stop, push, stop, then back: four sounds with no fader) and the hydroplane.
+techniques. Not yet built: the hydroplane. A style's number is saved in a clip's recipe, so new styles are added on the end.
 
 The clips are stored in `recipes.txt` and `kept.bin` in the module's folder, so every new instance of the module starts with the same clips
 on the same pads. Clips can also be imported from an Ableton Live Pack you own (`python tools/import_clips.py "your pack.alp"` writes

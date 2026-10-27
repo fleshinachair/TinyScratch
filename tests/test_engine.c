@@ -1300,7 +1300,7 @@ static void test_generator(void)
     CHECK(lens_ok, "one, two or four bars, nothing else");
 
     /* every style: a real path, cut in and out, back where it started so it loops, no wild jumps */
-    static const char *names[GS_COUNT] = { "any", "baby", "cuts", "military", "scribble", "stab", "chirp", "transform", "flare", "crab", "orbit", "drag" };
+    static const char *names[GS_COUNT] = { "any", "baby", "cuts", "military", "scribble", "stab", "chirp", "transform", "flare", "crab", "orbit", "drag", "tear" };
     int shape_ok = 1, loop_ok = 1, jump_ok = 1, duty_ok = 1, range_ok = 1;
     double dsum = 0.0;
     int ndraw = 0, distinct_ok = 1;
@@ -1363,7 +1363,7 @@ static void test_generator(void)
             ts_clip_generate(&s2, y, 5, 1);
             style_distinct &= memcmp(s1.gate, s2.gate, (size_t)s1.n) != 0 || memcmp(s1.pos, s2.pos, (size_t)s1.n * 2) != 0;
         }
-    CHECK(style_distinct, "the eleven styles make different clips");
+    CHECK(style_distinct, "the twelve styles make different clips");
     double d1, t1, l1, h1;
     int j1;
     ts_clip_generate(&s1, GS_BABY, 3, 1);
@@ -1410,7 +1410,7 @@ static void test_generator(void)
         pairs++;
     }
     int all_seen = 1;
-    for (int st = 1; st < GS_COUNT; st++) all_seen &= seen_style[st] > 0 || st == GS_DRAG;          /* (a drag is a whole bar of two slow strokes: 'any' keeps away from it) */
+    for (int st = 1; st < GS_COUNT; st++) all_seen &= seen_style[st] > 0 || st == GS_DRAG || st == GS_TEAR;          /* (a drag is a whole bar of two slow strokes and a tear is only the record hand: 'any' keeps away from both) */
     CHECK(chain_ok && all_seen, "'any' makes a phrase A A B A where B is a style that follows A, as a scratcher would string them, and uses every style");
     CHECK(repeats < pairs / 4, "...with B a different style most of the time (%d of %d are the same)", repeats, pairs);
 
@@ -1667,7 +1667,7 @@ static void test_ttm_styles(void)
 {
     printf("styles as defined\n");
     static ts_clip_t c;
-    const int N = 40;
+    const int N = 40, SP = TS_CLIP_RES / 4;                                       /* (points in a sixteenth) */
     double baby_open = 0, cut_open_falling = 0, cut_open = 0, crab_clicks = 0, points = 0;
     int flare_min = 99, flare_max = 0, stab_linear = 1, stab_bursts = 0;
     for (uint32_t sd = 1; sd <= (uint32_t)N; sd++) {
@@ -1704,6 +1704,45 @@ static void test_ttm_styles(void)
     double slow = scribble_hz(90.0f, N), fast = scribble_hz(150.0f, N);
     CHECK(fabs(slow - fast) < 0.25 * slow, "...whatever the tempo (%.1f a second at 90 bpm, %.1f at 150)", slow, fast);
     CHECK(stab_bursts > 100 && stab_linear, "a stab is pushed at a constant speed (%d samples of it checked)", stab_bursts);
+
+    /* a tear: the record hand only, so the fader is open all the way; two pushes forward and two back, each stopped, twice a bar */
+    int tear_ok = 1, tear_moves = 0, tear_stops = 0;
+    double tear_open = 0, tear_points = 0;
+    for (uint32_t sd = 1; sd <= (uint32_t)N; sd++) {
+        ts_clip_generate_for(&c, GS_TEAR, sd * 7919u, 1, NULL, 0.0f, 120.0f, 0.0f, 0.0f);
+        int moving_prev = 0, runs = 0, ups = 0, downs = 0;
+        for (int i = 0; i < c.n; i++) {
+            int d = (int)c.pos[(i + 1) % c.n] - (int)c.pos[i], mv = abs(d) > 30;
+            tear_open += c.gate[i] != 0;
+            tear_points++;
+            if (mv && !moving_prev) { runs++; if (d > 0) ups++; else downs++; }
+            moving_prev = mv;
+        }
+        tear_ok &= runs >= 8 && runs <= 10 && ups >= 4 && downs >= 4;          /* (two tears: four pushes up and four back, with a stop between each) */
+        tear_moves += runs;
+        for (int i = 0; i + 8 < c.n; i += SP) tear_stops += abs((int)c.pos[i + 8] - (int)c.pos[i]) < 30;
+    }
+    CHECK(tear_ok && tear_open / tear_points > 0.95, "a tear is two pushes forward and two back, each stopped, with the fader open (%.1f moves a bar)", (double)tear_moves / N);
+    CHECK(tear_stops > N, "...and the record really is still between the pushes");
+
+    /* a military scratch speeds up: its strokes get shorter through the bar, and it has both cuts and rubs */
+    double first_len = 0, last_len = 0;
+    int rub_clips = 0, cut_clips = 0;
+    for (uint32_t sd = 1; sd <= (uint32_t)N; sd++) {
+        ts_clip_generate_for(&c, GS_MILITARY, sd * 7919u, 1, NULL, 0.0f, 120.0f, 0.0f, 0.0f);
+        int turns[40], nt = 0, dir = 0, falling_open = 0, falling_shut = 0;
+        for (int i = 0; i < c.n - SP && nt < 40; i++) {
+            int d = (int)c.pos[i + 1] - (int)c.pos[i], nd = d > 20 ? 1 : (d < -20 ? -1 : 0);
+            if (nd && dir && nd != dir) turns[nt++] = i;
+            if (nd) dir = nd;
+            if (d < -20) { if (c.gate[i]) falling_open++; else falling_shut++; }
+        }
+        if (nt >= 4) { first_len += turns[1] - turns[0]; last_len += turns[nt - 1] - turns[nt - 2]; }
+        rub_clips += falling_open > 20;
+        cut_clips += falling_shut > 20;
+    }
+    CHECK(first_len > 1.15 * last_len, "a military scratch gathers speed: its strokes get shorter through the bar (%.0f points at the start, %.0f at the end)", first_len / N, last_len / N);
+    CHECK(rub_clips > N / 2 && cut_clips == N, "...with cuts (the fader shut on the pull) and rubs (open both ways) (%d clips with rubs, %d with cuts, of %d)", rub_clips, cut_clips, N);
 }
 
 /* Cue pads: with no clip playing, the bottom row drops the needle at the sample's attacks and plays on at its own speed */
@@ -2894,7 +2933,7 @@ static void test_state(void)
     api->set_param(h2, "state", big);
     CHECK(memcmp(&keep, &b->p, sizeof keep) == 0, "an oversized state is refused");
     api->set_param(h2, "state", "{\"v\":\"1\",\"drag\":\"nan\",\"gain\":\"9999\",\"clip_depth\":\"77\",\"clip_offset\":\"-9\",\"sample\":\"-3\",\"gen_style\":\"99\"}");
-    CHECK(b->p.gain_db == 12.0f && b->p.clip_depth == 2.0f && b->p.clip_offset == -0.5f && b->p.gen_style == 11 && b->p.sample == 0 && isfinite(b->p.drag) && b->p.drag >= 0.0f && b->p.drag <= 1.0f,
+    CHECK(b->p.gain_db == 12.0f && b->p.clip_depth == 2.0f && b->p.clip_offset == -0.5f && b->p.gen_style == TS_GEN_STYLES - 1 && b->p.sample == 0 && isfinite(b->p.drag) && b->p.drag >= 0.0f && b->p.drag <= 1.0f,
           "out-of-range values are clamped (gain %.1f depth %.1f style %d)", (double)b->p.gain_db, (double)b->p.clip_depth, b->p.gen_style);
     api->set_param(h2, "state", NULL);
     api->set_param(NULL, "state", "{}");

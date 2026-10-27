@@ -356,7 +356,7 @@ int ts_engine_load_clips(ts_engine_t *e, const char *path)
  * Strokes are on the sixteenth grid with a little hand jitter. Every bar ends back at the clip's base position, so the
  * clip loops, and a bar of the same style is never quite the same twice. Positions are 0..1 of the sample's sound
  * (a generated clip is for any sample: it is spread over where the sample has its sound). */
-enum { GS_ANY, GS_BABY, GS_CUTS, GS_MILITARY, GS_SCRIBBLE, GS_STAB, GS_CHIRP, GS_TRANSFORM, GS_FLARE, GS_CRAB, GS_ORBIT, GS_DRAG, GS_COUNT };
+enum { GS_ANY, GS_BABY, GS_CUTS, GS_MILITARY, GS_SCRIBBLE, GS_STAB, GS_CHIRP, GS_TRANSFORM, GS_FLARE, GS_CRAB, GS_ORBIT, GS_DRAG, GS_TEAR, GS_COUNT };       /* (a style's number is saved in a recipe: new ones go on the end) */
 #define GP (TS_CLIP_RES / 4)                         /* dense points per sixteenth */
 
 typedef struct { ts_clip_t *c; uint32_t rng; float amp_t; int shape; int bars; int fw16; float fw_p; int nfw; float fw_t[64], fw_d[64]; int fw_kind[64];
@@ -466,7 +466,7 @@ static void g_warp(gen_t *g, float o, float base)
  * The open-fader scratches (a baby, a scribble, a flare, an orbit: TTM) are the places where the turns are heard, so those keep them all. */
 static void g_mask_turns(gen_t *g, float o, int style)
 {
-    float keep = style == GS_BABY || style == GS_SCRIBBLE || style == GS_FLARE || style == GS_ORBIT ? 1.0f : (style == GS_DRAG ? 0.6f : 0.07f);      /* the share of turns left audible */
+    float keep = style == GS_BABY || style == GS_SCRIBBLE || style == GS_FLARE || style == GS_ORBIT || style == GS_TEAR ? 1.0f : (style == GS_DRAG ? 0.6f : 0.07f);      /* the share of turns left audible */
     int a = (int)(o * (float)GP), b = (int)((o + 16.0f) * (float)GP);
     if (b > g->c->n) b = g->c->n;
     int dir = 0, exti = a;
@@ -583,21 +583,24 @@ static float st_cuts(gen_t *g, float o, float base)
     return top;
 }
 
-/* forward cuts and rubs, in blocks of a beat */
+/* A military scratch: "forward scratches interspersed with rubs" (TTM), a marching rhythm that gathers speed: the strokes get shorter as the
+ * bar goes on. A cut is pushed forward and shut on the pull back; a rub is open both ways. It starts with a cut and mostly alternates. */
 static float st_military(gen_t *g, float o, float base)
 {
-    float top = g_top(g, base, 0.25f, 0.5f, 0.2f, 0.95f), end = base;
-    int rub[4] = { 0, gi(g, 0, 1), gi(g, 0, 1), gi(g, 0, 1) };
-    if (!rub[1] && !rub[2] && !rub[3]) rub[2] = 1;                          /* some of each */
+    static const int sched[3][6] = { { 4, 4, 4, 3, 0, 0 }, { 4, 4, 3, 2, 2, 0 }, { 3, 3, 3, 2, 2, 2 } };     /* sixteenths to a stroke, 15 in all */
+    const int *units = sched[gi(g, 0, 2)];
+    float top = g_top(g, base, 0.25f, 0.5f, 0.2f, 0.95f), t = 0.0f;
+    int rub = 0;
     g_gate(g, o, o + 16.0f, 0);
-    for (int b = 0; b < 4; b++) {
-        float t = 4.0f * (float)b, len = b == 3 ? 3.0f : 4.0f, h = len * 0.5f, tp = top * gr(g, 0.95f, 1.0f);
+    for (int k = 0; k < 6 && units[k]; k++) {
+        float len = (float)units[k], h = len * 0.5f, tp = top * gr(g, 0.95f, 1.0f);
         g_seg(g, o + t, o + t + h, base, tp, g_shape(g));
         g_seg(g, o + t + h, o + t + len, tp, base, g_shape(g));
-        g_gate(g, o + t, o + t + (rub[b] ? len : h), 1);
-        end = base;
+        g_gate(g, o + t, o + t + (rub ? len : h), 1);
+        if (gi(g, 0, 3)) rub = !rub;                                            /* (three times in four the next one is the other kind) */
+        t += len;
     }
-    return end;
+    return base;
 }
 
 /* A scribble: "a very quick baby using a small portion of the record" (TTM), a fingertip vibrating on one spot, about twelve vibrations a
@@ -734,8 +737,25 @@ static float st_drag(gen_t *g, float o, float base)
     return base;
 }
 
+/* A tear (TTM): "performed with just the record hand": pushed forward, stopped, pushed forward again and stopped, then the same backwards,
+ * four sounds, two forward and two back, the fader open all the while (Hansen's clover tear). Where the line is flat the record is still. */
+static float st_tear(gen_t *g, float o, float base)
+{
+    float top = g_top(g, base, 0.25f, 0.55f, 0.2f, 0.95f);
+    const float move = 1.25f;                                                   /* sixteenths in a push; the stop after it is 0.75 */
+    for (int k = 0; k < 2; k++) {                                               /* two tears a bar, eight sixteenths each */
+        const float t = o + 8.0f * (float)k, mid = base + (top - base) * gr(g, 0.45f, 0.55f);
+        const float lv[5] = { base, mid, top, mid, base };
+        for (int m = 0; m < 4; m++) {
+            g_seg(g, t + 2.0f * (float)m, t + 2.0f * (float)m + move, lv[m], lv[m + 1], g_shape(g));
+            g_seg(g, t + 2.0f * (float)m + move, t + 2.0f * (float)m + 2.0f, lv[m + 1], lv[m + 1], SH_LIN);
+        }
+    }
+    return base;
+}
+
 typedef float (*gen_style_fn)(gen_t *, float, float);
-static const gen_style_fn k_styles[GS_COUNT] = { NULL, st_baby, st_cuts, st_military, st_scribble, st_stab, st_chirp, st_transform, st_flare, st_crab, st_orbit, st_drag };
+static const gen_style_fn k_styles[GS_COUNT] = { NULL, st_baby, st_cuts, st_military, st_scribble, st_stab, st_chirp, st_transform, st_flare, st_crab, st_orbit, st_drag, st_tear };
 static const int k_any_weight[GS_COUNT] = { 0, 3, 2, 2, 1, 2, 2, 2, 3, 1, 2, 0 };            /* (Drag is only for when you pick it) */
 
 /* What tends to follow what, as a scratcher would string them: a Markov chain over the styles, one state to a bar. A bar's
@@ -988,7 +1008,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         float o = 16.0f * (float)bar, base = bases[bar], next = bases[(bar + 1) % bars];
         { uint16_t bb = (uint16_t)(base * 65535.0f + 0.5f); for (int i = (int)(o * (float)GP); i < (int)((o + 16.0f) * (float)GP) && i < n; i++) out->pos[i] = bb; }
         float end = k_styles[s](&g, o, base);
-        if (s != GS_STAB && s != GS_CRAB && s != GS_SCRIBBLE) {                 /* (a stab's jabs, a crab's clicks and a scribble's vibrations keep their exact places and sizes) */
+        if (s != GS_STAB && s != GS_CRAB && s != GS_SCRIBBLE && s != GS_TEAR) {   /* (a stab's jabs, a crab's clicks, a scribble's vibrations and a tear's steps keep their exact places and sizes) */
             g_warp(&g, o, base);
             int ie = (int)((o + 15.0f) * (float)GP) - 1;
             if (ie >= 0 && ie < out->n) end = (float)out->pos[ie] / 65535.0f;   /* where the warped path really is */
@@ -999,7 +1019,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         }
         if (s != GS_STAB && s != GS_CRAB) {
             g_mask_turns(&g, o, s);                                             /* (an open-fader scratch keeps its turns; the others hide them) */
-            if (s != GS_BABY && s != GS_SCRIBBLE && s != GS_FLARE && s != GS_ORBIT && s != GS_DRAG) g_limit_open(&g, o);       /* (a baby is open all the way: that is what it is) */
+            if (s != GS_BABY && s != GS_SCRIBBLE && s != GS_FLARE && s != GS_ORBIT && s != GS_DRAG && s != GS_TEAR) g_limit_open(&g, o);       /* (a baby is open all the way: that is what it is) */
         }
     }
     /* now and then the last half bar runs out: a stroke on to the end of the sample, so its tail plays, and a silent jump back */
@@ -1112,7 +1132,7 @@ void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, co
      * long in seconds as at 120 bpm, and the cuts as rare per second; at 120 and below nothing changes. */
     const float stretch = isfinite(bpm) && bpm > 120.0f ? fminf(bpm / 120.0f, 2.0f) : 1.0f;
     const float spx = isfinite(bpm) && bpm > 0.0f ? bpm / 15.0f : 8.0f;           /* sixteenths a second (what a hand does is in seconds: a scribble's vibration, a crab's fingers) */
-    static const float need[GS_COUNT] = { 0.42f, 0.45f, 0.40f, 0.40f, 0.50f, 0.28f, 0.42f, 0.38f, 0.45f, 0.15f, 0.45f, 0.45f };       /* (a crab is a few clicks a beat: about a fifth of it is heard) */
+    static const float need[GS_COUNT] = { 0.42f, 0.45f, 0.40f, 0.40f, 0.50f, 0.28f, 0.42f, 0.38f, 0.45f, 0.15f, 0.45f, 0.45f, 0.40f };       /* (a crab is a few clicks a beat: about a fifth of it is heard) */
     style = clampi(style, 0, GS_COUNT - 1);
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;

@@ -17,12 +17,12 @@
 (function () {
     "use strict";
 
-    var STYLES = ["ANY", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG"];
+    var STYLES = ["ANY", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
     var CLIP_PADS = 14;                                 /* clip pads 1-14; the next two places are Generate (15) and Auto (16) */
     var CLIP_AUTO = 17, CLIP_TRY = 18;               /* the clip parameter: 0 off, 1..16 a clip, 17 auto, 18 the clip just generated */
     var HOLD_MS = 1500;                                /* hold a clip you made, or a User sample, this long to delete / unload it (the Delete button never reaches a screen) */
     var TOAST_MS = 1600;                               /* how long a dial's new value stays on the screen */
-    var STYLE_SHORT = ["ANY", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG"];
+    var STYLE_SHORT = ["ANY", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
     var BARS = [1, 2, 4];
     var BACK_CC = 51;                                  /* the Move's Back button */
     var JOG_CC = 14;                                   /* the jog wheel: right zooms the clip view in, left out */
@@ -47,7 +47,7 @@
     var KNOBS = [
         null,
         null,
-        { key: "gen_style", v: "gs", min: 0, max: 11, steps: true, detents: 2 },
+        { key: "gen_style", v: "gs", min: 0, max: 12, steps: true, detents: 2 },
         { key: "gen_bars", v: "gb", min: 0, max: 2, steps: true, detents: 3 },
         { key: "gen_fwd", v: "gf", min: 0, max: 1, step: 0.05 },                      /* how often Any lets the record go through the word */
         { key: "gen_fin", v: "fn", min: 0, max: 1, step: 0.05 },                      /* how often a clip ends with the whole sample played through */
@@ -222,7 +222,7 @@
 
     function clipLabel(v) {
         var cm = clamp(Math.round(num(v.cm, 0)), 0, 18), cl = clamp(Math.round(num(v.cl, 0)), 0, 18);
-        var ln = Math.round(num(v.ln, 0)), tg = clamp(Math.round(num(v.tg, 0)), 0, 11);
+        var ln = Math.round(num(v.ln, 0)), tg = clamp(Math.round(num(v.tg, 0)), 0, 12);
         var head = cm === CLIP_TRY ? "TRY " + STYLES[tg].slice(0, 5) : (cm ? (cm === CLIP_AUTO ? "AUTO " : "CLIP ") + cl : "HAND");
         return head + (ln > 0 ? " N" + ln : "");                                                    /* N: the last note that arrived */
     }
@@ -264,7 +264,7 @@
         if (inv) ctx.fillRect(0, 57, 128, 7, 1);
         text(ctx, 1, 59, notice || (clipLabel(v) + (pad !== undefined && pad >= 0 ? " P" + pad : "") + (cc !== undefined && cc >= 0 ? " C" + cc : "")), inv ? 0 : 1);
         /* what Generate makes (the dials 7 and 8), then how the pads are being read */
-        var right = STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 11)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : "");
+        var right = STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : "");
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 
@@ -303,7 +303,7 @@
         var inv = !!extra.touchText && notice === extra.touchText;
         if (inv) ctx.fillRect(0, 57, 128, 7, 1);
         text(ctx, 1, 59, notice || ("BAR " + bar + " BEAT " + beat + (pad !== undefined && pad >= 0 ? "  P" + pad : "")), inv ? 0 : 1);
-        var right = STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 11)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
+        var right = STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 
@@ -453,7 +453,7 @@
         switch (k.key) {
         case "clip_depth": return "CLIP DEPTH " + Math.round(val * 100) + "%";
         case "clip_offset": return "CLIP OFFSET " + sign + val.toFixed(2);
-        case "gen_style": return "STYLE " + STYLES[clamp(Math.round(val), 0, 11)];
+        case "gen_style": return "STYLE " + STYLES[clamp(Math.round(val), 0, 12)];
         case "gen_bars": return "LENGTH " + BARS[clamp(Math.round(val), 0, 2)] + (Math.round(val) ? " BARS" : " BAR");
         case "gen_fwd": return "FORWARDS " + Math.round(val * 100) + "%";
         case "swing": return "SWING " + Math.round(val * 100) + "%";
