@@ -55,7 +55,7 @@ clip never changes):
 
 | dial | what it does |
 |---|---|
-| **Style** | what Generate makes: **Improv** (the default: an improvised two-bar phrase of strokes of every length, answered by a changed version of itself; it does not pick from the named styles) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear |
+| **Style** | what Generate makes: **Improv** (the default: an improvised two-bar phrase of strokes of every length, answered by a changed version of itself; it does not pick from the named styles) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear, Rave |
 | **Length** | 1, 2 or 4 bars |
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |
@@ -116,7 +116,14 @@ sixteenth grid):
 | **Drag** | slow strokes, low in pitch |
 | **Tear** | the record hand alone, the fader open: pushed forward, stopped, pushed forward again, stopped, then the same backwards: four sounds, two forward and two back (Hansen's "clover tear") |
 
-The Hansen & Bresin measurements describe one DJ's improvisation, which is what "Improv" follows. The named styles follow the textbook
+**Rave** is the exception: a flavour of the 90s hardcore records, not a textbook technique (nothing documents how the hardcore DJs
+scratched beyond "little touches peppered through the mix"). It is short constant-speed stabs (the TTM stab), cut in and out at once, in
+syncopated bursts: three to five bursts a bar on a 3-3-2 or four-to-the-floor pattern of eighths, each one to three stabs on the sixteenths,
+an occasional double hit, and a rest between. The stabs are never closer than 0.11 s on a fast song, so at 170 bpm they fall on every other
+sixteenth and it stays within what a hand can do (about 5 sounds a second at any tempo). How snappy the turns are is the **Drag** dial's
+business: turn it down.
+
+The Hansen & Bresin measurements describe one DJ's improvisation, which is what "Improv" follows. The other named styles follow the textbook
 techniques. Not yet built: the hydroplane. A style's number is saved in a clip's recipe, so new styles are added on the end.
 
 The clips are stored in `recipes.txt` and `kept.bin` in the module's folder, so every new instance of the module starts with the same clips
