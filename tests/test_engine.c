@@ -1349,7 +1349,7 @@ static void test_generator(void)
             for (int i = 0; i < a.n; i++) {
                 int j = (i + 1) % a.n;
                 double d = fabs((double)a.pos[j] - (double)a.pos[i]) / 65535.0 * TS_CLIP_RES;
-                if (a.gate[i] && d > 0.05) run = 0; else if (++run >= TS_CLIP_RES) { long_gap++; break; }
+                if (a.gate[i] && d > 0.05) run = 0; else if (++run >= (st == GS_RAVE ? 2 : 1) * TS_CLIP_RES) { long_gap++; break; }       /* (a riff may rest a beat between bursts; not two) */
             }
         }
         if (st == GS_CRAB) crab_mean = sum / 60.0;
@@ -1776,8 +1776,39 @@ static void test_ttm_styles(void)
             open_share[bi] = open / pts;
         }
         CHECK(per_s[0] < 6.0 && per_s[1] < 6.5 && per_s[0] > 3.0 && per_s[1] > 3.0, "rave stays within what a hand can do at any tempo (%.1f sounds a second at 120 bpm, %.1f at 170)", per_s[0], per_s[1]);
-        CHECK(close[1] == 0 && close[0] > 0, "...no two hits closer than 90 ms on a fast song, a double hit now and then on a slow one (%.0f at 170 bpm, %.0f at 120)", close[1], close[0]);
+        CHECK(close[1] == 0 && close[0] == 0, "...no two notes closer than 90 ms, on a fast song or a slow one (%.0f at 170 bpm, %.0f at 120)", close[1], close[0]);
         CHECK(down > 0.6 * N && open_share[0] > 0.15 && open_share[0] < 0.5, "...bursts that start on the downbeat (%d of %d clips), the fader open a third of the time (%.0f%%)", down, N, 100.0 * open_share[0]);
+        /* played like an instrument: the pitch of a stab is the speed of its push, and it walks up and down a scale; the second bar answers the first */
+        double distinct_sum = 0, range_sum = 0;
+        int rave_clips = 0, answers = 0;
+        for (uint32_t sd = 1; sd <= (uint32_t)N; sd++) {
+            ts_clip_generate_for(&c, GS_RAVE, sd * 7919u, 2, NULL, 0.0f, 150.0f, 0.0f, 0.0f);
+            answers += memcmp(c.pos, c.pos + c.n / 2, (size_t)(c.n / 2) * 2) != 0;
+            double st[64];
+            int ns = 0, a = -1;
+            for (int i = 0; i <= c.n; i++) {
+                const int open = i < c.n && c.gate[i];
+                if (open && a < 0) a = i;
+                if (!open && a >= 0) {
+                    const int b = i - 1;
+                    if (b - a >= 3 && ns < 64) st[ns++] = fabs((double)c.pos[b] - (double)c.pos[a]) / 65535.0 / ((b - a + 1) / (double)TS_CLIP_RES * 60.0 / 150.0);
+                    a = -1;
+                }
+            }
+            if (ns < 3) continue;
+            double lo = st[0], hi = 0;
+            for (int q = 0; q < ns; q++) if (st[q] < lo) lo = st[q];
+            int seen[48] = { 0 }, distinct = 0;
+            for (int q = 0; q < ns; q++) {
+                const double semis = 12.0 * log2(st[q] / lo);
+                const int bin = (int)floor(semis + 0.5);
+                hi = semis > hi ? semis : hi;
+                if (bin < 48 && !seen[bin]) { seen[bin] = 1; distinct++; }
+            }
+            distinct_sum += distinct; range_sum += hi; rave_clips++;
+        }
+        CHECK(rave_clips > N / 2 && distinct_sum / rave_clips > 4.5 && range_sum / rave_clips > 8.0, "...played like an instrument: a riff of different pitches, about %.1f of them over %.1f semitones a clip", distinct_sum / rave_clips, range_sum / rave_clips);
+        CHECK(answers > 0.85 * N, "...and the second bar answers the first, it is not the same bar twice (%d of %d clips)", answers, N);
     }
 
     CHECK(first_len > 1.15 * last_len, "a military scratch gathers speed: its strokes get shorter through the bar (%.0f points at the start, %.0f at the end)", first_len / N, last_len / N);
