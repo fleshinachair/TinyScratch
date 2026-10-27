@@ -168,7 +168,7 @@ static void recount_clips(ts_engine_t *e)
     for (int i = 1; i <= TS_NUM_CLIPS; i++) n += bank_clip(e, e->p.sample, i) != NULL;
     e->nclips = n;
     e->clips_ver++;
-    e->auto_bar = -1;
+    e->auto_start = 1.0; e->auto_end = 0.0;                                       /* (an empty turn: the first frame chooses) */
 }
 
 /* The eight hand-written clips are not on any pad any more: every sample starts with empty pads, for the clips you generate and keep. They
@@ -289,25 +289,43 @@ static void hand_of(long long hand, int k, int out[TS_NUM_CLIPS])
     }
 }
 
+/* Which clip Auto plays at a beat of the song, and the beats its turn begins and ends: every clip is played right through, from its
+ * own start, and then another. The turns are dealt out in hands as before, each hand a shuffle of all the clips; every hand lasts as long
+ * as all the clips together (a one-bar clip a bar, a four-bar one four), so the hand and the place in it depend on nothing but the beat. */
+static int auto_at(const ts_engine_t *e, double beat, double *start, double *end)
+{
+    int cand[TS_NUM_CLIPS], k = auto_candidates(e, cand);
+    double len[TS_NUM_CLIPS], total = 0.0;
+    for (int i = 0; i < k; i++) {
+        const ts_clip_t *c = bank_clip(e, e->p.sample, cand[i]);
+        len[i] = c && c->len >= 1 ? (double)c->len : (double)TS_LANE_BEATS;
+        total += len[i];
+    }
+    if (k < 1 || !isfinite(beat)) { *start = isfinite(beat) ? floor(beat / TS_LANE_BEATS) * TS_LANE_BEATS : 0.0; *end = *start + TS_LANE_BEATS; return 0; }
+    if (k == 1) { *start = floor(beat / len[0]) * len[0]; *end = *start + len[0]; return cand[0]; }
+    const double hand_d = floor(beat / total), off = beat - hand_d * total;
+    const long long hand = (long long)hand_d;
+    int order[TS_NUM_CLIPS];
+    if (k == 2) { order[0] = 0; order[1] = 1; }                                  /* only two: the other one, every time */
+    else {
+        int prev[TS_NUM_CLIPS];
+        hand_of(hand, k, order);
+        hand_of(hand - 1, k, prev);
+        if (order[0] == prev[k - 1]) { int t = order[0]; order[0] = order[1]; order[1] = t; }       /* (a hand never starts with the clip the last one ended on) */
+    }
+    double acc = 0.0;
+    for (int i = 0; i < k; i++) {
+        const double l = len[order[i]];
+        if (off < acc + l || i == k - 1) { *start = hand_d * total + acc; *end = *start + l; return cand[order[i]]; }
+        acc += l;
+    }
+    return cand[order[k - 1]];
+}
+
 int ts_clip_auto(const ts_engine_t *e, long long bar)
 {
-    if (!e) return 0;
-    int cand[TS_NUM_CLIPS], k = auto_candidates(e, cand);
-    if (k < 1) return 0;
-    if (k == 1) return cand[0];
-    if (k == 2) return cand[(int)(((bar % 2) + 2) % 2)];            /* only two: the other one, every bar */
-    long long hand = bar >= 0 ? bar / k : -((-bar + k - 1) / k);
-    int idx = (int)(bar - hand * k);
-    int h[TS_NUM_CLIPS], prev[TS_NUM_CLIPS];
-    hand_of(hand, k, h);
-    if (idx <= 1) {
-        hand_of(hand - 1, k, prev);
-        if (h[0] == prev[k - 1]) {
-            if (idx == 0) { int t = h[0]; h[0] = h[1]; h[1] = t; }
-            else return cand[h[0]];                                     /* (the swap moved the second one to the first place) */
-        }
-    }
-    return cand[h[idx]];
+    double s, f;
+    return e ? auto_at(e, (double)bar * (double)TS_LANE_BEATS, &s, &f) : 0;
 }
 
 int ts_engine_load_clips(ts_engine_t *e, const char *path)
@@ -2161,14 +2179,15 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         e->running = running;
         const int live = running || held;
         int clip = p->clip;
-        if (clip == TS_CLIP_AUTO) {                                         /* a random other clip each bar, kept for the bar */
-            long long bar = (long long)floor(e->mclock / (double)TS_LANE_BEATS);
-            if (bar != e->auto_bar || e->auto_sample != p->sample || e->auto_nc != (int)e->clips_ver) {
-                e->auto_bar = bar; e->auto_sample = p->sample; e->auto_nc = (int)e->clips_ver;
-                e->auto_clip = ts_clip_auto(e, bar);
+        double t0 = 0.0;                                                    /* where the clip's turn began: Auto plays each clip from its own start */
+        if (clip == TS_CLIP_AUTO) {                                         /* a clip right through, then a random other one */
+            if (e->mclock < e->auto_start || e->mclock >= e->auto_end || e->auto_sample != p->sample || e->auto_nc != (int)e->clips_ver) {
+                e->auto_sample = p->sample; e->auto_nc = (int)e->clips_ver;
+                e->auto_clip = auto_at(e, e->mclock, &e->auto_start, &e->auto_end);
             }
             clip = e->auto_clip;
             e->clip_now = clip;
+            t0 = e->auto_start;
         } else if (clip > 0) {
             e->clip_now = clip;
         }
@@ -2201,12 +2220,12 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         /* The clip's own time, swung. Humanise loosens a clip as it plays, whatever is stored: the timing drifts (up to 25 ms either way, a new
          * drift every beat), each cut lands a little early or late (up to 12 ms, every sixteenth) and a little softer, and each stroke runs a
          * little short or long (up to 4% of the sample). Every pass round the clip is different; at 0 it is exactly as written. */
-        const double sw_t = ts_swing_time(e->mclock, p->swing);
+        const double sw_t = ts_swing_time(e->mclock, p->swing) - t0;
         double t_path = sw_t, t_gate = sw_t, pos_off = 0.0;
         float lv_scale = 1.0f;
         if (p->humanise > 0.0f && clip > 0 && live) {
             const double h = (double)p->humanise, bps = (double)e->bpm / 60.0;
-            const unsigned sd = mix32((unsigned)(long long)floor(e->mclock / (double)ck->len) * 0x9E3779B9u ^ (unsigned)clip * 0x85EBCA6Bu ^ 0x48554Du);
+            const unsigned sd = mix32((unsigned)(long long)floor((e->mclock - t0) / (double)ck->len) * 0x9E3779B9u ^ (unsigned)clip * 0x85EBCA6Bu ^ 0x48554Du);
             t_path = sw_t + h * 0.025 * bps * hum_noise(sd, sw_t);
             t_gate = t_path + h * 0.012 * bps * hum_noise(sd ^ 0x1111u, sw_t * 4.0);
             pos_off = h * 0.04 * hum_noise(sd ^ 0x2222u, sw_t * 2.0);
@@ -2247,7 +2266,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         /* the clip view's cursor, and with no clip the record of what the playhead did, over whatever the last pass left */
         const int lane_len = clip > 0 ? ck->len : TS_LANE_BEATS;
         e->lane_len = lane_len;
-        int col = clampi((int)(fmod(e->mclock, (double)lane_len) * (double)TS_LANE / (double)lane_len), 0, TS_LANE - 1);
+        int col = clampi((int)(fmod(e->mclock - t0, (double)lane_len) * (double)TS_LANE / (double)lane_len), 0, TS_LANE - 1);
         if (!live || clip > 0) {
             e->lane_col = col;
         } else if (col != e->lane_col) {
@@ -2337,8 +2356,9 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
         jw(&j, ",\"zs\":%.3f,\"zw\":%.1f,\"zp\":\"", start, w);
         for (int c = 0; c < TS_LANE && j.len >= 0; c++) {
             double beat = start + ((double)c + 0.5) * w / (double)TS_LANE;
-            int clip = p->clip == TS_CLIP_AUTO ? ts_clip_auto(e, (long long)floor(beat / (double)TS_LANE_BEATS)) : p->clip;     /* in auto, the next bar's clip when the window reaches it */
-            double sb = ts_swing_time(beat, p->swing);
+            double a_start = 0.0, a_end = 0.0;
+            int clip = p->clip == TS_CLIP_AUTO ? auto_at(e, beat, &a_start, &a_end) : p->clip;     /* in auto, the next clip when the window reaches it */
+            double sb = ts_swing_time(beat, p->swing) - a_start;
             jw(&j, "%02x", clip > 0 ? clampi((int)(ts_clip_pos(e, clip, sb) * 255.0f + 0.5f), 0, 255) : 0);
             gates[c] = clip > 0 && ts_clip_cut(e, clip, sb) ? '1' : '0';
         }

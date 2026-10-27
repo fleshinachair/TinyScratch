@@ -27,8 +27,8 @@
 
 /* Clips: a clip is a few bars of playhead movement (its Turntable automation) and the notes that cut the sound in. They
  * are loaded from local/clips.bin (tools/import_clips.py makes it from a Live Pack you own); without it there are eight
- * built-in one-bar clips. 0 is off; TS_CLIP_AUTO works like a clip Follow Action set to "Other" with Legato launch: at
- * the end of every bar, a random OTHER clip, played from the same position of its loop as the song has reached. A clip
+ * built-in one-bar clips. 0 is off; TS_CLIP_AUTO plays a clip right through, from its own start, and then a random OTHER
+ * one (like a clip Follow Action set to "Other"): a one-bar clip is a bar, a four-bar clip four. A clip
  * can be made for a sample (Ahhh or Fresssh): auto picks among those for the sample in use (all of them for a user sample). While a clip runs it moves the playhead and cuts;
  * the Turntable knob still takes over for a moment, and held notes add cuts. */
 #define TS_NUM_CLIPS      16                /* clip pads: the built-in or imported clips, then the ones you keep */
@@ -137,7 +137,7 @@ typedef struct ts_engine {
     unsigned    view_seq;       /* counts audio blocks: it is in the view, so the view differs on every poll (and a screen is told) */
     int         zoom;           /* the zoomed clip view on the Pads screen: 0 off, 1..3 = a window of 4, 2 or 1 beats */
     char        recipes_path[480];
-    long long   auto_bar;       /* auto's choice is kept for the bar it was made in */
+    double      auto_start, auto_end;   /* auto's choice is kept for the beats of its turn: from where the clip starts to where it ends */
     int         auto_sample, auto_nc, auto_clip;
 
     /* Recording from the audio input into a User slot. The render thread only ever copies input into rec_buf and swaps in
@@ -194,7 +194,7 @@ double ts_swing_time(double beat, float swing);
 int   ts_clip_cut(const ts_engine_t *e, int clip, double beat);
 /* The fader's level, 0..1: a clip's gate is 0 shut, 1 fully open, and 2 to 7 the lower levels an echo scratch steps down through. */
 float ts_clip_level(const ts_engine_t *e, int clip, double beat);
-int   ts_clip_auto(const ts_engine_t *e, long long bar);      /* which clip (1..) auto plays in this bar of the song */
+int   ts_clip_auto(const ts_engine_t *e, long long bar);      /* which clip (1..) auto plays at the start of this bar of the song (a clip's turn lasts as many bars as it is long) */
 int   ts_engine_load_clips(ts_engine_t *e, const char *path);  /* clips.bin: the clip count, or TS_WAV_ERR_*; file I/O */
 
 /* The generator: a clip made from a style and a seed, from the vocabulary of scratching (babies, cuts, military, scribbles,

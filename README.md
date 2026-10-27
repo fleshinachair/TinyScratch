@@ -18,8 +18,8 @@ Pads screen opens full screen and the pads light up (Back leaves it):
 come with three clips on pads 1 to 3 to start with.) Press play on the Move if nothing is sounding: clips follow the transport. The dials shape what comes next: **Style** (Improv, Baby, Cuts, Flare, ...) and **Length**
 (1, 2 or 4 bars), **Forwards**, **Finish** and **Echo** (dials 3 to 7; touch one to see its name and value).
 
-**3. Keep it.** Tap an **empty clip pad** while the generated clip is playing. It stays on that pad for that sample, and **Auto** (a
-random other clip every bar) will include it.
+**3. Keep it.** Tap an **empty clip pad** while the generated clip is playing. It stays on that pad for that sample, and **Auto** (which
+plays each clip right through, from its start, then a random other one) will include it.
 
 **4. Delete it.** Hold a clip pad for a second and a half (a bar fills the screen and the pad goes red). **Any clip can be deleted**,
 including the ones that come with the module. The other pads stay where they are.

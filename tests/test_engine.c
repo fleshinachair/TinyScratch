@@ -1137,17 +1137,22 @@ static void test_clip_files(void)
         p = e->p;
         p.sample = slot == 2 ? 2 : slot;
         ts_engine_set_params(e, &p);
-        int prev = 0;
+        int prev = 0, run = 0;
         for (long long bar = 0; bar < 200; bar++) {
             int c = ts_clip_auto(e, bar);
             seen[slot][c]++;
-            if (slot < 2 && bar > 0) nodup &= c != prev;
+            if (slot < 2 && bar > 0 && c != prev) {                                /* a turn ends: it lasted exactly as long as the clip, and the other one is next */
+                const ts_clip_t *pc = bank_clip(e, p.sample, prev);
+                nodup &= pc && run * TS_LANE_BEATS == pc->len;
+                run = 0;
+            }
+            run++;
             prev = c;
         }
     }
     CHECK(seen[0][1] > 0 && seen[0][2] > 0 && seen[0][3] == 0 && seen[1][1] > 0 && seen[1][2] > 0 && seen[1][3] == 0, "Ahhh and Fresssh: auto plays the two clips on their pads");
     CHECK(seen[2][1] == 200 && seen[2][0] == 0, "a user sample has one: auto plays that one");
-    CHECK(nodup, "with two to choose from it is the other one every bar");
+    CHECK(nodup, "with two to choose from each is played right through (an 8-beat clip is two bars, a one-bar clip one), and then the other one");
 
     /* playing: Legato, the position the song has reached; a clip made for the sample plays where it says, one for anything is spread */
     static int16_t gap[44100];
@@ -1743,6 +1748,61 @@ static void test_ttm_styles(void)
     }
     CHECK(first_len > 1.15 * last_len, "a military scratch gathers speed: its strokes get shorter through the bar (%.0f points at the start, %.0f at the end)", first_len / N, last_len / N);
     CHECK(rub_clips > N / 2 && cut_clips == N, "...with cuts (the fader shut on the pull) and rubs (open both ways) (%d clips with rubs, %d with cuts, of %d)", rub_clips, cut_clips, N);
+}
+
+/* Auto plays every clip right through, from its own start, and then another: a one-bar clip a bar, a two-bar clip two, a four-bar clip four */
+static void test_auto_whole_clips(void)
+{
+    printf("auto plays whole clips\n");
+    ts_builtins_on_pads = 0;
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_engine_set_recipes_path(e, "");
+    load_sample(e, 0, "ahhh.wav", SMP_SINE, 0.7f, 44100);
+    ts_params_t p = e->p;
+    p.pads = 0; p.drag = 0.0f; p.swing = 0.0f; p.normalise = 0;
+    int pad[3], lens_ok = 1;
+    for (int i = 0; i < 3; i++) {                                                /* a clip of one, two and four bars */
+        p.gen_bars = i;
+        ts_engine_set_params(e, &p);
+        ts_engine_generate(e);
+        pad[i] = ts_engine_keep(e, 0);
+        const ts_clip_t *k = pad[i] > 0 ? bank_clip(e, 0, pad[i]) : NULL;
+        lens_ok &= k && k->len == 4 << i;
+    }
+    p.clip = TS_CLIP_AUTO;
+    ts_engine_set_params(e, &p);
+    CHECK(lens_ok && e->nclips == 3, "(three clips of 1, 2 and 4 bars)");
+    /* the turns: each lasts as long as its clip, and every hand of them (7 bars) has each clip once */
+    int run_clip[64], run_bars[64], nr = 0;
+    for (long long bar = 0; bar < 49; bar++) {
+        int c = ts_clip_auto(e, bar);
+        if (nr > 0 && run_clip[nr - 1] == c) run_bars[nr - 1]++;
+        else { run_clip[nr] = c; run_bars[nr] = 1; nr++; }
+    }
+    int turns_ok = nr >= 18, hands_ok = 1;
+    for (int r = 0; r + 1 < nr; r++) {                                           /* (all but the last, which the loop cut short) */
+        const ts_clip_t *k = bank_clip(e, 0, run_clip[r]);
+        turns_ok &= k && run_bars[r] * TS_LANE_BEATS == k->len;
+    }
+    for (int h = 0; h + 3 <= nr - 1 && h < 15; h += 3)
+        hands_ok &= run_clip[h] != run_clip[h + 1] && run_clip[h + 1] != run_clip[h + 2] && run_clip[h] != run_clip[h + 2];
+    CHECK(turns_ok, "each clip's turn is exactly its length (%d turns in 49 bars)", nr);
+    CHECK(hands_ok, "...and every hand of three has each clip once");
+    /* in the engine: a turn starts on its clip's first beat, and a long clip is not restarted at each bar */
+    static float blk[128];
+    int starts_ok = 1, carries_ok = 1, bar = 0;
+    for (int r = 0; r < 12 && r + 1 < nr; r++) {
+        for (int b = 0; b < run_bars[r]; b++, bar++) {
+            ts_engine_sync_beat(e, (double)bar * TS_LANE_BEATS);
+            ts_engine_render(e, blk, 128);
+            const double into = e->mclock - e->auto_start;
+            starts_ok &= e->clip_now == run_clip[r] && fabs(into - 4.0 * b) < 0.05;                /* (b bars into its turn, which began at its first beat) */
+            if (b > 0) carries_ok &= e->clip_now == run_clip[r] && into > 3.9;
+        }
+    }
+    CHECK(starts_ok && carries_ok, "the engine plays each clip from its own start, and carries on through its later bars");
+    ts_engine_destroy(e);
+    ts_builtins_on_pads = 1;
 }
 
 /* Cue pads: with no clip playing, the bottom row drops the needle at the sample's attacks and plays on at its own speed */
@@ -3489,6 +3549,7 @@ int main(int argc, char **argv)
     test_tempo();
     test_pad_mutes_clip();
     test_ttm_styles();
+    test_auto_whole_clips();
     test_cues();
     test_shipped_clips();
     test_pad_runs_clip();
