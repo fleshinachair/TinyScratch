@@ -82,8 +82,10 @@ Generate makes a **recipe** (sample, style, seed, length, and the dial settings)
 gives the same clip. A kept clip is saved exactly (its playhead path and fader), so it sounds the same whatever the generator becomes later.
 
 - **Any** is a two-bar phrase of strokes of every length, then the same phrase again with some strokes changed, on the sixteenth grid at
-  any tempo. The fader is laid on the grid and the record turns a little ahead of the beat, so every cut bites in with the record already
-  moving fast.
+  any tempo up to 120 bpm. The fader is laid on the grid and the record turns a little ahead of the beat, so every cut bites in with the
+  record already moving fast. **On a faster song** (above 120 bpm) the strokes and the cuts keep the length in seconds they have at 120, so
+  there are fewer to the bar: no more sounds a second (about 6.5) than a hand can make, however fast the song. (At 160 bpm the plain grid
+  made 8.6 a second, with strokes up to five times the sample's own speed.)
 - **It looks at the sample.** It finds the attacks (the start of the sound and any strong rise out of a real dip) and starts each bar's strokes
   just inside one, because a DJ puts the record where the sound bites.
 - **Mostly sound, not silence.** Each clip is measured as it is made; a seed that comes out too quiet for its style is thrown again.

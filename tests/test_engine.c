@@ -1796,8 +1796,9 @@ static void test_attacks(void)
 
 /* the module as it ships: no hand-written clips on any pad */
 /* Swing: as a clip plays, each eighth is split long-short; the clip itself does not change */
-/* Tempo: Generate does not look at the song's tempo when it lays out the phrase (a version that moved to triplets and thirty-seconds on slow songs
- * sounded worse and was taken out): the same seed makes the same clip at any tempo */
+/* Tempo: up to 120 bpm Generate does not look at the song's tempo when it lays out the phrase (a version that moved to triplets and
+ * thirty-seconds on slow songs sounded worse and was taken out): the same seed makes the same clip. Above 120 the strokes and the cuts are
+ * as long (and as rare) in seconds as at 120, so a fast song does not get more sounds a second than a hand can make. */
 static uint32_t clip_fnv(const ts_clip_t *c)
 {
     uint32_t h = 2166136261u;
@@ -1808,7 +1809,7 @@ static uint32_t clip_fnv(const ts_clip_t *c)
 static void test_tempo(void)
 {
     printf("tempo\n");
-    /* clips made before the tempo was looked at, for a few seeds and styles: the tempo does not change them (Any is always on sixteenths) */
+    /* clips made before the tempo was looked at, for a few seeds and styles: the tempo does not change them up to 120 bpm */
     static const uint32_t before[15] = { 1953970742u, 557623256u, 1711664955u, 4219920907u, 4086795089u, 4086795089u, 1724656640u, 2335758686u,
                                           2335758686u, 3515860986u, 236595325u, 236595325u, 4199836569u, 3654799649u, 3654799649u };
     ts_engine_t *e = ts_engine_create(44100.0f);
@@ -1821,14 +1822,30 @@ static void test_tempo(void)
             if (sl >= 0 && !have) continue;
             uint32_t seed = 7919u * (uint32_t)(k + 3);
             for (int bi = 0; bi < 8; bi++) {
-                const float bpms[8] = { 120.0f, 140.0f, 99.0f, 90.0f, 75.0f, 66.0f, 55.0f, 40.0f };
+                const float bpms[8] = { 120.0f, 119.0f, 99.0f, 90.0f, 75.0f, 66.0f, 55.0f, 40.0f };
                 float bpm = bpms[bi];
                 ts_clip_generate_for(&c, cfg[k][0], seed, cfg[k][1], sl >= 0 ? &e->slot[sl] : NULL, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f, 0.0f);
                 same &= clip_fnv(&c) == before[k * 3 + (sl + 1)];
                 n_checked++;
             }
         }
-    CHECK(same && n_checked >= 15, "at 40 to 140 bpm the clips are exactly what they were, the tempo changes nothing (%d checked)", n_checked);
+    CHECK(same && n_checked >= 15, "at 40 to 120 bpm the clips are exactly what they were, the tempo changes nothing (%d checked)", n_checked);
+    /* above 120 bpm: the sounds a second stay where they are at 120 (a hand tops out near 6), and the clips are not what the grid alone makes */
+    double rate[4] = { 0, 0, 0, 0 }, beats[4] = { 0, 0, 0, 0 };
+    const float fast[4] = { 120.0f, 140.0f, 160.0f, 200.0f };
+    int differs = 0;
+    for (int bi = 0; bi < 4; bi++)
+        for (uint32_t seed = 1; seed <= 40; seed++) {
+            ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 4, NULL, 0.0f, fast[bi], 0.0f, 0.0f);
+            beats[bi] += c.len;
+            for (int i = 0; i < c.n; i++) rate[bi] += c.gate[i] && !c.gate[(i + c.n - 1) % c.n];
+            if (bi == 2) { static ts_clip_t at120; ts_clip_generate_for(&at120, GS_ANY, seed * 7919u, 4, NULL, 0.0f, 120.0f, 0.0f, 0.0f); differs += clip_fnv(&c) != clip_fnv(&at120); }
+        }
+    double per_s[4];
+    for (int bi = 0; bi < 4; bi++) per_s[bi] = rate[bi] / beats[bi] * fast[bi] / 60.0;
+    CHECK(per_s[1] > 0.85 * per_s[0] && per_s[1] < 1.15 * per_s[0] && per_s[2] > 0.85 * per_s[0] && per_s[2] < 1.15 * per_s[0] && per_s[3] > 0.8 * per_s[0] && per_s[3] < 1.2 * per_s[0],
+          "the sounds a second hold at 120 on fast songs, they do not climb with the tempo (120 bpm: %.1f, 140: %.1f, 160: %.1f, 200: %.1f)", per_s[0], per_s[1], per_s[2], per_s[3]);
+    CHECK(differs > 35, "...because a clip made at 160 is another clip than the same seed at 120 (%d of 40)", differs);
     ts_engine_destroy(e);
 }
 

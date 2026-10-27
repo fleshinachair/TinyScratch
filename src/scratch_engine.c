@@ -360,7 +360,7 @@ enum { GS_ANY, GS_BABY, GS_CUTS, GS_MILITARY, GS_SCRIBBLE, GS_STAB, GS_CHIRP, GS
 #define GP (TS_CLIP_RES / 4)                         /* dense points per sixteenth */
 
 typedef struct { ts_clip_t *c; uint32_t rng; float amp_t; int shape; int bars; int fw16; float fw_p; int nfw; float fw_t[64], fw_d[64]; int fw_kind[64];
-                 float echo_p; uint32_t seed; } gen_t;          /* amp_t: how tall the strokes are, 0..1, the same all through the clip */
+                 float echo_p; uint32_t seed; float stretch, thin; int dmin; } gen_t;          /* amp_t: how tall the strokes are, 0..1, the same all through the clip; stretch: how many sixteenths longer a stroke is (and thin: how much rarer a cut) on a fast song, 1 up to 120 bpm */
 
 /* The curve a stroke takes. The hand does not move like a sine: it bites in and settles (a fast start: 60-90% of the strokes in the
  * clips measured), now and then a plain S-curve, and rarely builds slowly. One is the clip's own (g->shape) and most strokes use it. */
@@ -532,11 +532,11 @@ static void g_grid_gate(gen_t *g, float o, int style)
         if (i1 >= g->c->n) break;
         int d = (int)g->c->pos[i1] - (int)g->c->pos[i0];
         if (d > -300 && d < 300) continue;                                       /* the record is (nearly) still: nothing to hear */
-        if (grnd(g) >= (d > 0 ? k->push : k->pull)) continue;
-        float len = gr(g, k->len_lo, k->len_hi);
+        if (grnd(g) >= (d > 0 ? k->push : k->pull) * g->thin) continue;
+        float len = gr(g, k->len_lo, k->len_hi) * g->stretch;                    /* (on a fast song as long in seconds as at 120 bpm) */
         if (st < 15 && grnd(g) < k->tie) {                                 /* held over the next step, if the record keeps going the same way */
             int j0 = (int)((t + 1.05f) * (float)GP), j1 = (int)((t + 1.45f) * (float)GP);
-            if (j1 < g->c->n && (((int)g->c->pos[j1] - (int)g->c->pos[j0]) > 0) == (d > 0)) len += 1.0f;
+            if (j1 < g->c->n && (((int)g->c->pos[j1] - (int)g->c->pos[j0]) > 0) == (d > 0)) len += g->stretch;
         }
         float at = grnd(g) < 0.22f ? -gr(g, 0.08f, 0.25f) : gr(g, 0.0f, 0.04f);   /* now and then a hair early, ahead of the beat */
         g_gate(g, t + at, t + len, 1);
@@ -877,6 +877,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
         }
         int left = len16 - t, r = gi(g, 0, 80), d = 1;
         for (int k = 0; k < 4; k++) { if (r < w[k]) { d = k + 1; break; } r -= w[k]; }
+        if (g->stretch > 1.0f) d = clampi((int)lrintf((float)d * g->stretch), g->dmin, 8);   /* a fast song: strokes as long in seconds as at 120 bpm, and none shorter than 0.11 s */
         if (d > left) d = left;
         int nxt = eat > t ? eat : -1;                                            /* the next thing planned on a beat: an echo scratch or a forward */
         if (fa > t && (nxt < 0 || fa < nxt)) nxt = fa;
@@ -924,7 +925,7 @@ static void gen_phrase(gen_t *g, int bars, const float *bases)
     }
 }
 
-static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p)
+static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch)
 {
     if (!out) return;
     bars = bars <= 1 ? 1 : (bars >= 4 ? 4 : 2);
@@ -936,6 +937,9 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     g.fw16 = fw16;
     g.fw_p = fw_p;
     g.echo_p = echo_p;
+    g.stretch = stretch;
+    g.thin = 1.0f / stretch;
+    g.dmin = (int)ceilf(0.88f * stretch);                                           /* the fewest sixteenths that make 0.11 s (a sixteenth is 0.125 / stretch seconds) */
     g.seed = seed;
     g.nfw = 0;
     g.rng = mix32(seed) | 1u;
@@ -1084,12 +1088,16 @@ void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, co
      * makes the same clip whatever the tempo it is loaded at */
     int fw16 = 4;
     if (slot && slot->loaded && slot->len > 0) fw16 = clampi((int)(0.8f * (slot->hi - slot->lo) * (float)slot->len / TS_SAMPLE_RATE / 0.125f + 0.5f), 3, 7);
+    /* A hand can make about 6 sounds a second at most (the real DJ in the measurements: 5.7). The grid is sixteenths, so on a fast song the
+     * clips would run past that (8.6 a second at 160 bpm, strokes five times the sample's own speed). Above 120 bpm the strokes are as
+     * long in seconds as at 120 bpm, and the cuts as rare per second; at 120 and below nothing changes. */
+    const float stretch = isfinite(bpm) && bpm > 120.0f ? fminf(bpm / 120.0f, 2.0f) : 1.0f;
     static const float need[GS_COUNT] = { 0.42f, 0.45f, 0.40f, 0.40f, 0.50f, 0.28f, 0.42f, 0.38f, 0.45f, 0.45f, 0.45f, 0.45f };
     style = clampi(style, 0, GS_COUNT - 1);
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;
     for (int attempt = 0; attempt < 8; attempt++) {                             /* a seed that comes out mostly silent is thrown again: same seed, same clip, always */
-        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on, fw16, fw_p, fin_p, pps, hi, echo_p);
+        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on, fw16, fw_p, fin_p, pps, hi, echo_p, stretch);
         float a = gen_audible(out);
         if (a >= need[style]) return;
         if (a > best_a) { best_a = a; best = *out; }

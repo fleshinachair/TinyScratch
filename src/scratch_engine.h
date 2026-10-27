@@ -204,7 +204,8 @@ void ts_clip_generate(ts_clip_t *out, int style, uint32_t seed, int bars);
 /* The same, for a sample: each bar's strokes start where the sample has an attack (the start of its sound, the start of a word), the way a
  * DJ places the record, and the positions are the sample's own (the clip is "native": tag 3). With no sample it is the plain one above. */
 void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm, float fin, float echo);     /* fwd: 0..1, forwards in Any */
-/* (bpm is the song's tempo; only Finish uses it, to play the sound through at its own speed. Any is on sixteenths at every tempo.) */
+/* (bpm is the song's tempo. Finish uses it to play the sound through at its own speed. Any is on sixteenths at every tempo, but above
+ * 120 bpm its strokes and cuts are as long in seconds as at 120, so a fast song is not busier than a hand can be; up to 120 it does not matter.) */
 int  ts_engine_generate(ts_engine_t *e);               /* a new "try" clip from the Generate settings; plays it; returns its style */
 int  ts_engine_keep(ts_engine_t *e, int pad);          /* the try clip on a clip pad of the selected sample (0: the first free one); the pad, or -1 */
 void ts_engine_select_sample(ts_engine_t *e, int sample);   /* another sample: its own clip pads, and the clip it last had selected */
