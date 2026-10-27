@@ -32,7 +32,7 @@ static const char *const k_recipe_file = "/data/UserData/schwung/modules/sound_g
 
 enum { K_ENUM, K_FLOAT, K_INT, K_CANVAS, K_STRING, K_FILEPATH };
 enum { P_SAMPLE, P_TURNTABLE, P_DRAG, P_GAIN, P_NOTE_GATE, P_VEL_VOL, P_NORMALISE,
-       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_GEN_FIN, P_GEN_ECHO, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_SAMPLE_FILE,
+       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_BITE, P_GEN_FIN, P_GEN_ECHO, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_SAMPLE_FILE,
        P_PAD_RAW, P_PAD_CUTS,
        P_VIEW, P_WAVE, P_FULL, P_STATUS,
        P_COUNT };
@@ -77,6 +77,7 @@ static const pdef_t k_params[P_COUNT] = {
     [P_GEN_FWD]     = { "gen_fwd", "Forwards", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.05f, NULL },
     [P_SWING]       = { "swing", "Swing", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.30f, 0.02f, NULL },
     [P_HUMANISE]    = { "humanise", "Humanise", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.02f, NULL },
+    [P_BITE]        = { "bite", "Bite", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.02f, NULL },
     [P_GEN_FIN]     = { "gen_fin", "Finish", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.10f, 0.05f, NULL },
     [P_GEN_ECHO]    = { "gen_echo", "Echo", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.10f, 0.05f, NULL },
     [P_CLIP_DEPTH]  = { "clip_depth", "Clip Depth", K_FLOAT, NULL, 0, 0.0f, 2.0f, 1.0f, 0.02f, NULL },
@@ -121,7 +122,7 @@ static const pdef_t k_params[P_COUNT] = {
  * project and not on a dial.) */
 static const int pg_root[] = { P_VIEW, P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO };
 static const int kn_root[] = { P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO };
-static const int pg_playback[] = { P_SWING, P_HUMANISE, P_CLIP_DEPTH, P_CLIP_OFFSET, P_DRAG, P_GAIN };
+static const int pg_playback[] = { P_SWING, P_HUMANISE, P_BITE, P_CLIP_DEPTH, P_CLIP_OFFSET, P_DRAG, P_GAIN };
 static const int pg_padplay[] = { P_NOTE_GATE, P_VEL_VOL, P_CUES };
 static const int pg_wave[] = { P_WAVE };
 
@@ -153,6 +154,7 @@ static float pget(const ts_params_t *p, int i)
     case P_GEN_FWD: return p->gen_fwd;
     case P_SWING: return p->swing;
     case P_HUMANISE: return p->humanise;
+    case P_BITE: return p->bite;
     case P_GEN_FIN: return p->gen_fin;
     case P_GEN_ECHO: return p->gen_echo;
     case P_CLIP_DEPTH: return p->clip_depth;
@@ -182,6 +184,7 @@ static void pset(ts_params_t *p, int i, float v)
     case P_GEN_FWD: p->gen_fwd = v; break;
     case P_SWING: p->swing = v; break;
     case P_HUMANISE: p->humanise = v; break;
+    case P_BITE: p->bite = v; break;
     case P_GEN_FIN: p->gen_fin = v; break;
     case P_GEN_ECHO: p->gen_echo = v; break;
     case P_CLIP_DEPTH: p->clip_depth = v; break;

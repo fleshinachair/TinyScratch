@@ -1805,6 +1805,60 @@ static void test_auto_whole_clips(void)
     ts_builtins_on_pads = 1;
 }
 
+/* Bite: soft saturation as the sound plays; harder on a fast stroke and at the attack; level-neutral; nothing at 0 */
+static double goertzel(const float *x, int n, double f, double sr)
+{
+    double c = 2.0 * cos(6.283185307179586 * f / sr), s1 = 0.0, s2 = 0.0;
+    for (int i = 0; i < n; i++) { double s0 = x[i] + c * s1 - s2; s2 = s1; s1 = s0; }
+    return sqrt(s1 * s1 + s2 * s2 - c * s1 * s2) / (n * 0.5);
+}
+
+static void bite_run(float bite, float *cap, int n, float *atk_early, float *atk_late)
+{
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    load_sample(e, 0, "sine.wav", SMP_SINE, 0.5f, 44100);
+    ts_params_t p = e->p;
+    p.pads = 1; p.clip = 0; p.drag = 0.0f; p.normalise = 0; p.note_gate = 1; p.bite = bite; p.gain_db = 0.0f;
+    ts_engine_set_params(e, &p);
+    static float blk[128];
+    ts_engine_note(e, TS_PAD_FIRST + 0, 100, 1);                                  /* a cue pad: the sound plays at its own speed while it is held */
+    ts_engine_render(e, blk, 128);
+    *atk_early = e->bite_atk;
+    for (int b = 0; b < 15; b++) ts_engine_render(e, blk, 128);                    /* 44 ms on */
+    *atk_late = e->bite_atk;
+    for (int i = 0; i < n; i += 128) ts_engine_render(e, cap + i, n - i < 128 ? n - i : 128);
+    ts_engine_note(e, TS_PAD_FIRST + 0, 0, 0);
+    ts_engine_destroy(e);
+}
+
+static void test_bite(void)
+{
+    printf("bite\n");
+    enum { N = 13230 };
+    static float clean[N], biting[N], mid[N];
+    float a0, a1, b0, b1, m0, m1;
+    bite_run(0.0f, clean, N, &a0, &a1);
+    bite_run(1.0f, biting, N, &b0, &b1);
+    bite_run(0.5f, mid, N, &m0, &m1);
+    const double h_clean = goertzel(clean, N, 1320.0, 44100.0) / goertzel(clean, N, 440.0, 44100.0);
+    const double h_bite = goertzel(biting, N, 1320.0, 44100.0) / goertzel(biting, N, 440.0, 44100.0);
+    const double h_mid = goertzel(mid, N, 1320.0, 44100.0) / goertzel(mid, N, 440.0, 44100.0);
+    CHECK(h_clean < 0.01 && h_bite > 0.05 && h_mid > h_clean && h_mid < h_bite, "Bite adds odd harmonics, more as it goes up (third harmonic: %.3f clean, %.3f at 50%%, %.3f at 100%%)", h_clean, h_mid, h_bite);
+    const double r_clean = rms_of(clean, N), r_bite = rms_of(biting, N);
+    CHECK(r_clean > 0.2 && fabs(20.0 * log10(r_bite / r_clean)) < 2.5, "...without changing the level (%.1f dB)", 20.0 * log10(r_bite / r_clean));
+    int sane = 1;
+    for (int i = 0; i < N; i++) sane &= isfinite(biting[i]) && fabsf(biting[i]) <= 1.0f;
+    CHECK(sane && peak_of(biting, N) > 0.1f, "...and it never goes past full scale");
+    CHECK(a0 == 0.0f && b0 > 0.6f && b1 < 0.05f, "the attack gets extra bite as the fader opens, gone within 40 ms (%.2f after the first 3 ms, %.2f after 47 ms)", b0, b1);
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_params_t p = e->p;
+    p.bite = 9.0f; ts_engine_set_params(e, &p);
+    ts_params_t d;
+    ts_params_default(&d);
+    CHECK(e->p.bite == 1.0f && d.bite == 0.0f, "Bite is clamped to 0..1, and starts at 0 (clean)");
+    ts_engine_destroy(e);
+}
+
 /* Cue pads: with no clip playing, the bottom row drops the needle at the sample's attacks and plays on at its own speed */
 static void test_cues(void)
 {
@@ -3550,6 +3604,7 @@ int main(int argc, char **argv)
     test_pad_mutes_clip();
     test_ttm_styles();
     test_auto_whole_clips();
+    test_bite();
     test_cues();
     test_shipped_clips();
     test_pad_runs_clip();

@@ -277,6 +277,15 @@ static double hum_noise(unsigned seed, double x)
     return a + (b - a) * (u * u * (3.0 - 2.0 * u));
 }
 
+/* A soft clipper: tanh, as a rational curve (x(27+x^2)/(27+9x^2): within 2%, and exactly 1 from x = 3 on). */
+static inline float bite_tanh(float x)
+{
+    if (x >= 3.0f) return 1.0f;
+    if (x <= -3.0f) return -1.0f;
+    const float x2 = x * x;
+    return x * (27.0f + x2) / (27.0f + 9.0f * x2);
+}
+
 static void hand_of(long long hand, int k, int out[TS_NUM_CLIPS])
 {
     for (int i = 0; i < k; i++) out[i] = i;
@@ -1490,6 +1499,7 @@ void ts_params_default(ts_params_t *p)
     p->gen_echo = 0.10f;                 /* now and then a bar holds an echo scratch */
     p->swing = 0.30f;                    /* a little loose */
     p->humanise = 0.0f;                  /* exactly as written */
+    p->bite = 0.0f;                      /* clean */
     p->clip_depth = 1.0f;
     p->clip_offset = 0.0f;
 }
@@ -1515,6 +1525,7 @@ void ts_params_sanitize(ts_params_t *p)
     p->gen_echo = isfinite(p->gen_echo) ? clampf(p->gen_echo, 0.0f, 1.0f) : 0.10f;
     p->swing = isfinite(p->swing) ? clampf(p->swing, 0.0f, 1.0f) : 0.30f;
     p->humanise = isfinite(p->humanise) ? clampf(p->humanise, 0.0f, 1.0f) : 0.0f;
+    p->bite = isfinite(p->bite) ? clampf(p->bite, 0.0f, 1.0f) : 0.0f;
     p->clip_depth = isfinite(p->clip_depth) ? clampf(p->clip_depth, 0.0f, 2.0f) : 1.0f;
     p->clip_offset = isfinite(p->clip_offset) ? clampf(p->clip_offset, -0.5f, 0.5f) : 0.0f;
 }
@@ -2159,7 +2170,9 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
     const float tau = (0.003f + 0.08f * drag * drag) * e->sr;                // 3 .. 83 ms
     const float alpha = 1.0f - expf(-1.0f / tau);
     const float ramp = 1.0f / (0.002f * e->sr);                             // a cut takes 2 ms
-    const float gain = powf(10.0f, p->gain_db / 20.0f) * (p->normalise && s->loaded ? s->norm : 1.0f);
+    const float nrm = p->normalise && s->loaded ? s->norm : 1.0f;
+    const float gain = powf(10.0f, p->gain_db / 20.0f) * nrm;
+    const float bite_decay = expf(-1.0f / (0.008f * e->sr));                    /* the attack's extra bite falls away in about 8 ms */
     const double spb = (double)e->bpm / (60.0 * (double)e->sr);
     if (e->pad_raw > 0) {                                                   /* the Pads screen has to keep saying it is there */
         e->pad_raw -= frames;
@@ -2259,6 +2272,17 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         float want = open ? lv : 0.0f;
         if (e->gate < want) { e->gate += ramp; if (e->gate > want) e->gate = want; }
         else if (e->gate > want) { e->gate -= ramp; if (e->gate < want) e->gate = want; }
+        /* Bite: soft saturation, on the normalised sound so a quiet recording bites as much as a loud one. The drive rises with the speed of the
+         * playhead (a fast stroke is where a scratch is bright and hard) and for a few milliseconds as the fader opens (the attack); the make-up
+         * gain keeps the loudness where it was, so it is edge and not level. At 0 the sound is untouched. */
+        if (p->bite > 0.0f) {
+            if (e->gate > 0.0f && e->gate < 0.02f && want > e->gate) e->bite_atk = 1.0f;
+            e->bite_atk *= bite_decay;
+            const float fast = fminf(fabsf(e->vel_out) * (1.0f / 3.0f), 1.0f);
+            const float drive = 1.0f + p->bite * (3.0f * fast + 3.0f * e->bite_atk), dm = drive - 1.0f;
+            const float makeup = 1.0f + 0.13f * dm + 0.006f * dm * dm;
+            smp = bite_tanh(smp * nrm * drive) * (makeup / drive) / nrm;
+        }
         float vol = p->vel_to_vol ? (float)e->last_vel * (1.0f / 127.0f) : 1.0f;
 
         out[i] = smp * e->gate * vol * gain;

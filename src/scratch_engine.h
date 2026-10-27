@@ -66,6 +66,7 @@ typedef struct {
     float gen_fwd;              /* 0..1: how many of Any's bars have a forward (the record let go through the word); 0 = none */
     float swing;                /* 0..1: the second sixteenth of each pair played late, as clips play (1 = triplets); 0 = straight */
     float humanise;             /* 0..1: how loose a clip plays: its timing drifts, each cut lands a little early or late and a little softer, the strokes a little shorter or longer; 0 = exactly as written */
+    float bite;                 /* 0..1: soft saturation of the sound as it plays, harder on a fast stroke and for a moment as the fader opens; 0 = none (clean) */
     float gen_fin;              /* 0..1: how often a clip ends with the whole sample playing through at its own speed, then a pull back; 0 = never */
     float gen_echo;             /* 0..1: how often a bar of Any holds an echo scratch (a stab repeated four times, each at a lower level); 0 = never */
     float clip_depth;           /* 0..2: how far a clip moves the playhead (1 = as written; the movement is scaled, then offset) */
@@ -113,6 +114,7 @@ typedef struct ts_engine {
     unsigned    cue_prev;       /* the cue pads held a frame ago */
     int         cue_on;         /* 1: a cue pad is playing the sound on from its cue */
     int         cue_pad;        /* which one (0..7) */
+    float       bite_atk;       /* 1 as the fader opens, falling away in a few milliseconds: Bite bites harder at the attack */
     double      cue_pos;        /* where it has got to, 0..1 */
     int         last_note;      /* the last note that arrived, 0 if none (the screen shows it, to see what the pads send) */
     int         running;        /* 1: the transport runs (Lock on), or Lock is off: clips play */
