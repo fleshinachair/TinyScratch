@@ -3,13 +3,10 @@
 **A scratch generator for the Ableton Move** (a Schwung sound generator). Press a pad and it writes a new, human-sounding turntable
 scratch for your sample, plays it in time with your song, and lets you keep the ones you like.
 
-**The look and workflow are inspired by the Live Scratcher module by Andrew Norris** (a sample, clips on the pads, a fader you
-cut with). TinyScratch is an independent project, written from scratch. The generator is TinyScratch's own: its vocabulary comes from scratch notation (the Turntablist Transcription Methodology,
-TTM), and it was tuned against published measurements of real scratching and overall statistics of example clips.
-
 ## Getting started
 
-**1. Open the Pads screen.** Select TinyScratch as a sound generator, then turn **knob 1** of its first menu. The pads light up:
+**1. Open the Pads screen.** Select TinyScratch as a sound generator, **touch the first dial** (knob 1) and **press the jog wheel**. The
+Pads screen opens full screen and the pads light up (Back leaves it):
 
 | row (from the top) | pads |
 |---|---|
@@ -17,15 +14,15 @@ TTM), and it was tuned against published measurements of real scratching and ove
 | 3 | the eight samples: **Ahhh**, **Fresssh**, **User 1 to 6** |
 | 4 | eight red pads: the fader (and, with no clip playing, **cues**: see below) |
 
-**2. Generate a scratch.** Press the **Generate** pad. A new clip plays at once; press it again for another. Press play on the Move if
-nothing is sounding: clips follow the transport. The dials shape what comes next: **Style** (Any, Baby, Cuts, Flare, ...) and **Length**
+**2. Generate a scratch.** Press the **Generate** pad. A new clip plays at once; press it again for another. (Ahhh and Fresssh each
+come with three clips on pads 1 to 3 to start with.) Press play on the Move if nothing is sounding: clips follow the transport. The dials shape what comes next: **Style** (Any, Baby, Cuts, Flare, ...) and **Length**
 (1, 2 or 4 bars), **Forwards**, **Finish** and **Echo** (dials 3 to 7; touch one to see its name and value).
 
 **3. Keep it.** Tap an **empty clip pad** while the generated clip is playing. It stays on that pad for that sample, and **Auto** (a
 random other clip every bar) will include it.
 
-**4. Delete it.** Hold a clip pad for a second and a half (a bar fills the screen and the pad goes red). Any clip can go. The other pads
-stay where they are.
+**4. Delete it.** Hold a clip pad for a second and a half (a bar fills the screen and the pad goes red). **Any clip can be deleted**,
+including the ones that come with the module. The other pads stay where they are.
 
 **5. Add your own sample.** Best at one to two seconds, noisy and aggressive, with a little silence at each end.
 
@@ -99,7 +96,7 @@ gives the same clip. A kept clip is saved exactly (its playhead path and fader),
 
 The clips are stored in `recipes.txt` and `kept.bin` in the module's folder, so every new instance of the module starts with the same clips
 on the same pads. Clips can also be imported from an Ableton Live Pack you own (`python tools/import_clips.py "your pack.alp"` writes
-`local/clips.bin`, which stays out of the repository because it is someone else's work); imported clips are read-only.
+`local/clips.bin`, which stays out of the repository because it is someone else's work); imported clips can be deleted like any other.
 
 ## Samples
 
@@ -121,7 +118,7 @@ from the end of "Change the Beat" (Fab 5 Freddy, 1982), described as public doma
 
 The first page is the picture: the sample's name, the waveform with the playhead through it, a vinyl that turns as the playhead crosses
 the sample, and the clip along the bottom (the playhead's path as a line, the cuts as blocks, a cursor for now). The last page,
-**Waveform**, is the sample on its own at full size, with the playhead's speed (1.0X is the sample's own pitch). **Pads** (knob 1) is the
+**Waveform**, is the sample on its own at full size, with the playhead's speed (1.0X is the sample's own pitch). **Pads** (touch knob 1, press the jog wheel) is the
 first picture full screen with the pads coloured: red cuts (cue colour when they are cues, white while held), yellow samples, violet clips
 (white for the one picked, green for the one playing in Auto), green Auto, orange Generate.
 
@@ -129,6 +126,12 @@ The Move turns a pad press into a note by its own octave and transpose, so the n
 open it is told which pad was pressed, so the pads are always this grid, and the notes the pads send are ignored. When it closes, every pad
 is repainted with the colour the Move itself had. **Pad Grid** (on) makes notes 36 to 99 a grid of eight to a row, counting from the
 bottom left, for playing the pads without the Pads screen.
+
+## Credits
+
+**The look and workflow are inspired by the Live Scratcher module by Andrew Norris** (a sample, clips on the pads, a fader you
+cut with). TinyScratch is an independent project, written from scratch. The generator is TinyScratch's own: its vocabulary comes from scratch notation (the Turntablist Transcription Methodology,
+TTM), and it was tuned against published measurements of real scratching and overall statistics of example clips.
 
 ## Development
 
