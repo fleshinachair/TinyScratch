@@ -1305,7 +1305,7 @@ static void test_generator(void)
     CHECK(lens_ok, "one, two or four bars, nothing else");
 
     /* every style: a real path, cut in and out, back where it started so it loops, no wild jumps */
-    static const char *names[GS_COUNT] = { "any", "baby", "cuts", "military", "scribble", "stab", "chirp", "transform", "flare", "crab", "orbit", "drag", "tear", "rave" };
+    static const char *names[GS_COUNT] = { "any", "baby", "cuts", "military", "scribble", "stab", "chirp", "transform", "flare", "crab", "orbit", "drag", "tear" };
     int shape_ok = 1, loop_ok = 1, jump_ok = 1, duty_ok = 1, range_ok = 1;
     double dsum = 0.0;
     int ndraw = 0, distinct_ok = 1;
@@ -1336,7 +1336,7 @@ static void test_generator(void)
     CHECK(distinct_ok, "...and every seed is different");
 
     /* a clip is mostly sound: the fader is open and the playhead is moving for most of it, and it never sits still and silent for a beat or more */
-    double worst_mean = 1.0, worst_one = 1.0, crab_mean = 0.0, rave_mean = 0.0;
+    double worst_mean = 1.0, worst_one = 1.0, crab_mean = 0.0;
     int long_gap = 0;
     for (int st = 0; st < GS_COUNT; st++) {
         double sum = 0.0;
@@ -1349,17 +1349,15 @@ static void test_generator(void)
             for (int i = 0; i < a.n; i++) {
                 int j = (i + 1) % a.n;
                 double d = fabs((double)a.pos[j] - (double)a.pos[i]) / 65535.0 * TS_CLIP_RES;
-                if (a.gate[i] && d > 0.05) run = 0; else if (++run >= (st == GS_RAVE ? 2 : 1) * TS_CLIP_RES) { long_gap++; break; }       /* (a riff may rest a beat between bursts; not two) */
+                if (a.gate[i] && d > 0.05) run = 0; else if (++run >= TS_CLIP_RES) { long_gap++; break; }
             }
         }
         if (st == GS_CRAB) crab_mean = sum / 60.0;
-        else if (st == GS_RAVE) rave_mean = sum / 60.0;
         else worst_mean = fmin(worst_mean, sum / 60.0);
     }
     CHECK(worst_mean > 0.35 && worst_one > 0.1 && long_gap == 0, "...and mostly sound, with no silent gap of a beat (worst style averages %.0f%%, worst clip %.0f%%, %d long gaps)",
           100.0 * worst_mean, 100.0 * worst_one, long_gap);
     CHECK(crab_mean > 0.15, "...a crab, four clicks to a beat, a fifth of it (%.0f%%)", 100.0 * crab_mean);
-    CHECK(rave_mean > 0.2, "...rave, short stabs in bursts, a third of it (%.0f%%)", 100.0 * rave_mean);
 
     /* the styles are different from one another */
     int style_distinct = 1;
@@ -1370,7 +1368,7 @@ static void test_generator(void)
             ts_clip_generate(&s2, y, 5, 1);
             style_distinct &= memcmp(s1.gate, s2.gate, (size_t)s1.n) != 0 || memcmp(s1.pos, s2.pos, (size_t)s1.n * 2) != 0;
         }
-    CHECK(style_distinct, "the thirteen styles make different clips");
+    CHECK(style_distinct, "the twelve styles make different clips");
     double d1, t1, l1, h1;
     int j1;
     ts_clip_generate(&s1, GS_BABY, 3, 1);
@@ -1417,7 +1415,7 @@ static void test_generator(void)
         pairs++;
     }
     int all_seen = 1;
-    for (int st = 1; st < GS_COUNT; st++) all_seen &= seen_style[st] > 0 || st == GS_DRAG || st == GS_TEAR || st == GS_RAVE;          /* (a drag is a whole bar of two slow strokes, a tear is only the record hand and a rave is a genre flavour: the old chain keeps away from them) */
+    for (int st = 1; st < GS_COUNT; st++) all_seen &= seen_style[st] > 0 || st == GS_DRAG || st == GS_TEAR;          /* (a drag is a whole bar of two slow strokes and a tear is only the record hand: 'any' keeps away from both) */
     CHECK(chain_ok && all_seen, "'any' makes a phrase A A B A where B is a style that follows A, as a scratcher would string them, and uses every style");
     CHECK(repeats < pairs / 4, "...with B a different style most of the time (%d of %d are the same)", repeats, pairs);
 
@@ -1748,69 +1746,6 @@ static void test_ttm_styles(void)
         rub_clips += falling_open > 20;
         cut_clips += falling_shut > 20;
     }
-    /* rave: short stabs in syncopated bursts that start on the downbeat, never closer than a hand and a fader can make them on a fast song,
-     * a double hit now and then on a slow one */
-    {
-        const float bpms[2] = { 120.0f, 170.0f };
-        double per_s[2] = { 0, 0 }, close[2] = { 0, 0 }, open_share[2] = { 0, 0 };
-        int down = 0;
-        for (int bi = 0; bi < 2; bi++) {
-            double edges = 0, secs = 0, open = 0, pts = 0;
-            for (uint32_t sd = 1; sd <= (uint32_t)N; sd++) {
-                ts_clip_generate_for(&c, GS_RAVE, sd * 7919u, 1, NULL, 0.0f, bpms[bi], 0.0f, 0.0f);
-                secs += 4.0 * 60.0 / bpms[bi];
-                int last = -1, first = -1;
-                for (int i = 0; i < c.n; i++) {
-                    open += c.gate[i] != 0;
-                    pts++;
-                    if (c.gate[i] && !c.gate[(i + c.n - 1) % c.n]) {
-                        edges++;
-                        if (first < 0) first = i;
-                        if (last >= 0 && (i - last) / (double)TS_CLIP_RES * 60.0 / bpms[bi] < 0.09) close[bi]++;
-                        last = i;
-                    }
-                }
-                if (bi == 0) down += first >= 0 && first < 2 * SP;
-            }
-            per_s[bi] = edges / secs;
-            open_share[bi] = open / pts;
-        }
-        CHECK(per_s[0] < 6.0 && per_s[1] < 6.5 && per_s[0] > 3.0 && per_s[1] > 3.0, "rave stays within what a hand can do at any tempo (%.1f sounds a second at 120 bpm, %.1f at 170)", per_s[0], per_s[1]);
-        CHECK(close[1] == 0 && close[0] == 0, "...no two notes closer than 90 ms, on a fast song or a slow one (%.0f at 170 bpm, %.0f at 120)", close[1], close[0]);
-        CHECK(down > 0.6 * N && open_share[0] > 0.15 && open_share[0] < 0.5, "...bursts that start on the downbeat (%d of %d clips), the fader open a third of the time (%.0f%%)", down, N, 100.0 * open_share[0]);
-        /* played like an instrument: the pitch of a stab is the speed of its push, and it walks up and down a scale; the second bar answers the first */
-        double distinct_sum = 0, range_sum = 0;
-        int rave_clips = 0, answers = 0;
-        for (uint32_t sd = 1; sd <= (uint32_t)N; sd++) {
-            ts_clip_generate_for(&c, GS_RAVE, sd * 7919u, 2, NULL, 0.0f, 150.0f, 0.0f, 0.0f);
-            answers += memcmp(c.pos, c.pos + c.n / 2, (size_t)(c.n / 2) * 2) != 0;
-            double st[64];
-            int ns = 0, a = -1;
-            for (int i = 0; i <= c.n; i++) {
-                const int open = i < c.n && c.gate[i];
-                if (open && a < 0) a = i;
-                if (!open && a >= 0) {
-                    const int b = i - 1;
-                    if (b - a >= 3 && ns < 64) st[ns++] = fabs((double)c.pos[b] - (double)c.pos[a]) / 65535.0 / ((b - a + 1) / (double)TS_CLIP_RES * 60.0 / 150.0);
-                    a = -1;
-                }
-            }
-            if (ns < 3) continue;
-            double lo = st[0], hi = 0;
-            for (int q = 0; q < ns; q++) if (st[q] < lo) lo = st[q];
-            int seen[48] = { 0 }, distinct = 0;
-            for (int q = 0; q < ns; q++) {
-                const double semis = 12.0 * log2(st[q] / lo);
-                const int bin = (int)floor(semis + 0.5);
-                hi = semis > hi ? semis : hi;
-                if (bin < 48 && !seen[bin]) { seen[bin] = 1; distinct++; }
-            }
-            distinct_sum += distinct; range_sum += hi; rave_clips++;
-        }
-        CHECK(rave_clips > N / 2 && distinct_sum / rave_clips > 4.5 && range_sum / rave_clips > 8.0, "...played like an instrument: a riff of different pitches, about %.1f of them over %.1f semitones a clip", distinct_sum / rave_clips, range_sum / rave_clips);
-        CHECK(answers > 0.85 * N, "...and the second bar answers the first, it is not the same bar twice (%d of %d clips)", answers, N);
-    }
-
     CHECK(first_len > 1.15 * last_len, "a military scratch gathers speed: its strokes get shorter through the bar (%.0f points at the start, %.0f at the end)", first_len / N, last_len / N);
     CHECK(rub_clips > N / 2 && cut_clips == N, "...with cuts (the fader shut on the pull) and rubs (open both ways) (%d clips with rubs, %d with cuts, of %d)", rub_clips, cut_clips, N);
 }
