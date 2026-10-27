@@ -41,6 +41,7 @@ grep -aq move_plugin_init_v2 "$OUT/dsp.so" || { echo "error: move_plugin_init_v2
 
 TAR=build/$ID-$VERSION.tar.gz
 tar -C build/modules/sound_generators -czf "$TAR" "$ID"
+cp "$TAR" build/TinyScratch.tar.gz                   # the release asset: what release.json points at (the same file as above)
 
 echo
 echo "== binary sizes (bytes)"

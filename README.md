@@ -3,6 +3,12 @@
 **A generative auto-scratcher for the Ableton Move** (a Schwung sound generator). Press a pad and it writes a new, human-sounding turntable
 scratch for your sample, plays it in time with your song, and lets you keep the ones you like.
 
+## Install
+
+Install `TinyScratch.tar.gz` from the [releases page](https://github.com/fleshinachair/TinyScratch/releases) with Schwung's module manager
+(Install Custom Module, From GitHub URL, `fleshinachair/TinyScratch`), then load TinyScratch in a track slot as a sound generator.
+Ahhh and Fresssh come with it, and three clips each.
+
 ## Getting started
 
 **1. Open the Pads screen.** Select TinyScratch as a sound generator, **touch the first dial** (knob 1) and **press the jog wheel**. The

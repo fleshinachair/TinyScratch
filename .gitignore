@@ -2,3 +2,6 @@ build/
 # public-domain audition samples: fetched by scripts/fetch_audition_samples.sh, pushed by scripts/install_move.sh
 samples_audition/
 local/
+
+# a test leaves an empty kept.bin in the folder it runs in; the shipped one is clips/kept.bin
+/kept.bin
