@@ -40,19 +40,18 @@
      * them (checked against what the Move really lit: 120 white, 127 red, 7 yellow, 123 grey, 11 and 13 greens, 23 purple, 3 orange). */
     var COL = { off: 0, white: 120, cut: 127, cutHot: 120, clip: 23, clipNow: 13, sample: 7, sampleEmpty: 123, clipAuto: 11, clipNo: 127, gen: 3, cue: 13 };
 
-    /* The dials on the Pads screen, as on the module's first page (Main): the first opens this screen and the second is Load Sample (the
-     * Move's file browser, which only the menu can open), so neither does anything here. Dials 3 to 7 are what Generate makes. Everything
-     * else (the sample, the clip, Generate) is on the pads. Swing, the one playback setting that is quick to reach, is the last dial here;
-     * the rest of playback (Humanise, Clip Depth, Drag, Gain, ...) is on the Playback and Pad Play pages. */
+    /* The eight dials on the Pads screen, in the order that reads: what Generate makes (Style, Length), then how it plays (Drag, Humanise,
+     * Swing), then what Generate adds (Echo, Forwards, Finish). The sample, the clip and Generate are on the pads; Load Sample and the rest of
+     * the settings (Bite, Clip Depth, Gain, ...) are on the module's own pages. */
     var KNOBS = [
-        null,
-        null,
         { key: "gen_style", v: "gs", min: 0, max: 12, steps: true, detents: 2 },
         { key: "gen_bars", v: "gb", min: 0, max: 2, steps: true, detents: 3 },
-        { key: "gen_fwd", v: "gf", min: 0, max: 1, step: 0.05 },                      /* how often Improv lets the record go through the word */
-        { key: "gen_fin", v: "fn", min: 0, max: 1, step: 0.05 },                      /* how often a clip ends with the whole sample played through */
-        { key: "gen_echo", v: "ec", min: 0, max: 1, step: 0.05 },                     /* how often a bar holds an echo scratch: a stab four times, each lower */
-        { key: "swing", v: "sw", min: 0, max: 1, step: 0.02 }                         /* every clip, as it plays: the second sixteenth of a pair late */
+        { key: "drag", v: "dr", min: 0, max: 1, step: 0.02 },                          /* how quickly the playhead follows: digital to analogue */
+        { key: "humanise", v: "hu", min: 0, max: 1, step: 0.02 },                      /* every clip, as it plays: looser timing, cuts, strokes */
+        { key: "swing", v: "sw", min: 0, max: 1, step: 0.02 },                         /* every clip, as it plays: the second sixteenth of a pair late */
+        { key: "gen_echo", v: "ec", min: 0, max: 1, step: 0.05 },                      /* how often a bar holds an echo scratch: a stab four times, each lower */
+        { key: "gen_fwd", v: "gf", min: 0, max: 1, step: 0.05 },                       /* how often Improv lets the record go through the word */
+        { key: "gen_fin", v: "fn", min: 0, max: 1, step: 0.05 }                        /* how often a clip ends with the whole sample played through */
     ];
 
     /* ---- a 3x5 font, so a sample name and a waveform fit on 128x64 ---- */
@@ -464,6 +463,8 @@
         case "gen_bars": return "LENGTH " + BARS[clamp(Math.round(val), 0, 2)] + (Math.round(val) ? " BARS" : " BAR");
         case "gen_fwd": return "FORWARDS " + Math.round(val * 100) + "%";
         case "swing": return "SWING " + Math.round(val * 100) + "%";
+        case "drag": return "DRAG " + Math.round(val * 100) + "%";
+        case "humanise": return "HUMANISE " + Math.round(val * 100) + "%";
         case "gen_fin": return "FINISH " + Math.round(val * 100) + "%";
         case "gen_echo": return "ECHO " + Math.round(val * 100) + "%";
         default: return String(k.key).toUpperCase();
@@ -472,8 +473,6 @@
 
     /* what a touched dial is, and what it is set to now: said before it is turned, so the wrong one is not */
     function touchText(v, n) {
-        if (n === 0) return "DIAL 1: PADS (NOT A DIAL HERE)";
-        if (n === 1) return "DIAL 2: LOAD SAMPLE (IN THE MENU)";
         var k = KNOBS[n];
         if (!k) return "DIAL " + (n + 1) + ": NOTHING";
         return knobText(k, num(v ? v[k.v] : 0, 0));

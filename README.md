@@ -15,8 +15,9 @@ Pads screen opens full screen and the pads light up (Back leaves it):
 | 4 | eight red pads: the fader (and, with no clip playing, **cues**: see below) |
 
 **2. Generate a scratch.** Press the **Generate** pad. A new clip plays at once; press it again for another. (Ahhh and Fresssh each
-come with three clips on pads 1 to 3 to start with.) Press play on the Move if nothing is sounding: clips follow the transport. The dials shape what comes next: **Style** (Improv, Baby, Cuts, Flare, ...) and **Length**
-(1, 2 or 4 bars), **Forwards**, **Finish** and **Echo** (dials 3 to 7; touch one to see its name and value).
+come with three clips on pads 1 to 3 to start with.) Press play on the Move if nothing is sounding: clips follow the transport. The eight dials of the Pads screen are in the order they read: **Style** (Improv, Baby, Cuts,
+Flare, ...) and **Length** (1, 2 or 4 bars), then how it plays, **Drag**, **Humanise** and **Swing**, then what Generate adds, **Echo**,
+**Forwards** and **Finish**. Touch one to see its name and value.
 
 **3. Keep it.** Tap an **empty clip pad** while the generated clip is playing. It stays on that pad for that sample, and **Auto** (which
 plays each clip right through, from its start, then a random other one) will include it.
@@ -82,7 +83,8 @@ so the highs do not fold back as a hiss when the record is pushed at several tim
 At its own speed or slower nothing changes. The built-in samples are mid-range noise, so it changes them very little (about half a dB at the
 top); it matters for bright sounds such as hi-hats and sibilants, and for your own recordings.
 
-On the Pads screen the dials are the same (3 to 7), and dial 8 is **Swing**, the quickest playback setting to reach.
+**On the Pads screen all eight dials are in use**, in this order: 1 Style, 2 Length, 3 Drag, 4 Humanise, 5 Swing, 6 Echo, 7 Forwards,
+8 Finish. (Load Sample, Bite and the other settings are on the module's own pages.)
 
 ## How the generator works
 

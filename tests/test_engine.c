@@ -2367,6 +2367,9 @@ static void test_humanise(void)
         ts_engine_render(v, blk, 128);
         static char js[8192], lnp[256], lhp[256], lng[256], lhg[256];
         ts_engine_view(v, js, sizeof js);
+        double hu = -1.0;
+        json_num(js, "hu", &hu);
+        CHECK(fabs(hu - (hi ? 1.0 : 0.0)) < 0.01, "the view says the Humanise setting, for the dial on the Pads screen (%.2f)", hu);
         const int has_h = json_str(js, "lhp", lhp, sizeof lhp) && json_str(js, "lhg", lhg, sizeof lhg);
         json_str(js, "lnp", lnp, sizeof lnp);
         json_str(js, "lng", lng, sizeof lng);
