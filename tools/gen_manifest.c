@@ -20,7 +20,7 @@ int main(void)
            "\"name\":\"TinyScratch\",\n"
            "\"abbrev\":\"TSCR\",\n"
            "\"version\":\"0.1.0\",\n"
-           "\"description\":\"A turntable-scratch instrument for the Move: a playhead over a short sample (move it, or let a clip), with MIDI notes at C3 and above cutting the sound in like a crossfader.\",\n"
+           "\"description\":\"A generative auto-scratcher for the Ableton Move: press a pad and it writes a new, human-sounding scratch for your sample, plays it in time with your song, and lets you keep the ones you like. MIDI notes at C3 and above cut the sound in like a crossfader.\",\n"
            "\"author\":\"TinyScratch\",\n"
            "\"dsp\":\"dsp.so\",\n"
            "\"api_version\":2,\n"

@@ -1,6 +1,6 @@
 # TinyScratch
 
-**A scratch generator for the Ableton Move** (a Schwung sound generator). Press a pad and it writes a new, human-sounding turntable
+**A generative auto-scratcher for the Ableton Move** (a Schwung sound generator). Press a pad and it writes a new, human-sounding turntable
 scratch for your sample, plays it in time with your song, and lets you keep the ones you like.
 
 ## Getting started
