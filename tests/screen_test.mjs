@@ -544,11 +544,11 @@ fixtures.forEach((v, i) => {
     knob(2, 1);
     check(!has(ctx, "gen_style"), "Style (dial 3) waits for a second detent");
     knob(2, 1);
-    check(has(ctx, "gen_style", "1"), "...then goes one style on (Any, then Baby): " + JSON.stringify(ctx.sets));
+    check(has(ctx, "gen_style", "1"), "...then goes one style on (Improv, then Baby): " + JSON.stringify(ctx.sets));
     for (let i = 0; i < 100; i++) knob(2, 1);
     check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "12", "it stops at Tear");
     for (let i = 0; i < 100; i++) knob(2, 127);
-    check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "0", "...and at Any");
+    check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "0", "...and at Improv");
     ctx.sets.length = 0;
     knob(3, 1); knob(3, 1);
     check(!has(ctx, "gen_bars"), "Length (dial 4) waits for three detents");

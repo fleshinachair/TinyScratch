@@ -356,7 +356,7 @@ int ts_engine_load_clips(ts_engine_t *e, const char *path)
  * Strokes are on the sixteenth grid with a little hand jitter. Every bar ends back at the clip's base position, so the
  * clip loops, and a bar of the same style is never quite the same twice. Positions are 0..1 of the sample's sound
  * (a generated clip is for any sample: it is spread over where the sample has its sound). */
-enum { GS_ANY, GS_BABY, GS_CUTS, GS_MILITARY, GS_SCRIBBLE, GS_STAB, GS_CHIRP, GS_TRANSFORM, GS_FLARE, GS_CRAB, GS_ORBIT, GS_DRAG, GS_TEAR, GS_COUNT };       /* (a style's number is saved in a recipe: new ones go on the end) */
+enum { GS_ANY /* shown as "Improv": a phrase, not a technique */, GS_BABY, GS_CUTS, GS_MILITARY, GS_SCRIBBLE, GS_STAB, GS_CHIRP, GS_TRANSFORM, GS_FLARE, GS_CRAB, GS_ORBIT, GS_DRAG, GS_TEAR, GS_COUNT };       /* (a style's number is saved in a recipe: new ones go on the end) */
 #define GP (TS_CLIP_RES / 4)                         /* dense points per sixteenth */
 
 typedef struct { ts_clip_t *c; uint32_t rng; float amp_t; int shape; int bars; int fw16; float fw_p; int nfw; float fw_t[64], fw_d[64]; int fw_kind[64];

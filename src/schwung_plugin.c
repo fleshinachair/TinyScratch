@@ -53,7 +53,7 @@ static const char *const o_clear[] = { "Idle", "Clear" };
 static const char *const o_clip[] = { "Off", "Clip 1", "Clip 2", "Clip 3", "Clip 4", "Clip 5", "Clip 6", "Clip 7", "Clip 8", "Clip 9", "Clip 10",
                                       "Clip 11", "Clip 12", "Clip 13", "Clip 14", "Clip 15", "Clip 16", "Auto", "Try" };
 static const char *const o_generate[] = { "Idle", "Generate" };
-static const char *const o_genstyle[] = { "Any", "Baby", "Cuts", "Military", "Scribble", "Stab", "Chirp", "Transform", "Flare", "Crab", "Orbit", "Drag", "Tear" };
+static const char *const o_genstyle[] = { "Improv", "Baby", "Cuts", "Military", "Scribble", "Stab", "Chirp", "Transform", "Flare", "Crab", "Orbit", "Drag", "Tear" };
 static const char *const o_genbars[] = { "1 bar", "2 bars", "4 bars" };
 
 static const pdef_t k_params[P_COUNT] = {
@@ -411,6 +411,7 @@ static void ts_set_param(void *h, const char *key, const char *val)
     if (d->kind == K_ENUM) {
         for (int o = 0; o < d->nopts; o++)
             if (strcmp(val, d->opts[o]) == 0) { v = (float)o; ok = 1; break; }
+        if (!ok && i == P_GEN_STYLE && strcmp(val, "Any") == 0) { v = 0.0f; ok = 1; }        /* (what Improv was called) */
     }
     if (!ok) {
         char *end = NULL;

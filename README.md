@@ -15,7 +15,7 @@ Pads screen opens full screen and the pads light up (Back leaves it):
 | 4 | eight red pads: the fader (and, with no clip playing, **cues**: see below) |
 
 **2. Generate a scratch.** Press the **Generate** pad. A new clip plays at once; press it again for another. (Ahhh and Fresssh each
-come with three clips on pads 1 to 3 to start with.) Press play on the Move if nothing is sounding: clips follow the transport. The dials shape what comes next: **Style** (Any, Baby, Cuts, Flare, ...) and **Length**
+come with three clips on pads 1 to 3 to start with.) Press play on the Move if nothing is sounding: clips follow the transport. The dials shape what comes next: **Style** (Improv, Baby, Cuts, Flare, ...) and **Length**
 (1, 2 or 4 bars), **Forwards**, **Finish** and **Echo** (dials 3 to 7; touch one to see its name and value).
 
 **3. Keep it.** Tap an **empty clip pad** while the generated clip is playing. It stays on that pad for that sample, and **Auto** (a
@@ -55,7 +55,7 @@ clip never changes):
 
 | dial | what it does |
 |---|---|
-| **Style** | what Generate makes: **Any** (an improvised two-bar phrase of strokes of every length, answered by a changed version of itself; it does not pick from the named styles) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear |
+| **Style** | what Generate makes: **Improv** (the default: an improvised two-bar phrase of strokes of every length, answered by a changed version of itself; it does not pick from the named styles) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear |
 | **Length** | 1, 2 or 4 bars |
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |
@@ -81,7 +81,7 @@ On the Pads screen the dials are the same (3 to 7), and dial 8 is **Swing**, the
 Generate makes a **recipe** (sample, style, seed, length, and the dial settings) and builds the clip from it, so the same recipe always
 gives the same clip. A kept clip is saved exactly (its playhead path and fader), so it sounds the same whatever the generator becomes later.
 
-- **Any** is a two-bar phrase of strokes of every length, then the same phrase again with some strokes changed, on the sixteenth grid at
+- **Improv** is a two-bar phrase of strokes of every length, then the same phrase again with some strokes changed, on the sixteenth grid at
   any tempo up to 120 bpm. The fader is laid on the grid and the record turns a little ahead of the beat, so every cut bites in with the
   record already moving fast. **On a faster song** (above 120 bpm) the strokes and the cuts keep the length in seconds they have at 120, so
   there are fewer to the bar: no more sounds a second (about 6.5) than a hand can make, however fast the song. (At 160 bpm the plain grid
@@ -98,7 +98,7 @@ gives the same clip. A kept clip is saved exactly (its playhead path and fader),
 
 **The named styles** are built from the definitions in the Turntablist Transcription Methodology
 ([TTM basics](https://www.ttm-dj.com/ttm-01-01-basics/), [the TTM guide](https://lcme.uwl.ac.uk/media/tmpfvcmu/ttm-guide-may-2021.pdf)) and
-Hansen's descriptions. Each keeps the fader it is defined by, and its strokes and fader move together ("Any" is the only one laid on the
+Hansen's descriptions. Each keeps the fader it is defined by, and its strokes and fader move together ("Improv" is the only one laid on the
 sixteenth grid):
 
 | style | what it is |
@@ -116,7 +116,7 @@ sixteenth grid):
 | **Drag** | slow strokes, low in pitch |
 | **Tear** | the record hand alone, the fader open: pushed forward, stopped, pushed forward again, stopped, then the same backwards: four sounds, two forward and two back (Hansen's "clover tear") |
 
-The Hansen & Bresin measurements describe one DJ's improvisation, which is what "Any" follows. The named styles follow the textbook
+The Hansen & Bresin measurements describe one DJ's improvisation, which is what "Improv" follows. The named styles follow the textbook
 techniques. Not yet built: the hydroplane. A style's number is saved in a clip's recipe, so new styles are added on the end.
 
 The clips are stored in `recipes.txt` and `kept.bin` in the module's folder, so every new instance of the module starts with the same clips

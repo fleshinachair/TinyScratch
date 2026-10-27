@@ -3232,6 +3232,12 @@ static void test_plugin_generate(void)
     api->set_param(h, "gen_bars", "4 bars");
     api->get_param(h, "gen_style", out, sizeof out);
     CHECK(atoi(out) == GS_STAB && in->p.gen_style == GS_STAB && in->p.gen_bars == 2, "Style and Length are settings (read back as their index)");
+    api->set_param(h, "gen_style", "Improv");
+    int improv_ok = in->p.gen_style == GS_ANY;
+    api->set_param(h, "gen_style", "Stab");
+    api->set_param(h, "gen_style", "Any");
+    CHECK(improv_ok && in->p.gen_style == GS_ANY, "the first style is Improv, and a project that says Any still means it");
+    api->set_param(h, "gen_style", "Stab");
     api->set_param(h, "generate", "Generate");
     api->get_param(h, "clip", out, sizeof out);
     CHECK(atoi(out) == TS_CLIP_TRY && in->eng->try_valid && in->eng->try_recipe.style == GS_STAB && in->eng->try_recipe.bars == 4, "Generate makes a clip in that style and length, and plays it");

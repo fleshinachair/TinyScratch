@@ -17,12 +17,12 @@
 (function () {
     "use strict";
 
-    var STYLES = ["ANY", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
+    var STYLES = ["IMPROV", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
     var CLIP_PADS = 14;                                 /* clip pads 1-14; the next two places are Generate (15) and Auto (16) */
     var CLIP_AUTO = 17, CLIP_TRY = 18;               /* the clip parameter: 0 off, 1..16 a clip, 17 auto, 18 the clip just generated */
     var HOLD_MS = 1500;                                /* hold a clip you made, or a User sample, this long to delete / unload it (the Delete button never reaches a screen) */
     var TOAST_MS = 1600;                               /* how long a dial's new value stays on the screen */
-    var STYLE_SHORT = ["ANY", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
+    var STYLE_SHORT = ["IMPRO", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
     var BARS = [1, 2, 4];
     var BACK_CC = 51;                                  /* the Move's Back button */
     var JOG_CC = 14;                                   /* the jog wheel: right zooms the clip view in, left out */
@@ -49,7 +49,7 @@
         null,
         { key: "gen_style", v: "gs", min: 0, max: 12, steps: true, detents: 2 },
         { key: "gen_bars", v: "gb", min: 0, max: 2, steps: true, detents: 3 },
-        { key: "gen_fwd", v: "gf", min: 0, max: 1, step: 0.05 },                      /* how often Any lets the record go through the word */
+        { key: "gen_fwd", v: "gf", min: 0, max: 1, step: 0.05 },                      /* how often Improv lets the record go through the word */
         { key: "gen_fin", v: "fn", min: 0, max: 1, step: 0.05 },                      /* how often a clip ends with the whole sample played through */
         { key: "gen_echo", v: "ec", min: 0, max: 1, step: 0.05 },                     /* how often a bar holds an echo scratch: a stab four times, each lower */
         { key: "swing", v: "sw", min: 0, max: 1, step: 0.02 }                         /* every clip, as it plays: the second sixteenth of a pair late */
