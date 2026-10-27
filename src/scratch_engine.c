@@ -1498,8 +1498,8 @@ void ts_params_default(ts_params_t *p)
     p->gen_fin = 0.10f;                  /* now and then a clip ends with the sound played through */
     p->gen_echo = 0.10f;                 /* now and then a bar holds an echo scratch */
     p->swing = 0.30f;                    /* a little loose */
-    p->humanise = 0.0f;                  /* exactly as written */
-    p->bite = 0.0f;                      /* clean */
+    p->humanise = 0.35f;                 /* loose, as a hand is */
+    p->bite = 0.10f;                     /* a touch of edge */
     p->clip_depth = 1.0f;
     p->clip_offset = 0.0f;
 }
@@ -1524,8 +1524,8 @@ void ts_params_sanitize(ts_params_t *p)
     p->gen_fin = isfinite(p->gen_fin) ? clampf(p->gen_fin, 0.0f, 1.0f) : 0.10f;
     p->gen_echo = isfinite(p->gen_echo) ? clampf(p->gen_echo, 0.0f, 1.0f) : 0.10f;
     p->swing = isfinite(p->swing) ? clampf(p->swing, 0.0f, 1.0f) : 0.30f;
-    p->humanise = isfinite(p->humanise) ? clampf(p->humanise, 0.0f, 1.0f) : 0.0f;
-    p->bite = isfinite(p->bite) ? clampf(p->bite, 0.0f, 1.0f) : 0.0f;
+    p->humanise = isfinite(p->humanise) ? clampf(p->humanise, 0.0f, 1.0f) : 0.35f;
+    p->bite = isfinite(p->bite) ? clampf(p->bite, 0.0f, 1.0f) : 0.10f;
     p->clip_depth = isfinite(p->clip_depth) ? clampf(p->clip_depth, 0.0f, 2.0f) : 1.0f;
     p->clip_offset = isfinite(p->clip_offset) ? clampf(p->clip_offset, -0.5f, 0.5f) : 0.0f;
 }

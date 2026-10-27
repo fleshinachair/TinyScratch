@@ -62,6 +62,15 @@ static void t_free(void *p)
 #include "../src/scratch_engine.c"
 #include "../src/schwung_plugin.c"
 
+/* The module starts with Humanise at 20% and Bite at 10%, but the tests are written for the sound and the clip as they are, so they run with both at 0.
+ * Every engine and every set of defaults they make is cleaned at once; the tests that check the real defaults use the _raw functions. */
+static void ts_params_default_raw(ts_params_t *p) { ts_params_default(p); }
+static ts_engine_t *ts_engine_create_raw(float sr) { return ts_engine_create(sr); }
+static void test_clean(ts_params_t *p) { p->humanise = 0.0f; p->bite = 0.0f; }
+static ts_engine_t *test_engine_create(float sr) { ts_engine_t *e = ts_engine_create_raw(sr); if (e) test_clean(&e->p); return e; }
+#define ts_params_default(p) do { ts_params_default_raw(p); test_clean(p); } while (0)
+#define ts_engine_create(sr) test_engine_create(sr)
+
 /* ---- mini harness ------------------------------------------------------ */
 
 #define CHECK(cond, ...)                                                   \
@@ -1936,8 +1945,8 @@ static void test_bite(void)
     ts_params_t p = e->p;
     p.bite = 9.0f; ts_engine_set_params(e, &p);
     ts_params_t d;
-    ts_params_default(&d);
-    CHECK(e->p.bite == 1.0f && d.bite == 0.0f, "Bite is clamped to 0..1, and starts at 0 (clean)");
+    ts_params_default_raw(&d);
+    CHECK(e->p.bite == 1.0f && fabsf(d.bite - 0.10f) < 1e-6f, "Bite is clamped to 0..1, and starts at 10%% (a touch of edge)");
     ts_engine_destroy(e);
 }
 
@@ -2352,8 +2361,8 @@ static void test_humanise(void)
     p.humanise = 9.0f; ts_engine_set_params(e, &p);
     CHECK(e->p.humanise == 1.0f && e->p.humanise <= 1.0f, "Humanise is clamped to 0..1");
     ts_params_t d;
-    ts_params_default(&d);
-    CHECK(d.humanise == 0.0f, "it starts at 0: clips play as written");
+    ts_params_default_raw(&d);
+    CHECK(fabsf(d.humanise - 0.35f) < 1e-6f, "it starts at 35%%: loose, as a hand is (0 plays exactly as written)");
     ts_engine_destroy(e);
     /* the clip view says what is played as well as what was written, so the effect can be seen */
     for (int hi = 0; hi < 2; hi++) {
@@ -3653,7 +3662,7 @@ static void test_manifest(void)
 
     /* the table and the engine agree on every default, and every parameter is on a page with at most eight knobs */
     ts_params_t d;
-    ts_params_default(&d);
+    ts_params_default_raw(&d);
     int agree = 1, on_page = 1;
     for (int i = 0; i < P_COUNT; i++) {
         const pdef_t *p = &k_params[i];
