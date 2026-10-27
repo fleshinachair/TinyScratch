@@ -2278,9 +2278,9 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         if (p->bite > 0.0f) {
             if (e->gate > 0.0f && e->gate < 0.02f && want > e->gate) e->bite_atk = 1.0f;
             e->bite_atk *= bite_decay;
-            const float fast = fminf(fabsf(e->vel_out) * (1.0f / 3.0f), 1.0f);
-            const float drive = 1.0f + p->bite * (3.0f * fast + 3.0f * e->bite_atk), dm = drive - 1.0f;
-            const float makeup = 1.0f + 0.13f * dm + 0.006f * dm * dm;
+            const float fast = fminf(fabsf(e->vel_out) * (1.0f / 1.5f), 1.0f);     /* (1.5 times the sample's own speed is a typical stroke) */
+            const float drive = 1.0f + p->bite * (9.0f * fast + 6.0f * e->bite_atk), dm = drive - 1.0f;
+            const float makeup = expf(0.1151293f * 1.247f * dm / (1.0f + 0.0447f * dm));        /* (dB lost by a soft clip of these samples, up to a drive of 16, as a gain) */
             smp = bite_tanh(smp * nrm * drive) * (makeup / drive) / nrm;
         }
         float vol = p->vel_to_vol ? (float)e->last_vel * (1.0f / 127.0f) : 1.0f;
