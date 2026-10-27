@@ -1331,7 +1331,7 @@ static void test_generator(void)
     CHECK(distinct_ok, "...and every seed is different");
 
     /* a clip is mostly sound: the fader is open and the playhead is moving for most of it, and it never sits still and silent for a beat or more */
-    double worst_mean = 1.0, worst_one = 1.0;
+    double worst_mean = 1.0, worst_one = 1.0, crab_mean = 0.0;
     int long_gap = 0;
     for (int st = 0; st < GS_COUNT; st++) {
         double sum = 0.0;
@@ -1347,10 +1347,12 @@ static void test_generator(void)
                 if (a.gate[i] && d > 0.05) run = 0; else if (++run >= TS_CLIP_RES) { long_gap++; break; }
             }
         }
-        worst_mean = fmin(worst_mean, sum / 60.0);
+        if (st == GS_CRAB) crab_mean = sum / 60.0;
+        else worst_mean = fmin(worst_mean, sum / 60.0);
     }
-    CHECK(worst_mean > 0.35 && worst_one > 0.2 && long_gap == 0, "...and mostly sound, with no silent gap of a beat (worst style averages %.0f%%, worst clip %.0f%%, %d long gaps)",
+    CHECK(worst_mean > 0.35 && worst_one > 0.1 && long_gap == 0, "...and mostly sound, with no silent gap of a beat (worst style averages %.0f%%, worst clip %.0f%%, %d long gaps)",
           100.0 * worst_mean, 100.0 * worst_one, long_gap);
+    CHECK(crab_mean > 0.15, "...a crab, four clicks to a beat, a fifth of it (%.0f%%)", 100.0 * crab_mean);
 
     /* the styles are different from one another */
     int style_distinct = 1;
@@ -1369,7 +1371,7 @@ static void test_generator(void)
     double d2;
     ts_clip_generate(&s2, GS_STAB, 3, 1);
     clip_stats(&s2, &d2, &t1, &l1, &h1, &j1);
-    CHECK(d1 > 0.4 && d1 < 0.9 && d2 < 0.5, "a baby is open a good part of the time but not all of it (%.0f%%); stabs are short (%.0f%%)", 100 * d1, 100 * d2);
+    CHECK(d1 > 0.85 && d2 < 0.5, "a baby is open nearly all the time, as it has no fader (%.0f%%); stabs are short (%.0f%%)", 100 * d1, 100 * d2);
     ts_clip_generate(&s1, GS_CUTS, 3, 1);
     int closed_back = 1;                                         /* forward cuts: the sound is shut while the playhead goes back */
     for (int i = 1; i < s1.n - (TS_CLIP_RES / 4); i++) if (s1.pos[i] + 300 < s1.pos[i - 1]) closed_back &= s1.gate[i] == 0 || i > s1.n - 2 * (TS_CLIP_RES / 4);
@@ -1468,7 +1470,7 @@ static void test_generator(void)
         CHECK(pulse / 60 < 0.35 && again / 60 > 0.5 && exact < 30, "'any' has no beat pulse (%.2f), and its two-bar phrase comes back (%.2f) with changes (%d of 60 exact)", pulse / 60, again / 60, exact);
     }
     ts_clip_generate(&ph, GS_BABY, 77, 2);
-    CHECK(memcmp(ph.pos, ph.pos + 16 * (TS_CLIP_RES / 4), (size_t)8 * (TS_CLIP_RES / 4) * 2) == 0, "a two-bar clip of one style is one bar, twice (bar the run-out at the end)");
+    CHECK(memcmp(ph.pos, ph.pos + 16 * (TS_CLIP_RES / 4), (size_t)7 * (TS_CLIP_RES / 4) * 2) == 0, "a two-bar clip of one style is one bar, twice (bar the run-out, which starts a little before the second half)");
     /* the strokes of a clip are not all the same: their height swells and falls, and where they come back to wanders */
     int varied = 0, counted = 0;
     for (uint32_t seed = 1; seed <= 40; seed++) {
@@ -1516,7 +1518,7 @@ static void test_generator(void)
         gaps += blk[127] == 0.0f;
         pmin = fminf(pmin, (float)e->pos); pmax = fmaxf(pmax, (float)e->pos);
     }
-    CHECK(heard > 300 && gaps > 300 && pmax - pmin > 0.2f, "it plays: cut in and out, the playhead travelling (%d in, %d out, %.2f..%.2f)", heard, gaps, (double)pmin, (double)pmax);
+    CHECK(heard > 300 && gaps > 100 && pmax - pmin > 0.2f, "it plays: cut in and out (a flare is open, with its clicks), the playhead travelling (%d in, %d out, %.2f..%.2f)", heard, gaps, (double)pmin, (double)pmax);
     char js[8192], cf[64];
     double v = 0;
     ts_engine_view(e, js, sizeof js);
@@ -1637,6 +1639,71 @@ static void test_pad_runs_clip(void)
     CHECK(open > 100 && shut > 100, "holding a pad with the transport stopped plays the clip with its own cuts (%ld open, %ld shut)", open, shut);
     ts_engine_note(e, 100, 0, 0);
     ts_engine_destroy(e);
+}
+
+/* The named styles as the Turntablist Transcription Methodology defines them (the futureDJs curriculum guide, ttm-dj.com): a baby has no
+ * fader, a forward cut shuts it on the pull back, a flare clicks mid-stroke (one click or two), a scribble is a fingertip vibrating on a spot,
+ * a stab is pushed at a constant speed, a crab is three or four fast clicks in one record gesture. */
+static double scribble_hz(float bpm, int n_clips)
+{
+    static ts_clip_t c;
+    double turns = 0, open_points = 0, points = 0;
+    for (uint32_t sd = 1; sd <= (uint32_t)n_clips; sd++) {
+        ts_clip_generate_for(&c, GS_SCRIBBLE, sd * 7919u, 1, NULL, 0.0f, bpm, 0.0f, 0.0f);
+        int dir = 0;
+        for (int i = 0; i < c.n; i++) {
+            int d = (int)c.pos[(i + 1) % c.n] - (int)c.pos[i], nd = d > 20 ? 1 : (d < -20 ? -1 : 0);
+            turns += c.gate[i] && nd && dir && nd != dir;                        /* (the vibration, not the fingertip settling while the fader is shut) */
+            if (nd) dir = nd;
+            open_points += c.gate[i] != 0;
+            points++;
+        }
+    }
+    double bar_seconds = 4.0 * 60.0 / bpm, open_seconds = open_points / points * bar_seconds * n_clips;
+    return turns / open_seconds / 2.0;                                           /* vibrations (two turns each) a second while the fader is open */
+}
+
+static void test_ttm_styles(void)
+{
+    printf("styles as defined\n");
+    static ts_clip_t c;
+    const int N = 40;
+    double baby_open = 0, cut_open_falling = 0, cut_open = 0, crab_clicks = 0, points = 0;
+    int flare_min = 99, flare_max = 0, stab_linear = 1, stab_bursts = 0;
+    for (uint32_t sd = 1; sd <= (uint32_t)N; sd++) {
+        ts_clip_generate_for(&c, GS_BABY, sd * 7919u, 1, NULL, 0.0f, 120.0f, 0.0f, 0.0f);
+        for (int i = 0; i < c.n; i++) baby_open += c.gate[i] != 0;
+        points += c.n;
+        ts_clip_generate_for(&c, GS_CUTS, sd * 7919u, 1, NULL, 0.0f, 120.0f, 0.0f, 0.0f);
+        for (int i = 0; i < c.n; i++) {
+            int d = (int)c.pos[(i + 1) % c.n] - (int)c.pos[i];
+            cut_open += c.gate[i] != 0;
+            cut_open_falling += c.gate[i] != 0 && d < -20;
+        }
+        ts_clip_generate_for(&c, GS_CRAB, sd * 7919u, 1, NULL, 0.0f, 120.0f, 0.0f, 0.0f);
+        for (int i = 0; i < c.n; i++) crab_clicks += c.gate[i] && !c.gate[(i + c.n - 1) % c.n];
+        ts_clip_generate_for(&c, GS_FLARE, sd * 7919u, 1, NULL, 0.0f, 120.0f, 0.0f, 0.0f);
+        int sounds = 0;
+        for (int i = 0; i < c.n; i++) sounds += c.gate[i] && !c.gate[(i + c.n - 1) % c.n];
+        flare_min = sounds < flare_min ? sounds : flare_min;
+        flare_max = sounds > flare_max ? sounds : flare_max;
+        ts_clip_generate_for(&c, GS_STAB, sd * 7919u, 1, NULL, 0.0f, 120.0f, 0.0f, 0.0f);
+        for (int i = 3; i + 3 < c.n; i++)                                       /* inside an open burst the playhead moves at a constant speed */
+            if (c.gate[i - 3] && c.gate[i + 3] && c.gate[i]) {
+                int a = (int)c.pos[i] - (int)c.pos[i - 3], b = (int)c.pos[i + 3] - (int)c.pos[i];
+                if (a > 60 && b > 60) { stab_bursts++; stab_linear &= abs(a - b) <= 12; }
+            }
+    }
+    CHECK(baby_open / points > 0.85, "a baby has no fader: it is open nearly all the time (%.0f%%)", 100.0 * baby_open / points);
+    CHECK(cut_open > 0 && cut_open_falling < 0.005 * cut_open, "a forward cut is open on the push and shut on the pull back (open while falling: %.0f of %.0f open points)", cut_open_falling, cut_open);
+    double per_gesture = crab_clicks / (N * 4.0);
+    CHECK(per_gesture > 3.0 && per_gesture < 4.2, "a crab is three or four clicks to a record gesture, a beat each (%.2f)", per_gesture);
+    CHECK(flare_max - flare_min >= 1, "a flare is a 2-click or a 1-click flare: its sounds a bar vary (%d to %d)", flare_min, flare_max);
+    double hz = scribble_hz(120.0f, N);
+    CHECK(hz > 9.0 && hz < 20.0, "a scribble is a fingertip vibrating about twelve times a second (%.1f)", hz);
+    double slow = scribble_hz(90.0f, N), fast = scribble_hz(150.0f, N);
+    CHECK(fabs(slow - fast) < 0.25 * slow, "...whatever the tempo (%.1f a second at 90 bpm, %.1f at 150)", slow, fast);
+    CHECK(stab_bursts > 100 && stab_linear, "a stab is pushed at a constant speed (%d samples of it checked)", stab_bursts);
 }
 
 /* Cue pads: with no clip playing, the bottom row drops the needle at the sample's attacks and plays on at its own speed */
@@ -1810,8 +1877,9 @@ static void test_tempo(void)
 {
     printf("tempo\n");
     /* clips made before the tempo was looked at, for a few seeds and styles: the tempo does not change them up to 120 bpm */
-    static const uint32_t before[15] = { 1953970742u, 557623256u, 1711664955u, 4219920907u, 4086795089u, 4086795089u, 1724656640u, 2335758686u,
-                                          2335758686u, 3515860986u, 236595325u, 236595325u, 4199836569u, 3654799649u, 3654799649u };
+    /* (the first six are "Any", unchanged since before the tempo was looked at; the rest are a baby, a flare and cuts as the notation defines them) */
+    static const uint32_t before[15] = { 1953970742u, 557623256u, 1711664955u, 4219920907u, 4086795089u, 4086795089u, 2739137509u, 753900917u,
+                                          753900917u, 4204885726u, 3910051669u, 3910051669u, 4116409320u, 2109576546u, 2109576546u };
     ts_engine_t *e = ts_engine_create(44100.0f);
     int have = ts_engine_load_dir(e, "samples") == 3;
     const int cfg[5][3] = { { GS_ANY, 4, 1 }, { GS_ANY, 2, 0 }, { GS_BABY, 2, 1 }, { GS_FLARE, 4, 0 }, { GS_CUTS, 1, 0 } };
@@ -3375,6 +3443,7 @@ int main(int argc, char **argv)
     test_echo();
     test_tempo();
     test_pad_mutes_clip();
+    test_ttm_styles();
     test_cues();
     test_shipped_clips();
     test_pad_runs_clip();

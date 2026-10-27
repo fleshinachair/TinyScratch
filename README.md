@@ -96,6 +96,28 @@ gives the same clip. A kept clip is saved exactly (its playhead path and fader),
   (2010). The example clips used for measuring are not in this repository and nothing of them is copied; only the measures were used.
   What was not matched: the real DJ's strokes are not constant in speed (the platter turns in an arc).
 
+**The named styles** are built from the definitions in the Turntablist Transcription Methodology
+([TTM basics](https://www.ttm-dj.com/ttm-01-01-basics/), [the TTM guide](https://lcme.uwl.ac.uk/media/tmpfvcmu/ttm-guide-may-2021.pdf)) and
+Hansen's descriptions. Each keeps the fader it is defined by, and its strokes and fader move together ("Any" is the only one laid on the
+sixteenth grid):
+
+| style | what it is |
+|---|---|
+| **Baby** | the record rubbed back and forth, smoothly, with no fader at all: open all the way, the turns heard (now and then a shark-tooth stroke) |
+| **Cuts** | the forward cut: pushed forward, then the fader shuts for the pull back |
+| **Military** | forward cuts interspersed with rubs, a beat each |
+| **Scribble** | a very quick baby on a small part of the record: a fingertip vibrating on a spot, about twelve times a second whatever the tempo, in bursts |
+| **Stab** | a short, quick push at a constant speed, so a higher pitch, the pull back silent |
+| **Chirp** | a quick baby with a click at each turn, so each stroke is a note of its own |
+| **Transform** | a slow stroke with the fader closed, tapped open in a rhythm |
+| **Flare** | a baby, open at the top and bottom, with a click in the middle of the push and of the pull (a 2-click flare, four sounds) or in only one of them (a 1-click flare, three) |
+| **Orbit** | the 2-click flare, round and smooth |
+| **Crab** | three or four fast clicks (about sixteen a second) in one record gesture, the pull back silent |
+| **Drag** | slow strokes, low in pitch |
+
+The Hansen & Bresin measurements describe one DJ's improvisation, which is what "Any" follows. The named styles follow the textbook
+techniques. Not yet built: the **tear** (push, stop, push, stop, then back: four sounds with no fader) and the hydroplane.
+
 The clips are stored in `recipes.txt` and `kept.bin` in the module's folder, so every new instance of the module starts with the same clips
 on the same pads. Clips can also be imported from an Ableton Live Pack you own (`python tools/import_clips.py "your pack.alp"` writes
 `local/clips.bin`, which stays out of the repository because it is someone else's work); imported clips can be deleted like any other.
