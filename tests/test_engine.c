@@ -1970,6 +1970,73 @@ static void test_swing(void)
     ts_engine_destroy(e);
 }
 
+/* Humanise: a clip plays a little looser (its timing, its cuts, their level, the size of its strokes); what is stored never changes.
+ * The same clip, the same pass and the same setting always sound the same, and each pass round the clip is different. */
+static void run_humanised(float h, int blocks, float *tgt, float *gate, int *blocks_per_pass)
+{
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    load_sample(e, 0, "dc.wav", SMP_DC, 0.5f, 44100);
+    ts_params_t p = e->p;
+    p.clip = 2; p.drag = 0.0f; p.note_gate = 1; p.swing = 0.0f; p.humanise = h; p.pads = 0;
+    ts_engine_set_params(e, &p);
+    const ts_clip_t *k = bank_clip(e, 0, 2);
+    *blocks_per_pass = k ? (int)lround((double)k->len * 60.0 / 120.0 * 44100.0 / 128.0) : 0;
+    static float blk[128];
+    double beat = 4.0;
+    for (int b = 0; b < blocks; b++) {
+        ts_engine_sync_beat(e, beat);
+        ts_engine_render(e, blk, 128);
+        tgt[b] = (float)e->target;
+        gate[b] = e->gate;
+        beat += 128.0 * 120.0 / (60.0 * 44100.0);
+    }
+    ts_engine_destroy(e);
+}
+
+static void test_humanise(void)
+{
+    printf("humanise\n");
+    enum { N = 9000 };
+    static float t0[N], g0[N], t0b[N], g0b[N], t1[N], g1[N], t1b[N], g1b[N];
+    int pass = 0, pass_b = 0;
+    run_humanised(0.0f, N, t0, g0, &pass);
+    run_humanised(0.0f, N, t0b, g0b, &pass_b);
+    run_humanised(1.0f, N, t1, g1, &pass_b);
+    CHECK(pass > 100 && 2 * pass < N, "(a clip %d blocks long)", pass);
+    CHECK(memcmp(t0, t0b, sizeof t0) == 0 && memcmp(g0, g0b, sizeof g0) == 0, "at 0 a clip plays exactly as written, every time");
+    run_humanised(1.0f, N, t1b, g1b, &pass_b);
+    CHECK(memcmp(t1, t1b, sizeof t1) == 0 && memcmp(g1, g1b, sizeof g1) == 0, "at 100%% it is the same every time too (the looseness is a function of the clip and the pass)");
+    double dt = 0.0, open0 = 0.0, open1 = 0.0, maxd = 0.0;
+    int gate_moved = 0;
+    for (int b = 0; b < N; b++) {
+        double d = fabs((double)t1[b] - (double)t0[b]);
+        dt += d;
+        maxd = d > maxd ? d : maxd;
+        open0 += g0[b] > 0.5f;
+        open1 += g1[b] > 0.5f;
+        gate_moved += fabsf(g1[b] - g0[b]) > 0.01f;
+    }
+    dt /= N;
+    CHECK(dt > 0.003 && dt < 0.12, "at 100%% the playhead is somewhere else, but not far (on average %.4f of the sample, at most %.3f)", dt, maxd);
+    CHECK(gate_moved > 20 && fabs(open1 - open0) / N < 0.06, "...the cuts move (%d blocks differ) without the sound opening more or less (%.1f%% against %.1f%% of the time)", gate_moved, 100.0 * open1 / N, 100.0 * open0 / N);
+    double again0 = 0.0, again1 = 0.0;
+    for (int b = 0; b < pass; b++) { again0 += fabs((double)t0[b] - (double)t0[b + pass]); again1 += fabs((double)t1[b] - (double)t1[b + pass]); }
+    again0 /= pass; again1 /= pass;
+    CHECK(again0 < 0.003 && again1 > 2.0 * again0 + 0.002, "each pass round the clip is different when it is humanised, and the same when it is not (%.4f against %.4f)", again0, again1);
+    double lo = 1.0, soft = 0.0;
+    for (int b = 1; b + 1 < N; b++)                                               /* (steady levels: not the 2 ms ramps of a cut opening or closing) */
+        if (g1[b] > 0.05f && fabsf(g1[b] - g1[b - 1]) < 0.005f && fabsf(g1[b] - g1[b + 1]) < 0.005f) { lo = g1[b] < lo ? g1[b] : lo; soft += g1[b] < 0.95f; }
+    CHECK(soft > 0 && lo > 0.6, "the cuts are a little softer, never much (quietest open level %.2f)", lo);
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_params_t p = e->p;
+    p.humanise = 9.0f; ts_engine_set_params(e, &p);
+    CHECK(e->p.humanise == 1.0f && e->p.humanise <= 1.0f, "Humanise is clamped to 0..1");
+    ts_params_t d;
+    ts_params_default(&d);
+    CHECK(d.humanise == 0.0f, "it starts at 0: clips play as written");
+    ts_engine_destroy(e);
+}
+
 static void test_empty_pads(void)
 {
     printf("as shipped: empty pads\n");
@@ -3145,16 +3212,17 @@ static void test_plugin_pickers(void)
     CHECK(in->eng->zoom == 0, "...and off");
     api->get_param(h, "state", out, sizeof out);
     CHECK(!strstr(out, "\"zoom\""), "it is not saved with the project");
-    /* the first menu has the Pads screen, the dials the screen passes on (Clip Depth, Clip Offset, Style, Length) and the file browser;
-     * the sample, the clip and everything Generate does are on the pads, so they are on no dial; the rest is on the More page */
+    /* the first menu (Main) is the generator: the Pads screen (the first dial), Load Sample (the second) and what Generate makes. The sample,
+     * the clip and the rest of what Generate does are on the pads, so they are on no dial; playback is on the pages after it */
     const char *root_end = strstr(hier, "\"knobs\"");                           /* the root level's params come before its knobs */
     int at_root = root_end != NULL;
-    const char *names[] = { "\"pads_screen\"", "\"gen_style\"", "\"gen_bars\"", "\"gen_fwd\"", "\"swing\"", "\"gen_fin\"", "\"gen_echo\"", "\"sample_file\"" };
+    const char *names[] = { "\"pads_screen\"", "\"sample_file\"", "\"gen_style\"", "\"gen_bars\"", "\"gen_fwd\"", "\"gen_fin\"", "\"gen_echo\"" };
     for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
         const char *at = strstr(hier, names[i]);
         at_root &= at != NULL && at < root_end;
     }
-    CHECK(at_root, "the first menu has the Pads screen, its dials and Load Sample");
+    const char *sw_at = strstr(hier, "\"swing\"");
+    CHECK(at_root && sw_at && sw_at > root_end, "the first menu has the Pads screen, Load Sample and the generator's dials, and no playback setting");
     const char *knobs_at = root_end ? strchr(root_end, '[') : NULL;
     const char *knobs_end = knobs_at ? strchr(knobs_at, ']') : NULL;
     int dials = 0, bad_dial = knobs_at == NULL || knobs_end == NULL;
@@ -3162,11 +3230,19 @@ static void test_plugin_pickers(void)
     dials /= 2;
     for (size_t i = 0; i < sizeof names / sizeof names[0] && !bad_dial; i++) {
         const char *at = strstr(root_end, names[i]);
-        int wanted = i != 7;                                                               /* (the first dial opens the Pads screen; the browser is not a dial) */
-        bad_dial |= wanted != (at != NULL && at < knobs_end);
+        bad_dial |= at == NULL || at >= knobs_end;                                         /* (all seven are dials, in this order) */
     }
+    bad_dial |= !(strstr(knobs_at ? knobs_at : "", "\"pads_screen\"") < strstr(knobs_at ? knobs_at : "", "\"sample_file\"") &&
+                  strstr(knobs_at ? knobs_at : "", "\"sample_file\"") < strstr(knobs_at ? knobs_at : "", "\"gen_style\""));
     CHECK(dials == 7 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
-          "the root has seven dials (the opener, Style, Length, Forwards, Swing, Finish and Echo), none of them the sample or clip, and the LFO and Sync pages are gone (%d dials)", dials);
+          "the root has seven dials (the opener, Load Sample as the second, Style, Length, Forwards, Finish and Echo), none of them the sample or clip (%d dials)", dials);
+    const char *l_pb = strstr(hier, "{\"level\":\"playback\""), *l_pp = strstr(hier, "{\"level\":\"pad_play\""), *l_wv = strstr(hier, "{\"level\":\"wave\"");
+    CHECK(l_pb && l_pp && l_wv && l_pb < l_pp && l_pp < l_wv, "the pages after Main are Playback, Pad Play and, last of all, Waveform");
+    const char *d_pb = strstr(hier, "\"playback\":{"), *d_pp = strstr(hier, "\"pad_play\":{"), *d_wv = strstr(hier, "\"wave\":{");
+    CHECK(d_pb && d_pp && d_wv && strstr(d_pb, "\"swing\"") && strstr(d_pb, "\"swing\"") < d_pp && strstr(d_pb, "\"humanise\"") && strstr(d_pb, "\"humanise\"") < d_pp &&
+          strstr(d_pb, "\"drag\"") && strstr(d_pb, "\"drag\"") < d_pp && strstr(d_pb, "\"clip_depth\"") && strstr(d_pb, "\"clip_depth\"") < d_pp &&
+          strstr(d_pp, "\"note_gate\"") && strstr(d_pp, "\"note_gate\"") < d_wv && strstr(d_pp, "\"cues\"") && strstr(d_pp, "\"cues\"") < d_wv && strstr(d_wv, "\"waveform\""),
+          "Playback has Swing, Humanise, Clip Depth and Drag; Pad Play has Note Gate and Cue Pads; the waveform page is on its own, last");
     api->destroy_instance(h);
 }
 
@@ -3245,7 +3321,7 @@ static void test_manifest(void)
     }
     CHECK(agree, "defaults and ranges in module.json match the engine");
     CHECK(on_page && N_(kn_root) <= 8, "every parameter has a knob");
-    for (int g = 0; g < N_(k_pages); g++) CHECK(k_pages[g].nparams <= 8, "page %s has %d knobs", k_pages[g].id, k_pages[g].nparams);
+    for (int g = 0; g < N_(k_pages); g++) CHECK(k_pages[g].nknobs <= 8 && k_pages[g].nknobs <= k_pages[g].nparams, "page %s has %d knobs", k_pages[g].id, k_pages[g].nknobs);
     int short_names = 1;
     for (int i = 0; i < P_COUNT; i++) {
         short_names &= strlen(k_params[i].key) < 32 && strlen(k_params[i].name) < 64;
@@ -3277,6 +3353,7 @@ int main(int argc, char **argv)
     test_delete_any();
     test_empty_pads();
     test_swing();
+    test_humanise();
     test_finish();
     test_echo();
     test_tempo();

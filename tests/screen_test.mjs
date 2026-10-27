@@ -538,23 +538,23 @@ fixtures.forEach((v, i) => {
     knob(0, 1); knob(0, 127);
     check(ctx.sets.length === 0, "dial 1 opens this screen from the first page: it sets nothing here");
     ctx.sets.length = 0;
-    for (const n of [7]) { knob(n, 1); knob(n, 127); }
-    check(ctx.sets.length === 0, "the dials after the last one are nothing");
+    for (const n of [1]) { knob(n, 1); knob(n, 127); }
+    check(ctx.sets.length === 0, "dial 2 is Load Sample, which only the menu can open: it sets nothing here");
     ctx.sets.length = 0;
-    knob(1, 1);
-    check(!has(ctx, "gen_style"), "Style waits for a second detent");
-    knob(1, 1);
+    knob(2, 1);
+    check(!has(ctx, "gen_style"), "Style (dial 3) waits for a second detent");
+    knob(2, 1);
     check(has(ctx, "gen_style", "1"), "...then goes one style on (Any, then Baby): " + JSON.stringify(ctx.sets));
-    for (let i = 0; i < 100; i++) knob(1, 1);
+    for (let i = 0; i < 100; i++) knob(2, 1);
     check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "11", "it stops at Drag");
-    for (let i = 0; i < 100; i++) knob(1, 127);
+    for (let i = 0; i < 100; i++) knob(2, 127);
     check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "0", "...and at Any");
     ctx.sets.length = 0;
-    knob(2, 1); knob(2, 1);
-    check(!has(ctx, "gen_bars"), "Length waits for three detents");
-    knob(2, 1);
+    knob(3, 1); knob(3, 1);
+    check(!has(ctx, "gen_bars"), "Length (dial 4) waits for three detents");
+    knob(3, 1);
     check(has(ctx, "gen_bars", "2"), "...then 4 bars (from 2): " + JSON.stringify(ctx.sets));
-    for (let i = 0; i < 30; i++) knob(2, 127);
+    for (let i = 0; i < 30; i++) knob(3, 127);
     check(ctx.sets.filter(([k]) => k === "gen_bars").slice(-1)[0][1] === "0", "...down to 1 bar");
     ctx.sets.length = 0;
     for (let n = 0; n < 8; n++) for (let i = 0; i < 4; i++) knob(n, 1);
@@ -563,10 +563,10 @@ fixtures.forEach((v, i) => {
         "the six dials do something, and nothing else is written: " + [...written].join(" "));
     { ctx.sets.length = 0; knob(6, 1); knob(6, 1); const ec = ctx.sets.filter(([k]) => k === "gen_echo").map(([, v]) => Number(v)); check(ec.length === 2 && Math.abs(ec[1] - ec[0] - 0.05) < 1e-6, "dial 7 is Echo, 5% a detent: " + JSON.stringify(ctx.sets)); }
     { ctx.sets.length = 0; knob(5, 1); knob(5, 1); const fn = ctx.sets.filter(([k]) => k === "gen_fin").map(([, v]) => Number(v)); check(fn.length === 2 && Math.abs(fn[1] - fn[0] - 0.05) < 1e-6, "dial 6 is Finish, 5% a detent: " + JSON.stringify(ctx.sets)); }
-    { ctx.sets.length = 0; knob(4, 1); knob(4, 1); const sw = ctx.sets.filter(([k]) => k === "swing").map(([, v]) => Number(v)); check(sw.length === 2 && Math.abs(sw[1] - sw[0] - 0.02) < 1e-6, "dial 5 is Swing, 2% a detent: " + JSON.stringify(ctx.sets)); }
+    { ctx.sets.length = 0; knob(7, 1); knob(7, 1); const sw = ctx.sets.filter(([k]) => k === "swing").map(([, v]) => Number(v)); check(sw.length === 2 && Math.abs(sw[1] - sw[0] - 0.02) < 1e-6, "dial 8 is Swing, 2% a detent: " + JSON.stringify(ctx.sets)); }
     ctx.sets.length = 0;
-    knob(3, 1); knob(3, 1);
-    { const fw = ctx.sets.filter(([k]) => k === "gen_fwd").map(([, v]) => Number(v)); check(fw.length === 2 && Math.abs(fw[1] - fw[0] - 0.05) < 1e-6, "dial 4 is Forwards, 5% a detent: " + JSON.stringify(ctx.sets)); }
+    knob(4, 1); knob(4, 1);
+    { const fw = ctx.sets.filter(([k]) => k === "gen_fwd").map(([, v]) => Number(v)); check(fw.length === 2 && Math.abs(fw[1] - fw[0] - 0.05) < 1e-6, "dial 5 is Forwards, 5% a detent: " + JSON.stringify(ctx.sets)); }
     // a dial says what it did, on the bottom line
     {
         const c = makeCtx({ values: {} }), bt = load(() => true);
@@ -576,7 +576,7 @@ fixtures.forEach((v, i) => {
         const bottom = () => JSON.stringify([...c.px.entries()].filter(([k, v]) => v && +k.split(",")[1] >= 58));
         c.clear(); bt.canvas_overlay.draw(hostCtx(c));
         const before = bottom();
-        for (let i = 0; i < 2; i++) bt.canvas_overlay.onMidi(c, { data: [0xB0, 72, 1] });          // dial 2: Style
+        for (let i = 0; i < 2; i++) bt.canvas_overlay.onMidi(c, { data: [0xB0, 73, 1] });          // dial 3: Style
         c.clear(); bt.canvas_overlay.draw(hostCtx(c));
         const during = bottom();
         check(before !== during && c.count(0, 58, 127, 63) > 20, "turning a dial puts its name and value on the bottom line");
@@ -866,7 +866,7 @@ fixtures.forEach((v, i) => {
 // 9. the labels and the pad grid agree with the engine's
 {
     check(T.padIndex(67) === 31 && T.padIndex(68) === 0 && T.padIndex(99) === 31 && T.padIndex(36) === 0 && T.padIndex(35) === -1 && T.padIndex(100) === -1, "pad notes: 36-67 and 68-99 are the same 32 pads");
-    check(T.KNOBS.length === 7 && T.KNOBS[0] === null && T.KNOBS[1].key === "gen_style" && T.KNOBS[2].key === "gen_bars" && T.KNOBS[3].key === "gen_fwd" && T.KNOBS[4].key === "swing" && T.KNOBS[5].key === "gen_fin" && T.KNOBS[6].key === "gen_echo", "the dials");
+    check(T.KNOBS.length === 8 && T.KNOBS[0] === null && T.KNOBS[1] === null && T.KNOBS[2].key === "gen_style" && T.KNOBS[3].key === "gen_bars" && T.KNOBS[4].key === "gen_fwd" && T.KNOBS[5].key === "gen_fin" && T.KNOBS[6].key === "gen_echo" && T.KNOBS[7].key === "swing", "the dials: Pads, Load Sample, then Style, Length, Forwards, Finish, Echo and Swing");
 }
 
 // 10. the waveform screen

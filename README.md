@@ -19,7 +19,7 @@ TTM), and it was tuned against published measurements of real scratching and ove
 
 **2. Generate a scratch.** Press the **Generate** pad. A new clip plays at once; press it again for another. Press play on the Move if
 nothing is sounding: clips follow the transport. The dials shape what comes next: **Style** (Any, Baby, Cuts, Flare, ...) and **Length**
-(1, 2 or 4 bars), **Forwards**, **Swing**, **Finish** and **Echo** (dials 2 to 7; touch one to see its name and value).
+(1, 2 or 4 bars), **Forwards**, **Finish** and **Echo** (dials 3 to 7; touch one to see its name and value).
 
 **3. Keep it.** Tap an **empty clip pad** while the generated clip is playing. It stays on that pad for that sample, and **Auto** (a
 random other clip every bar) will include it.
@@ -48,21 +48,36 @@ Then generate and keep scratches for it, exactly as above. Every sample has its 
 - **Turn the jog wheel right** for a zoomed view of the clip (4, 2 or 1 beats); left zooms back out.
 - Any note from C3 up also cuts the sound in, so you can play it from the Move's sequencer.
 
-## The dials
+## The pages and dials
+
+Turn the jog wheel to move between the pages: the picture, then **Main** (the generator), **Playback**, **Pad Play** and, always last,
+the **Waveform**.
+
+**Main: the generator.** Dial 1 opens the Pads screen and dial 2 is **Load Sample**; dials 3 to 7 shape what Generate makes next (a kept
+clip never changes):
 
 | dial | what it does |
 |---|---|
 | **Style** | what Generate makes: **Any** (a phrase that strings styles together, the way a scratcher would) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag |
 | **Length** | 1, 2 or 4 bars |
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
-| **Swing** (30%) | how every clip plays: each pair of sixteenths long-short instead of even (100% is a triplet feel). Changes no clip |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |
 | **Echo** (10%) | how often a bar holds an echo scratch: a short stab four times over two beats, each at a lower fader level |
 
-Forwards, Finish and Echo change only what Generate makes next; a kept clip never changes. The **More** page has **Drag** (how quickly
-the playhead follows: low is "digital", high is "analogue"), **Gain**, **Note Gate** (on: the red pads are the fader; off: you always hear
-the playhead), **Vel to Vol**, **Clip Depth** and **Clip Offset** (a smaller or shifted version of every clip), and **Cue Pads**. Lock,
-Normalise, Cut From and Pad Grid keep their defaults.
+**Playback: how clips play.** These change how a clip sounds as it plays, never the clip itself:
+
+| dial | what it does |
+|---|---|
+| **Swing** (30%) | each pair of sixteenths long-short instead of even (100% is a triplet feel) |
+| **Humanise** (0%) | loosens a clip the way a hand would: the timing drifts a little (up to 25 ms either way), each cut lands a little early or late (up to 12 ms) and a little softer, and each stroke runs a little short or long. Every pass round the clip is different. At 0 it plays exactly as written |
+| **Clip Depth** / **Clip Offset** | how far the clip moves the playhead (0-200%) and where along the sample it moves it: a smaller or shifted version of every clip |
+| **Drag** | how quickly the playhead follows: low is "digital", high is "analogue" |
+| **Gain** | -24 to +12 dB |
+
+**Pad Play: how the pads play.** **Note Gate** (on: the red pads are the fader; off: you always hear the playhead), **Vel to Vol**, and
+**Cue Pads** (below). Lock, Normalise, Cut From and Pad Grid keep their defaults.
+
+On the Pads screen the dials are the same (3 to 7), and dial 8 is **Swing**, the quickest playback setting to reach.
 
 ## How the generator works
 
@@ -105,7 +120,7 @@ from the end of "Change the Beat" (Fab 5 Freddy, 1982), described as public doma
 ## The screens
 
 The first page is the picture: the sample's name, the waveform with the playhead through it, a vinyl that turns as the playhead crosses
-the sample, and the clip along the bottom (the playhead's path as a line, the cuts as blocks, a cursor for now). The second page,
+the sample, and the clip along the bottom (the playhead's path as a line, the cuts as blocks, a cursor for now). The last page,
 **Waveform**, is the sample on its own at full size, with the playhead's speed (1.0X is the sample's own pitch). **Pads** (knob 1) is the
 first picture full screen with the pads coloured: red cuts (cue colour when they are cues, white while held), yellow samples, violet clips
 (white for the one picked, green for the one playing in Auto), green Auto, orange Generate.

@@ -65,6 +65,7 @@ typedef struct {
     int   gen_bars;             /* 0, 1, 2: a clip of 1, 2 or 4 bars */
     float gen_fwd;              /* 0..1: how many of Any's bars have a forward (the record let go through the word); 0 = none */
     float swing;                /* 0..1: the second sixteenth of each pair played late, as clips play (1 = triplets); 0 = straight */
+    float humanise;             /* 0..1: how loose a clip plays: its timing drifts, each cut lands a little early or late and a little softer, the strokes a little shorter or longer; 0 = exactly as written */
     float gen_fin;              /* 0..1: how often a clip ends with the whole sample playing through at its own speed, then a pull back; 0 = never */
     float gen_echo;             /* 0..1: how often a bar of Any holds an echo scratch (a stab repeated four times, each at a lower level); 0 = never */
     float clip_depth;           /* 0..2: how far a clip moves the playhead (1 = as written; the movement is scaled, then offset) */

@@ -267,6 +267,16 @@ static unsigned mix32(unsigned x)
     return x ^ (x >> 16);
 }
 
+/* Smooth noise between -1 and 1: a value for every whole number of x (the same seed always gives the same ones), eased from one to the next. */
+static double hum_noise(unsigned seed, double x)
+{
+    const double f = floor(x), u = x - f;
+    const unsigned i = (unsigned)(long long)f;
+    const double a = (double)(mix32(seed + i * 0x9E3779B9u) >> 8) / 8388608.0 - 1.0;
+    const double b = (double)(mix32(seed + (i + 1u) * 0x9E3779B9u) >> 8) / 8388608.0 - 1.0;
+    return a + (b - a) * (u * u * (3.0 - 2.0 * u));
+}
+
 static void hand_of(long long hand, int k, int out[TS_NUM_CLIPS])
 {
     for (int i = 0; i < k; i++) out[i] = i;
@@ -1413,6 +1423,7 @@ void ts_params_default(ts_params_t *p)
     p->gen_fin = 0.10f;                  /* now and then a clip ends with the sound played through */
     p->gen_echo = 0.10f;                 /* now and then a bar holds an echo scratch */
     p->swing = 0.30f;                    /* a little loose */
+    p->humanise = 0.0f;                  /* exactly as written */
     p->clip_depth = 1.0f;
     p->clip_offset = 0.0f;
 }
@@ -1437,6 +1448,7 @@ void ts_params_sanitize(ts_params_t *p)
     p->gen_fin = isfinite(p->gen_fin) ? clampf(p->gen_fin, 0.0f, 1.0f) : 0.10f;
     p->gen_echo = isfinite(p->gen_echo) ? clampf(p->gen_echo, 0.0f, 1.0f) : 0.10f;
     p->swing = isfinite(p->swing) ? clampf(p->swing, 0.0f, 1.0f) : 0.30f;
+    p->humanise = isfinite(p->humanise) ? clampf(p->humanise, 0.0f, 1.0f) : 0.0f;
     p->clip_depth = isfinite(p->clip_depth) ? clampf(p->clip_depth, 0.0f, 2.0f) : 1.0f;
     p->clip_offset = isfinite(p->clip_offset) ? clampf(p->clip_offset, -0.5f, 0.5f) : 0.0f;
 }
@@ -2138,10 +2150,25 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
             }
         }
 
+        /* The clip's own time, swung. Humanise loosens a clip as it plays, whatever is stored: the timing drifts (up to 25 ms either way, a new
+         * drift every beat), each cut lands a little early or late (up to 12 ms, every sixteenth) and a little softer, and each stroke runs a
+         * little short or long (up to 4% of the sample). Every pass round the clip is different; at 0 it is exactly as written. */
+        const double sw_t = ts_swing_time(e->mclock, p->swing);
+        double t_path = sw_t, t_gate = sw_t, pos_off = 0.0;
+        float lv_scale = 1.0f;
+        if (p->humanise > 0.0f && clip > 0 && live) {
+            const double h = (double)p->humanise, bps = (double)e->bpm / 60.0;
+            const unsigned sd = mix32((unsigned)(long long)floor(e->mclock / (double)ck->len) * 0x9E3779B9u ^ (unsigned)clip * 0x85EBCA6Bu ^ 0x48554Du);
+            t_path = sw_t + h * 0.025 * bps * hum_noise(sd, sw_t);
+            t_gate = t_path + h * 0.012 * bps * hum_noise(sd ^ 0x1111u, sw_t * 4.0);
+            pos_off = h * 0.04 * hum_noise(sd ^ 0x2222u, sw_t * 2.0);
+            lv_scale = (float)(1.0 - h * 0.30 * (0.5 + 0.5 * hum_noise(sd ^ 0x3333u, sw_t * 4.0)));
+        }
+
         if (e->hand_hold > 0) e->hand_hold--;
         if (e->hand_hold > 0 || !live) e->target = e->man;
         else if (clip > 0) {
-            double v = (double)ts_clip_pos(e, clip, ts_swing_time(e->mclock, p->swing)) * (double)p->clip_depth + (double)p->clip_offset;     /* Swing, Depth and Offset */
+            double v = (double)ts_clip_pos(e, clip, t_path) * (double)p->clip_depth + (double)p->clip_offset + pos_off;     /* Swing, Humanise, Depth and Offset */
             v = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
             e->target = native ? v : (double)s->lo + (double)(s->hi - s->lo) * v;
         }
@@ -2158,9 +2185,9 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
          * with no clip a held note opens the sound, and Note Gate off means "always heard". */
         int open;
         float lv = 1.0f;                                                           /* the fader's level: an echo scratch steps down through the lower ones */
-        const double ct = ts_swing_time(e->mclock, p->swing);                      /* (the clip's own time, swung) */
-        if (running && clip > 0) { lv = ts_clip_level(e, clip, ct); open = lv > 0.0f && !(p->note_gate && held); }        /* the pads are the fader: hold one to cut the clip out */
-        else if (live && clip > 0) { lv = ts_clip_level(e, clip, ct); open = lv > 0.0f; }                                 /* a pad held with the transport stopped runs the clip, cuts and all */
+        const double ct = t_gate;                                                  /* (the clip's own time, swung and humanised) */
+        if (running && clip > 0) { lv = ts_clip_level(e, clip, ct) * lv_scale; open = lv > 0.0f && !(p->note_gate && held); }        /* the pads are the fader: hold one to cut the clip out */
+        else if (live && clip > 0) { lv = ts_clip_level(e, clip, ct) * lv_scale; open = lv > 0.0f; }                                 /* a pad held with the transport stopped runs the clip, cuts and all */
         else open = !p->note_gate || held;
         float want = open ? lv : 0.0f;
         if (e->gate < want) { e->gate += ramp; if (e->gate > want) e->gate = want; }
