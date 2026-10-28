@@ -589,6 +589,18 @@ fixtures.forEach((v, i) => {
         const row = (cx) => JSON.stringify([...cx.px.entries()].filter(([k, v]) => v && +k.split(",")[1] >= 58 && +k.split(",")[0] >= 60));
         check(row(a) !== row(b) && a.count(60, 58, 127, 63) > 15, "the style and the length Generate will use are shown on the Pads view");
     }
+    // a clip playing says its style, and which of Echo, Forwards and Finish it was made with, and nothing if it used none
+    {
+        const bt = fixtures[0];
+        const made = (extra) => { const cx = makeCtx(); box.__tinyscratch.drawView(cx, Object.assign({}, bt, { cm: 3, cl: 3, ln: 0, rw: 1, gs: 0, gb: 1 }, extra), false); return cx; };
+        const none = made({ cy: 1, cx: 0 }), echo = made({ cy: 1, cx: 1 }), all = made({ cy: 1, cx: 7 });
+        const plain = made({ cy: -1 }), other = made({ cy: 5, cx: 0 }), unknown = made({ cy: 1, cx: -1 });
+        const right = (cx) => cx.count(64, 58, 127, 63), left = (cx) => cx.count(0, 58, 63, 63);
+        check(left(none) !== left(other) || JSON.stringify([...none.px]) !== JSON.stringify([...other.px]), "the clip playing says its style (BABY, then STAB)");
+        check(right(none) === 0 && right(unknown) === 0, "no Echo, Forwards or Finish in the clip, or not known: nothing is shown for them");
+        check(right(echo) > 8 && right(all) > right(echo), `each one used is named (${right(echo)} then ${right(all)} pixels)`);
+        check(right(plain) > 15, "a clip with no recipe (a built-in one) keeps the Generate summary");
+    }
     // the Move lights a pressed pad (and the one an octave away) itself: whatever it writes is put back at once
     {
         const sentF = [], bf = load((pkt) => { sentF.push(pkt.slice()); return true; }), cf = makeCtx({ values: {} });
@@ -651,21 +663,40 @@ fixtures.forEach((v, i) => {
         bw.shadow_get_pad_led_snapshot = () => snap;
         let wall = 100000, blocks = 0;
         bw.__tsClock = () => wall;
-        bw.host_pad_block = () => { blocks++; return 0; };
+        const told = [];
+        bw.host_pad_block = (v) => { blocks++; told.push(v); return 0; };
         bw.canvas_overlay.onOpen(cw);
         bw.canvas_overlay.onValues(cw, { values: { view: JSON.stringify(Object.assign({}, fixtures[0], { cm: 0 })) } });
+        bw.host_pad_block(0);
+        check(told[0] === 0, "opened but not yet drawn: the host's own value goes through (nothing is blocked for a screen nobody has seen)");
+        told.length = 0;
         for (let t = 0; t < 20; t++) { cw.t += 20; wall += 20; bw.canvas_overlay.draw(hostCtx(cw)); bw.canvas_overlay.tick(hostCtx(cw)); bw.host_pad_block(0); }
+        check(told.length === 20 && told.every((v) => v === 1), "the screen up: the host's every-frame 'pads are not blocked' is answered with blocked, so the Move's firmware (a Set overview, Session view) never hears a pad tapped here");
         const n0 = sentW.length;
-        check(blocks === 20 && sentW.slice(-5).every((p) => p[3] !== p[2] % 5 + 2 || true), "(the host's call still reaches the host: wrapped, not replaced)");
+        check(blocks === 21 && sentW.slice(-5).every((p) => p[3] !== p[2] % 5 + 2 || true), "(the host's call still reaches the host: wrapped, not replaced)");
+        told.length = 0;
         for (let t = 0; t < 30; t++) { wall += 20; bw.host_pad_block(0); }     // the screen is gone: no tick, no draw, no onClose
+        check(told.slice(-8).every((v) => v === 0), "the screen gone: the pads are handed back within moments (0.4 s), never stuck blocked (" + told.join("") + ")");
         const back = sentW.slice(n0);
         check(back.length === 32 && back.every((p) => p[3] === p[2] % 5 + 2), "the screen left without a goodbye: the next host frames hand every pad back as the Move had it (" + back.length + ")");
         const n1 = sentW.length;
         for (let t = 0; t < 10; t++) { wall += 20; bw.host_pad_block(0); }
-        check(sentW.length === n1 && blocks === 60, "...once; and the host's own call always went through");
+        check(sentW.length === n1 && blocks === 61, "...once; and the host's own call always went through");
         bw.canvas_overlay.draw(hostCtx(cw));
         for (let t = 0; t < 6; t++) { cw.t += 20; wall += 20; bw.canvas_overlay.tick(hostCtx(cw)); bw.host_pad_block(0); bw.canvas_overlay.draw(hostCtx(cw)); }
         check(sentW.length > n1, "back on the screen, it paints the pads again");
+        told.length = 0;
+        bw.host_pad_block(0);
+        check(told[0] === 1, "...and blocks them again");
+        bw.canvas_overlay.onMidi(cw, { data: [0xB0, 51, 127] });               // Back
+        told.length = 0;
+        bw.host_pad_block(0);
+        check(told[0] === 0, "Back: the very next host call hands the pads back, without waiting for the screen to stop drawing");
+        bw.canvas_overlay.draw(hostCtx(cw));
+        bw.canvas_overlay.onClose(cw);
+        told.length = 0;
+        bw.host_pad_block(0);
+        check(told[0] === 0, "closing the screen hands them back too");
     }
     // touching a dial says what it is (and what it is set to) before it is turned
     {

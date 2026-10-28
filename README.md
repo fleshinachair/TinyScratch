@@ -23,7 +23,8 @@ Pads screen opens full screen and the pads light up (Back leaves it):
 **2. Generate a scratch.** Press the **Generate** pad. A new clip plays at once; press it again for another. (Ahhh and Fresssh each
 come with three clips on pads 1 to 3 to start with.) Press play on the Move if nothing is sounding: clips follow the transport. The eight dials of the Pads screen are in the order they read: **Style** (Improv, Baby, Cuts,
 Flare, ...) and **Length** (1, 2 or 4 bars), then how it plays, **Drag**, **Humanise** and **Swing**, then what Generate adds, **Echo**,
-**Forwards** and **Finish**. Touch one to see its name and value.
+**Forwards** and **Finish**. Touch one to see its name and value. Whenever a clip plays, its style is on the bottom line next to its
+number (**CLIP 3 BABY**), and bottom right says which of Echo, Forwards and Finish are really in it, or nothing if it has none. (Echo scratches only appear in Improv.)
 
 **3. Keep it.** Tap an **empty clip pad** while the generated clip is playing. It stays on that pad for that sample, and **Auto** (which
 plays each clip right through, from its start, then a random other one) will include it.

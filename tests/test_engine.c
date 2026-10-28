@@ -1951,6 +1951,94 @@ static void test_bite(void)
 }
 
 /* Cue pads: with no clip playing, the bottom row drops the needle at the sample's attacks and plays on at its own speed */
+/* the view says how the clip on the screen was made: its style, and which of Echo, Forwards and Finish the generator really wrote into it */
+static int view_int(ts_engine_t *e, const char *key)
+{
+    static char js[8192];
+    double v = -99;
+    ts_engine_view(e, js, sizeof js);
+    json_num(js, key, &v);
+    return (int)v;
+}
+
+static void play_a_little(ts_engine_t *e)
+{
+    float blk[128];
+    for (int b = 0; b < 4; b++) ts_engine_render(e, blk, 128);
+}
+
+static void test_clip_recipe_view(void)
+{
+    printf("the recipe of the clip on the screen\n");
+    const char *lib = TDIR "/rec/recipes.txt";
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_engine_set_recipes_path(e, lib);
+    remove(lib);
+    remove(TDIR "/rec/kept.bin");
+    load_sample(e, 0, "ahhh.wav", SMP_SINE, 0.5f, 44100);
+    ts_params_t p;
+    ts_params_default(&p);
+    p.pads = 0; p.clip = 0;
+    p.gen_style = GS_ANY; p.gen_bars = 1; p.gen_echo = 1.0f; p.gen_fwd = 1.0f; p.gen_fin = 1.0f;
+    ts_engine_set_params(e, &p);
+    CHECK(view_int(e, "cy") == -1 && view_int(e, "cx") == -1, "hand playing: no recipe");
+
+    ts_engine_generate(e);
+    play_a_little(e);
+    CHECK(view_int(e, "cy") == GS_ANY && view_int(e, "cx") == (TS_EX_ECHO | TS_EX_FWD | TS_EX_FIN), "Improv with all three at 100%%: all three are in the clip (cx %d)", view_int(e, "cx"));
+    int pad = ts_engine_keep(e, 0);
+    p.gen_style = GS_FLARE; p.gen_echo = 0.0f; p.gen_fin = 0.0f; p.gen_fwd = 0.0f;                        /* the dials move on: the kept clip does not */
+    p.clip = pad;
+    ts_engine_set_params(e, &p);
+    play_a_little(e);
+    CHECK(pad > 0 && view_int(e, "cy") == GS_ANY && view_int(e, "cx") == 7, "a kept clip still says what it holds, whatever the dials say now");
+
+    p.clip = 0;
+    p.gen_style = GS_ANY;
+    ts_engine_set_params(e, &p);
+    ts_engine_generate(e);
+    play_a_little(e);
+    CHECK(view_int(e, "cx") == 0, "all three at 0%%: none is in the clip");
+
+    p.gen_style = GS_BABY; p.gen_echo = 1.0f;
+    ts_engine_set_params(e, &p);
+    ts_engine_generate(e);
+    play_a_little(e);
+    CHECK(view_int(e, "cy") == GS_BABY && view_int(e, "cx") == 0, "Echo is set but a Baby has no echo scratch in it: it is not claimed");
+
+    /* the generator tells the truth over many clips: no extras at 0, and a setting that is on only sometimes puts it in only some */
+    int with_echo = 0, with_fin = 0, wrong = 0;
+    static ts_clip_t c;
+    for (uint32_t sd = 1; sd <= 60; sd++) {
+        ts_clip_generate_for(&c, GS_ANY, sd, 2, &e->slot[0], 0.0f, 120.0f, 0.0f, 0.0f);
+        wrong += c.extras != TS_EX_KNOWN;
+        ts_clip_generate_for(&c, GS_ANY, sd, 2, &e->slot[0], 0.0f, 120.0f, 0.5f, 0.5f);
+        with_echo += (c.extras & TS_EX_ECHO) != 0;
+        with_fin += (c.extras & TS_EX_FIN) != 0;
+    }
+    CHECK(wrong == 0 && with_echo > 5 && with_echo < 55 && with_fin > 10 && with_fin < 50, "at 0%% never, at 50%% sometimes (%d echoes, %d finishes in 60 clips, %d wrong)", with_echo, with_fin, wrong);
+
+    /* saved and loaded again: the same recipe makes the same clip, so what it holds is still known */
+    ts_engine_service(e);
+    ts_engine_destroy(e);
+    e = ts_engine_create(44100.0f);
+    ts_engine_set_recipes_path(e, lib);
+    load_sample(e, 0, "ahhh.wav", SMP_SINE, 0.5f, 44100);
+    CHECK(ts_engine_load_recipes(e) >= 1, "(the library loads)");
+    ts_params_default(&p);
+    p.pads = 0; p.clip = pad;
+    ts_engine_set_params(e, &p);
+    play_a_little(e);
+    CHECK(view_int(e, "cy") == GS_ANY && view_int(e, "cx") == 7, "after a reload it still says what it holds (cx %d)", view_int(e, "cx"));
+
+    /* saved data the recipe no longer makes (an older generator): what it holds is not known, so nothing is claimed */
+    ts_clip_t *k = &e->clip_data[e->bank[0][pad - 1] - 1];
+    k->extras = 0;
+    play_a_little(e);
+    CHECK(view_int(e, "cx") == -1, "a clip whose contents are not known is not labelled");
+    ts_engine_destroy(e);
+}
+
 static void test_cues(void)
 {
     printf("cue pads\n");
@@ -3723,6 +3811,7 @@ int main(int argc, char **argv)
     test_fader();
     test_bite();
     test_cues();
+    test_clip_recipe_view();
     test_shipped_clips();
     test_pad_runs_clip();
     test_unload_files();

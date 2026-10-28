@@ -162,6 +162,16 @@ static const ts_clip_t *bank_clip(const ts_engine_t *e, int sample, int pad)
     return pool_clip(e, e->bank[sample][pad - 1] - 1);
 }
 
+/* how the clip being shown was made, or NULL: the one just generated, or one you kept (the built-in ones have no recipe) */
+static const ts_recipe_t *recipe_at(const ts_engine_t *e, int clip)
+{
+    if (!e) return NULL;
+    if (clip == TS_CLIP_TRY) return e->try_valid ? &e->try_recipe : NULL;
+    if (clip < 1 || clip > TS_NUM_CLIPS) return NULL;
+    int idx = e->bank[e->p.sample][clip - 1] - 1;
+    return idx >= 0 && e->kept[idx].used ? &e->kept[idx] : NULL;
+}
+
 static void recount_clips(ts_engine_t *e)
 {
     int n = 0;
@@ -387,7 +397,7 @@ enum { GS_ANY /* shown as "Improv": a phrase, not a technique */, GS_BABY, GS_CU
 #define GP (TS_CLIP_RES / 4)                         /* dense points per sixteenth */
 
 typedef struct { ts_clip_t *c; uint32_t rng; float amp_t; int shape; int bars; int fw16; float fw_p; int nfw; float fw_t[64], fw_d[64]; int fw_kind[64];
-                 float echo_p; uint32_t seed; float stretch, thin; int dmin; float spx; } gen_t;          /* amp_t: how tall the strokes are, 0..1, the same all through the clip; stretch: how many sixteenths longer a stroke is (and thin: how much rarer a cut) on a fast song, 1 up to 120 bpm */
+                 float echo_p; uint32_t seed; float stretch, thin; int dmin; float spx; unsigned used; } gen_t;         /* amp_t: how tall the strokes are, 0..1, the same all through the clip; stretch: how many sixteenths longer a stroke is (and thin: how much rarer a cut) on a fast song, 1 up to 120 bpm */
 
 /* The curve a stroke takes. The hand does not move like a sine: it bites in and settles (a fast start: 60-90% of the strokes in the
  * clips measured), now and then a plain S-curve, and rarely builds slowly. One is the clip's own (g->shape) and most strokes use it. */
@@ -920,6 +930,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
     while (t < len16 && ns + 3 < cap) {
         int bar = t / S, fa = bar < 4 ? fw_at[bar] : -1, eat = bar < 4 ? ea[bar] : -1;
         if (eat == t && t + 8 <= len16 && ns + 10 < cap) {                       /* the echo scratch: four stabs, each lower */
+            g->used |= TS_EX_ECHO;
             for (int r = 0; r < 4; r++) {
                 sl[ns].dur = 1; sl[ns].to = clampf(base + es[bar], base + 0.12f, 0.9f); sl[ns].shape = SH_FLICK; sl[ns].fw = 3 + r; ns++;
                 sl[ns].dur = 1; sl[ns].to = base; sl[ns].shape = SH_LIN; sl[ns].fw = 7; ns++;
@@ -928,6 +939,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
             continue;
         }
         if (fa == t) {                                                           /* the forward: at about the sample's own speed, through most of it */
+            g->used |= TS_EX_FWD;
             int beat3 = (t % S) == S / 2, fd, pd;
             fd = beat3 ? 4 : 3; pd = beat3 ? gi(g, 1, 2) : 1;
             if (t + fd + pd > len16) pd = len16 - t - fd;
@@ -1005,6 +1017,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     g.dmin = (int)ceilf(0.88f * stretch);                                           /* the fewest sixteenths that make 0.11 s (a sixteenth is 0.125 / stretch seconds) */
     g.seed = seed;
     g.nfw = 0;
+    g.used = 0;
     g.rng = mix32(seed) | 1u;
     int n = bars * 16 * GP;
     out->n = n;
@@ -1055,6 +1068,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     if (last != GS_STAB && last != GS_CRAB && grnd(&g) < 0.25f * fw_p) {                 /* (a run-out is a kind of forward: the Forwards setting rules it too) */
         float o = 16.0f * (float)(bars - 1);
         int i0 = (int)((o + 8.0f) * (float)GP);
+        g.used |= TS_EX_FWD;
         float from = (float)out->pos[i0] / 65535.0f, to = gr(&g, 0.93f, 0.99f);
         g_seg(&g, o + 8.0f, o + 15.0f, from, to, gi(&g, 0, 1) ? SH_LIN : SH_SLOW);
         g_gate(&g, o + 8.0f, o + 15.0f, 1);
@@ -1068,6 +1082,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         gen_t t = g;
         t.rng = mix32(seed ^ 0xF1415EEDu) | 1u;
         if (grnd(&t) < fin_p) {
+            g.used |= TS_EX_FIN;
             float o = 16.0f * (float)(bars - 1);
             float from = bases[bars - 1], span = fmaxf(hi - from, 0.2f);
             /* sixteenths the sound takes at the sample's own speed: up to three quarters of a bar (half a bar in a one bar clip); a sample
@@ -1116,7 +1131,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         }
         g_mask_turns(&g, 16.0f * (float)bar, s);
     }
-
+    out->extras = (uint8_t)(TS_EX_KNOWN | g.used);
 }
 
 /* How much of a clip is heard: the sound is cut in and the playhead is moving (a stopped playhead is silence, whatever the fader does). */
@@ -1229,6 +1244,7 @@ static int install_clip(ts_engine_t *e, int sample, int pad, const ts_clip_t *sr
     memcpy(d->gate, src->gate, sizeof d->gate);
     d->len = src->len;
     d->tag = src->tag;
+    d->extras = src->extras;
     __sync_synchronize();
     d->n = src->n;
     e->kept[idx] = *r;
@@ -1303,9 +1319,16 @@ static int restore_kept_from(ts_engine_t *e, int sample, int pad, int style, uin
     }
     if (pad < 1 || pad > TS_CLIP_PADS || e->bank[sample][pad - 1] != 0) pad = first_free_pad(e, sample);     /* its pad is taken: the next free one */
     if (pad < 0) return -1;
-    static ts_clip_t tmp;                                                       /* (called from the thread that sets parameters, one at a time) */
-    if (data) tmp = *data;
-    else ts_clip_generate_for(&tmp, clampi(style, 0, TS_GEN_STYLES - 1), seed, bars, &e->slot[sample], (float)clampi(fwd, 0, 100) / 100.0f, (float)bpm, (float)clampi(fin, 0, 100) / 100.0f, (float)clampi(echo, 0, 100) / 100.0f);
+    static ts_clip_t tmp, again;                                                /* (called from the thread that sets parameters, one at a time) */
+    const int st = clampi(style, 0, TS_GEN_STYLES - 1);
+    ts_clip_generate_for(&again, st, seed, bars, &e->slot[sample], (float)clampi(fwd, 0, 100) / 100.0f, (float)bpm, (float)clampi(fin, 0, 100) / 100.0f, (float)clampi(echo, 0, 100) / 100.0f);
+    if (data) {                                                                 /* the saved data is what plays; what it holds is known only if the recipe still makes exactly it */
+        tmp = *data;
+        tmp.extras = again.n == data->n && again.len == data->len && memcmp(again.pos, data->pos, sizeof(uint16_t) * (size_t)data->n) == 0 &&
+                     memcmp(again.gate, data->gate, (size_t)data->n) == 0 ? again.extras : 0;
+    } else {
+        tmp = again;
+    }
     ts_recipe_t r = { 1, clampi(style, 0, TS_GEN_STYLES - 1), tmp.len / 4, seed, clampi(fwd, 0, 100), bpm, clampi(fin, 0, 100), clampi(echo, 0, 100) };
     if (install_clip(e, sample, pad, &tmp, &r) != 0) return -1;
     e->recipes_dirty = 0;                                                       /* it came from the library */
@@ -2413,6 +2436,7 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     int tx = clampi((int)(e->target * (TS_VIEW_COLS - 1) + 0.5), 0, TS_VIEW_COLS - 1);
     const ts_clip_t *shown_clip = p->clip ? clip_at(e, e->clip_now) : NULL;
     const int lane_beats = shown_clip ? shown_clip->len : TS_LANE_BEATS;
+    const ts_recipe_t *rec = shown_clip ? recipe_at(e, e->clip_now) : NULL;     /* how the clip on the screen was made */
 
     char cue_cols[17];                                                         /* where the eight cue pads drop the needle, a column each (two hex digits) */
     float cue_at[8];
@@ -2428,13 +2452,14 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     jw(&j, "\",\"ld\":\"");
     for (int i = 0; i < TS_SLOTS; i++) jw(&j, "%c", e->slot[i].loaded ? '1' : '0');
     jw(&j, "\",\"x\":%d,\"tx\":%d,\"p\":%.4f,\"tt\":%.3f,\"vl\":%.2f,\"dr\":%.2f,\"gn\":%.1f,\"ng\":%d,\"vv\":%d,\"no\":%d,\"lk\":%d,"
-           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"fn\":%.2f,\"ec\":%.2f,\"hu\":%.2f,\"cs\":%d,\"cq\":%d,\"cu\":\"%s\",\"w\":\"",
+           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"fn\":%.2f,\"ec\":%.2f,\"hu\":%.2f,\"cs\":%d,\"cq\":%d,\"cu\":\"%s\",\"cy\":%d,\"cx\":%d,\"w\":\"",
        x, tx, e->pos, (double)p->turntable, (double)e->vel_out, (double)p->drag, (double)p->gain_db, p->note_gate, p->vel_to_vol, p->normalise, p->lock,
        p->cut_from, e->gate > 0.5f, e->notes_held + e->pad_held, e->transport, e->lane_col, p->clip ? e->clip_now : 0, p->clip, e->running, e->last_note, e->pad_raw > 0, lane_beats, e->nclips,
        e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
        e->try_valid, e->try_valid ? e->try_recipe.style : 0, e->view_seq,
        (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin, (double)p->gen_echo, (double)p->humanise,
-       p->cues, e->cue_on ? e->cue_pad : -1, cue_cols);
+       p->cues, e->cue_on ? e->cue_pad : -1, cue_cols,
+       rec ? rec->style : -1, rec && (shown_clip->extras & TS_EX_KNOWN) ? shown_clip->extras & 7 : -1);
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->pk[c] : 0);       /* the waveform: peak, then body */
     jw(&j, "\",\"wr\":\"");
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->rms[c] : 0);

@@ -46,7 +46,13 @@ typedef struct {
     int      n;                             /* len * TS_CLIP_RES */
     uint16_t pos[TS_CLIP_MAX_BEATS * TS_CLIP_RES];      /* the playhead, 0..65535 */
     uint8_t  gate[TS_CLIP_MAX_BEATS * TS_CLIP_RES];     /* 1: a note is on, the sound is cut in */
+    uint8_t  extras;                                    /* what the generator really wrote in, as TS_EX_*: only when TS_EX_KNOWN is set (a built-in clip, or old saved data, is 0: not known) */
 } ts_clip_t;
+
+#define TS_EX_ECHO  1                       /* an echo scratch is in the clip */
+#define TS_EX_FWD   2                       /* a forward is (or the run-out to the end of the sample) */
+#define TS_EX_FIN   4                       /* the clip ends with the whole sample played through */
+#define TS_EX_KNOWN 0x80
 
 typedef struct {
     int   sample;               /* slot 0..5 */

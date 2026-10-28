@@ -226,11 +226,24 @@
         if (cur >= 0) for (var yy = y0 + 1; yy < y0 + L.laneH - 1; yy += 2) px(ctx, lx(cur), yy);
     }
 
-    function clipLabel(v) {
+    /* the style the clip on the screen was made in (a kept clip keeps its recipe), or -1 when it has none (a built-in one, or hand playing) */
+    function clipStyle(v) {
+        var cy = Math.round(num(v.cy, -1));
+        return num(v.cm, 0) > 0 && cy >= 0 && cy <= 12 ? cy : -1;
+    }
+
+    function clipLabel(v, plain) {
         var cm = clamp(Math.round(num(v.cm, 0)), 0, 18), cl = clamp(Math.round(num(v.cl, 0)), 0, 18);
-        var ln = Math.round(num(v.ln, 0)), tg = clamp(Math.round(num(v.tg, 0)), 0, 12);
-        var head = cm === CLIP_TRY ? "TRY " + STYLES[tg].slice(0, 5) : (cm ? (cm === CLIP_AUTO ? "AUTO " : "CLIP ") + cl : "HAND");
-        return head + (ln > 0 ? " N" + ln : "");                                                    /* N: the last note that arrived */
+        var ln = Math.round(num(v.ln, 0)), tg = clamp(Math.round(num(v.tg, 0)), 0, 12), cy = clipStyle(v);
+        var head = cm === CLIP_TRY ? "TRY " + STYLES[tg].slice(0, 5) : (cm ? (cm === CLIP_AUTO ? "AUTO " : "CLIP ") + cl + (cy >= 0 ? " " + STYLE_SHORT[cy] : "") : "HAND");
+        return head + (ln > 0 && !plain ? " N" + ln : "");                                          /* N: the last note that arrived */
+    }
+
+    /* besides its style, which of Echo, Forwards and Finish are really in the clip (cx, from the generator: a bit each; -1, or none of them: nothing) */
+    function clipExtras(v) {
+        var x = Math.round(num(v.cx, -1));
+        if (x < 0) return "";
+        return [x & 1 ? "ECHO" : "", x & 2 ? "FWD" : "", x & 4 ? "FIN" : ""].filter(Boolean).join(" ");
     }
 
     /* the transport is stopped and a clip is waiting for it: nothing plays by itself */
@@ -259,7 +272,7 @@
         drawVinyl(ctx, v, 117, L.vinylY);
         drawLane(ctx, v, L);
         if (compact) {                                        /* the panel beside the lane */
-            text(ctx, 86, L.laneY + 2, clipLabel(v), 1);
+            text(ctx, 86, L.laneY + 2, clipLabel(v, clipStyle(v) >= 0), 1);
             text(ctx, 86, L.laneY + 9, waiting(v) ? "PRESS PLAY" : (v.g ? "CUT" : ""), 1);
             return;
         }
@@ -268,9 +281,10 @@
         var notice = bottomNotice(ctx, extra, v);
         var inv = !!extra.touchText && notice === extra.touchText;                              /* a touched dial's name: white on black stands out */
         if (inv) ctx.fillRect(0, 57, 128, 7, 1);
-        text(ctx, 1, 59, notice || (clipLabel(v) + (pad !== undefined && pad >= 0 ? " P" + pad : "") + (cc !== undefined && cc >= 0 ? " C" + cc : "")), inv ? 0 : 1);
-        /* what Generate makes (the dials 7 and 8), then how the pads are being read */
-        var right = STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : "");
+        var made = clipStyle(v) >= 0;
+        text(ctx, 1, 59, notice || (clipLabel(v) + (made ? "" : (pad !== undefined && pad >= 0 ? " P" + pad : "") + (cc !== undefined && cc >= 0 ? " C" + cc : ""))), inv ? 0 : 1);
+        /* a clip with a recipe: its style is in the label and here is what else it was made with; otherwise what Generate makes (the dials 1 and 2), then how the pads are being read */
+        var right = made ? clipExtras(v) : (STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : ""));
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 
@@ -309,7 +323,7 @@
         var inv = !!extra.touchText && notice === extra.touchText;
         if (inv) ctx.fillRect(0, 57, 128, 7, 1);
         text(ctx, 1, 59, notice || ("BAR " + bar + " BEAT " + beat + (pad !== undefined && pad >= 0 ? "  P" + pad : "")), inv ? 0 : 1);
-        var right = STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
+        var right = clipStyle(v) >= 0 ? clipExtras(v) : STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 
@@ -414,15 +428,23 @@
      * Move had them. */
     var LEFT_MS = 400;
     function wallNow() { return typeof globalThis.__tsClock === "function" ? globalThis.__tsClock() : Date.now(); }
+    /* Is this screen on the display right now? True only while it is being drawn, so it can never be true for a screen that has gone. */
+    function screenUp(st) { return !st.released && st.lastDrawWall > 0 && wallNow() - st.lastDrawWall <= LEFT_MS && onScreen(); }
     function watchPads(st) {
         globalThis.__tsPadHook = function () {
             if (!st.released && st.lastDrawWall && wallNow() - st.lastDrawWall > LEFT_MS) releaseLeds(st);
         };
+        /* The pads are ours while the screen is up. The Move's firmware hears every pad the host merely observes, and what a pad does there
+         * depends on a view we cannot see behind this one: in the Set overview a tap opens another Set, in Session view it launches a
+         * clip. Nothing is lost by withholding them: with this screen up the DSP ignores pad notes and takes every pad from here. */
+        globalThis.__tsPadWant = function () { return screenUp(st); };
         if (typeof globalThis.host_pad_block !== "function" || globalThis.__tsPadWatch) return;
         var original = globalThis.host_pad_block;
         globalThis.__tsPadWatch = true;
         globalThis.host_pad_block = function () {
-            var r = original.apply(this, arguments);
+            var args = Array.prototype.slice.call(arguments);
+            try { if (typeof globalThis.__tsPadWant === "function" && globalThis.__tsPadWant()) args[0] = 1; } catch (e) { /* the host's own value stands */ }
+            var r = original.apply(this, args);
             try { if (typeof globalThis.__tsPadHook === "function") globalThis.__tsPadHook(); } catch (e) { /* never in the host's way */ }
             return r;
         };
