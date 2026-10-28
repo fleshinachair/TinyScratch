@@ -32,10 +32,12 @@
  * can be made for a sample (Ahhh or Fresssh): auto picks among those for the sample in use (all of them for a user sample). While a clip runs it moves the playhead and cuts;
  * the Turntable knob still takes over for a moment, and held notes add cuts. */
 #define TS_NUM_CLIPS      16                /* clip pads: the built-in or imported clips, then the ones you keep */
+#define TS_PAGES          4                 /* pages of clip pads for each sample: the Pads screen shows one, 14 pads, and < and > turn the page */
+#define TS_BANK           (TS_PAGES * TS_NUM_CLIPS)   /* a sample's bank, all its pages: pad p of page g is at index g * 16 + p - 1 (page 0 is where the pads always were) */
 #define TS_CLIP_AUTO      17                /* the clip parameter: 0 off, 1..16 a clip, 17 auto, 18 the clip just generated */
 #define TS_CLIP_TRY       18
 #define TS_CLIP_PADS      14                /* clip pads 1-14: the two places after them on the pads are Generate and Auto */
-#define TS_POOL           64                /* every clip there is: the built-in or imported ones, and the ones you kept */
+#define TS_POOL           256               /* every clip there is: the built-in or imported ones, and the ones you kept */
 #define TS_GEN_STYLES     13                /* any, baby, cuts, military, scribble, stab, chirp, transform, flare, crab, orbit, drag, tear */
 #define TS_CLIP_RES       128               /* points to the beat in a clip's data */
 #define TS_CLIP_MAX_BEATS 16
@@ -73,7 +75,8 @@ typedef struct {
     int   pads;                 /* 1: the 32 pads are a fixed grid (below) instead of plain notes */
     int   taste_log;            /* 1: keep a log of the clips you keep, pass over and delete (taste_log.csv, local to this Move) */
     int   cues;                 /* 1: with no clip playing, the bottom row of pads are cues: each drops the needle at an attack of the sample and plays it on */
-    int   clip;                 /* 0 off, 1..16 a clip, 17 auto, 18 the clip just generated ("try") */
+    int   clip;                 /* 0 off, 1..16 a pad of the page clip_page, 17 auto, 18 the clip just generated ("try") */
+    int   clip_page;            /* 0..3: the page of the pad in clip (the page of the clip that is playing: not the page the pads show) */
     int   gen_style;            /* what Generate makes: 0 any, or one of the styles above */
     int   gen_bars;             /* 0, 1, 2: a clip of 1, 2 or 4 bars */
     float gen_fwd;              /* 0..1: how many of Any's bars have a forward (the record let go through the word); 0 = none */
@@ -151,9 +154,11 @@ typedef struct ts_engine {
     int         lane_len;       /* the beats the clip view spans: the clip's length, or a bar */
 
     ts_clip_t   clip_data[TS_POOL + 2];        /* every clip; the last two are the "try" clip, built in the one not playing, then switched to */
-    int         bank[TS_SLOTS][TS_NUM_CLIPS];  /* each sample has its own clip pads: a clip's place in clip_data, plus one; 0 is an empty pad */
-    int         bank_last[TS_SLOTS];           /* the clip each sample last had selected (a pad, 0 off, auto, try) */
-    uint8_t     removed[TS_SLOTS][TS_NUM_CLIPS];   /* 1: a built-in or imported clip you took off this pad (remembered in the library) */
+    int         bank[TS_SLOTS][TS_BANK];       /* each sample has its own clip pads, in pages of 16: a clip's place in clip_data, plus one; 0 is an empty pad */
+    int         bank_last[TS_SLOTS];           /* the clip each sample last had selected (a pad, 0 off, auto, try)... */
+    int         bank_last_page[TS_SLOTS];      /* ...and the page it was on */
+    int         view_page;                     /* the page of pads the Pads screen shows (what a tap on a pad means), not the page of the clip playing */
+    uint8_t     removed[TS_SLOTS][TS_BANK];   /* 1: a built-in or imported clip you took off this pad (remembered in the library) */
     int         nclips;         /* how many pads of the selected sample's bank have a clip */
     int         try_idx, try_valid;
     double      try_t0;         /* when the clip just generated began (free_clock) */
@@ -215,6 +220,7 @@ void ts_engine_all_notes_off(ts_engine_t *e);
  * here" (call it again at least every second; it lapses by itself 1.5 s after the last call, so a screen that goes away
  * cannot leave the notes ignored) and while it holds, notes are ignored; ts_engine_pad_cuts is the cut pads held. */
 void ts_engine_pad_raw(ts_engine_t *e, int on);
+void ts_engine_set_page(ts_engine_t *e, int page);   /* the page of clip pads the Pads screen shows, 0..TS_PAGES-1 */
 void ts_engine_set_zoom(ts_engine_t *e, int zoom);      /* the zoomed clip view: 0 off, 1..3 a window of 4, 2 or 1 beats */
 void ts_engine_pad_cuts(ts_engine_t *e, unsigned mask);
 

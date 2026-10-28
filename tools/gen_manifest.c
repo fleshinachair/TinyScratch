@@ -31,6 +31,7 @@ int main(void)
            "\"midi_in\":true,\n"
            "\"midi_out\":false,\n"
            "\"chainable\":true,\n"
+           "\"claims_ccs\":[62,63],\n"
            "\"component_type\":\"sound_generator\",\n"
            "\"requires_continuous_processing\":true,\n"
            "\"chain_params\":%s,\n"

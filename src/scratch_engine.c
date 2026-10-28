@@ -156,10 +156,24 @@ static const ts_clip_t *pool_clip(const ts_engine_t *e, int idx)
     return idx >= 0 && idx < TS_POOL && e->clip_data[idx].n > 0 ? &e->clip_data[idx] : NULL;
 }
 
-static const ts_clip_t *bank_clip(const ts_engine_t *e, int sample, int pad)
+/* A clip is named by a number that holds its page: page * 32 + pad (pad 1..16), so the clips of the first page are named as they always were
+ * (1..16), and the clip just generated is 18, as it was. (The clip setting is a pad and a page apart; this is what they make together.) */
+#define CID_PAGE 32
+static int cid_flat(int cid)                                  /* the place in a sample's bank, or -1 */
 {
-    if (!e || sample < 0 || sample >= TS_SLOTS || pad < 1 || pad > TS_NUM_CLIPS) return NULL;
-    return pool_clip(e, e->bank[sample][pad - 1] - 1);
+    const int page = cid / CID_PAGE, pad = cid % CID_PAGE;
+    return cid >= 1 && page < TS_PAGES && pad >= 1 && pad <= TS_NUM_CLIPS ? page * TS_NUM_CLIPS + pad - 1 : -1;
+}
+static int play_cid(const ts_params_t *p)                     /* the clip the settings say is playing */
+{
+    return p->clip >= 1 && p->clip <= TS_NUM_CLIPS ? p->clip_page * CID_PAGE + p->clip : p->clip;
+}
+
+static const ts_clip_t *bank_clip(const ts_engine_t *e, int sample, int cid)
+{
+    const int at = cid_flat(cid);
+    if (!e || sample < 0 || sample >= TS_SLOTS || at < 0) return NULL;
+    return pool_clip(e, e->bank[sample][at] - 1);
 }
 
 /* how the clip being shown was made, or NULL: the one just generated, or one you kept (the built-in ones have no recipe) */
@@ -167,16 +181,17 @@ static const ts_recipe_t *recipe_at(const ts_engine_t *e, int clip)
 {
     if (!e) return NULL;
     if (clip == TS_CLIP_TRY) return e->try_valid ? &e->try_recipe : NULL;
-    if (clip < 1 || clip > TS_NUM_CLIPS) return NULL;
-    int idx = e->bank[e->p.sample][clip - 1] - 1;
+    const int at = cid_flat(clip);
+    if (at < 0) return NULL;
+    int idx = e->bank[e->p.sample][at] - 1;
     return idx >= 0 && e->kept[idx].used ? &e->kept[idx] : NULL;
 }
 
 static void recount_clips(ts_engine_t *e)
 {
     int n = 0;
-    for (int i = 1; i <= TS_NUM_CLIPS; i++) n += bank_clip(e, e->p.sample, i) != NULL;
-    e->nclips = n;
+    for (int pg = 0; pg < TS_PAGES; pg++) for (int i = 1; i <= TS_NUM_CLIPS; i++) n += bank_clip(e, e->p.sample, pg * CID_PAGE + i) != NULL;
+    e->nclips = n;               /* (on every page: Auto plays them all) */
     e->clips_ver++;
     e->auto_start = 1.0; e->auto_end = 0.0;                                       /* (an empty turn: the first frame chooses) */
 }
@@ -258,10 +273,11 @@ static int sample_tag(int slot) { return slot == 0 ? 1 : (slot == 1 ? 2 : 0); }
 #define TAG_GENERATED 3                                     /* a clip generated for the sample it is on: its positions are the sample's own */
 
 /* The clips auto may play: those on the selected sample's pads. */
-static int auto_candidates(const ts_engine_t *e, int out[TS_NUM_CLIPS])
+static int auto_candidates(const ts_engine_t *e, int out[TS_BANK])
 {
     int k = 0;
-    for (int c = 1; c <= TS_NUM_CLIPS; c++) if (bank_clip(e, e->p.sample, c)) out[k++] = c;
+    for (int pg = 0; pg < TS_PAGES; pg++)
+        for (int c = 1; c <= TS_NUM_CLIPS; c++) if (bank_clip(e, e->p.sample, pg * CID_PAGE + c)) out[k++] = pg * CID_PAGE + c;
     return k;
 }
 
@@ -296,7 +312,7 @@ static inline float bite_tanh(float x)
     return x * (27.0f + x2) / (27.0f + 9.0f * x2);
 }
 
-static void hand_of(long long hand, int k, int out[TS_NUM_CLIPS])
+static void hand_of(long long hand, int k, int out[TS_BANK])
 {
     for (int i = 0; i < k; i++) out[i] = i;
     unsigned seed = mix32((unsigned)(hand & 0xFFFFFFFF) ^ mix32((unsigned)(hand >> 32)) ^ mix32((unsigned)k * 7919u));
@@ -313,8 +329,8 @@ static void hand_of(long long hand, int k, int out[TS_NUM_CLIPS])
  * as all the clips together (a one-bar clip a bar, a four-bar one four), so the hand and the place in it depend on nothing but the beat. */
 static int auto_at(const ts_engine_t *e, double beat, double *start, double *end)
 {
-    int cand[TS_NUM_CLIPS], k = auto_candidates(e, cand);
-    double len[TS_NUM_CLIPS], total = 0.0;
+    int cand[TS_BANK], k = auto_candidates(e, cand);
+    double len[TS_BANK], total = 0.0;
     for (int i = 0; i < k; i++) {
         const ts_clip_t *c = bank_clip(e, e->p.sample, cand[i]);
         len[i] = c && c->len >= 1 ? (double)c->len : (double)TS_LANE_BEATS;
@@ -324,10 +340,10 @@ static int auto_at(const ts_engine_t *e, double beat, double *start, double *end
     if (k == 1) { *start = floor(beat / len[0]) * len[0]; *end = *start + len[0]; return cand[0]; }
     const double hand_d = floor(beat / total), off = beat - hand_d * total;
     const long long hand = (long long)hand_d;
-    int order[TS_NUM_CLIPS];
+    int order[TS_BANK];
     if (k == 2) { order[0] = 0; order[1] = 1; }                                  /* only two: the other one, every time */
     else {
-        int prev[TS_NUM_CLIPS];
+        int prev[TS_BANK];
         hand_of(hand, k, order);
         hand_of(hand - 1, k, prev);
         if (order[0] == prev[k - 1]) { int t = order[0]; order[0] = order[1]; order[1] = t; }       /* (a hand never starts with the clip the last one ended on) */
@@ -1353,23 +1369,31 @@ static int free_pool(const ts_engine_t *e)
     return -1;
 }
 
-static int first_free_pad(const ts_engine_t *e, int sample)
+static int first_free_pad(const ts_engine_t *e, int sample, int page)       /* a free pad (1..14) on a page, or -1 */
 {
-    for (int i = 1; i <= TS_CLIP_PADS; i++) if (e->bank[sample][i - 1] == 0) return i;
+    for (int i = 1; i <= TS_CLIP_PADS; i++) if (e->bank[sample][page * TS_NUM_CLIPS + i - 1] == 0) return i;
     return -1;
 }
 
-/* the pad where this sample already has this recipe, or -1: the same clip is never kept twice */
+/* a place in the library: page * 16 + pad, 1..64 (the first page is numbered as it always was); is it a place a clip can be kept? */
+static int lp_ok(int lp) { return lp >= 1 && lp <= TS_BANK && (lp - 1) % TS_NUM_CLIPS < TS_CLIP_PADS; }
+static int first_free_lp(const ts_engine_t *e, int sample)
+{
+    for (int pg = 0; pg < TS_PAGES; pg++) { int p = first_free_pad(e, sample, pg); if (p > 0) return pg * TS_NUM_CLIPS + p; }
+    return -1;
+}
+
+/* the place (page * 16 + pad) where this sample already has this recipe, or -1: the same clip is never kept twice */
 static int find_recipe(const ts_engine_t *e, int sample, int style, int bars, uint32_t seed)
 {
-    for (int pad = 1; pad <= TS_NUM_CLIPS; pad++) {
-        int idx = e->bank[sample][pad - 1] - 1;
-        if (idx >= 0 && e->kept[idx].used && e->kept[idx].style == style && e->kept[idx].bars == bars && e->kept[idx].seed == seed) return pad;
+    for (int lp = 1; lp <= TS_BANK; lp++) {
+        int idx = e->bank[sample][lp - 1] - 1;
+        if (idx >= 0 && e->kept[idx].used && e->kept[idx].style == style && e->kept[idx].bars == bars && e->kept[idx].seed == seed) return lp;
     }
     return -1;
 }
 
-static int install_clip(ts_engine_t *e, int sample, int pad, const ts_clip_t *src, const ts_recipe_t *r)
+static int install_clip(ts_engine_t *e, int sample, int lp, const ts_clip_t *src, const ts_recipe_t *r)
 {
     int idx = free_pool(e);
     if (idx < 0) return -1;
@@ -1386,8 +1410,8 @@ static int install_clip(ts_engine_t *e, int sample, int pad, const ts_clip_t *sr
     e->kept[idx] = *r;
     e->kept[idx].used = 1;
     __sync_synchronize();
-    e->bank[sample][pad - 1] = idx + 1;                                         /* on its pad last */
-    e->removed[sample][pad - 1] = 0;
+    e->bank[sample][lp - 1] = idx + 1;                                          /* on its pad last */
+    e->removed[sample][lp - 1] = 0;
     recount_clips(e);
     e->recipes_dirty = 1;
     return 0;
@@ -1398,66 +1422,74 @@ int ts_engine_keep(ts_engine_t *e, int pad)
     if (!e || !e->try_valid) return -1;
     int sample = e->p.sample;
     int have = find_recipe(e, sample, e->try_recipe.style, e->try_recipe.bars, e->try_recipe.seed);
-    if (have > 0) { e->p.clip = have; return have; }                            /* already kept: go to it, do not keep it twice */
-    if (pad <= 0) pad = first_free_pad(e, sample);
-    if (pad < 1 || pad > TS_CLIP_PADS || e->bank[sample][pad - 1] != 0) return -1;
-    if (install_clip(e, sample, pad, &e->clip_data[e->try_idx], &e->try_recipe) != 0) return -1;
+    if (have > 0) {                                                             /* already kept: go to it (and its page), do not keep it twice */
+        e->p.clip = (have - 1) % TS_NUM_CLIPS + 1;
+        e->p.clip_page = e->view_page = (have - 1) / TS_NUM_CLIPS;
+        return e->p.clip;
+    }
+    if (pad <= 0) pad = first_free_pad(e, sample, e->view_page);              /* (on the page the pads show) */
+    if (pad < 1 || pad > TS_CLIP_PADS || e->bank[sample][e->view_page * TS_NUM_CLIPS + pad - 1] != 0) return -1;
+    if (install_clip(e, sample, e->view_page * TS_NUM_CLIPS + pad, &e->clip_data[e->try_idx], &e->try_recipe) != 0) return -1;
     taste_event(e, 'K', &e->try_recipe, sample, &e->clip_data[e->try_idx], e->free_clock - e->try_t0);
     e->try_kept = 1;
     e->p.clip = pad;
+    e->p.clip_page = e->view_page;
     return pad;
 }
 
 void ts_engine_clip_pad(ts_engine_t *e, int n)
 {
     if (!e || n < 1 || n > TS_CLIP_PADS) return;
-    if (bank_clip(e, e->p.sample, n)) e->p.clip = n;                            /* a clip: play it */
+    const int pg = e->view_page;                                                /* a pad is a pad of the page the screen shows */
+    if (bank_clip(e, e->p.sample, pg * CID_PAGE + n)) { e->p.clip = n; e->p.clip_page = pg; }       /* a clip: play it */
     else if (e->p.clip == TS_CLIP_TRY && e->try_valid) ts_engine_keep(e, n);    /* an empty pad, with the clip just generated playing: keep it here */
-    else e->p.clip = n;                                                         /* an empty pad: nothing plays */
+    else { e->p.clip = n; e->p.clip_page = pg; }                                /* an empty pad: nothing plays */
 }
 
 /* a clip off its pad: one you kept leaves the pool; a built-in or imported one is shared by the samples, so only this pad lets go
  * of it (and the library remembers that). The other pads stay where they are. 0 if there was a clip. */
-static int drop_pad(ts_engine_t *e, int sample, int pad, int all)
+static int drop_pad(ts_engine_t *e, int sample, int lp, int all)            /* lp: page * 16 + pad */
 {
-    int idx = e->bank[sample][pad - 1] - 1;
+    int idx = e->bank[sample][lp - 1] - 1;
     if (idx < 0 || (!all && !e->kept[idx].used)) return -1;
-    e->bank[sample][pad - 1] = 0;                                               /* off its pad first */
+    e->bank[sample][lp - 1] = 0;                                                /* off its pad first */
     __sync_synchronize();
     if (e->kept[idx].used) {
         e->clip_data[idx].n = 0;
         memset(&e->kept[idx], 0, sizeof e->kept[idx]);
     } else {
-        e->removed[sample][pad - 1] = 1;
+        e->removed[sample][lp - 1] = 1;
     }
-    if (e->p.sample == sample && e->p.clip == pad) e->p.clip = TS_CLIP_AUTO;
+    if (e->p.sample == sample && e->p.clip == (lp - 1) % TS_NUM_CLIPS + 1 && e->p.clip_page == (lp - 1) / TS_NUM_CLIPS) e->p.clip = TS_CLIP_AUTO;
     recount_clips(e);
     e->recipes_dirty = 1;
     return 0;
 }
-static int drop_kept(ts_engine_t *e, int sample, int pad) { return drop_pad(e, sample, pad, 0); }
+static int drop_kept(ts_engine_t *e, int sample, int lp) { return drop_pad(e, sample, lp, 0); }
 
 int ts_engine_clear_clip(ts_engine_t *e, int pad)
 {
     if (!e) return -1;
+    const int pg = pad <= 0 ? e->p.clip_page : e->view_page;                   /* a pad of the page the screen shows; or, with none given, the clip playing */
     if (pad <= 0) pad = e->p.clip;
     if (pad < 1 || pad > TS_NUM_CLIPS) return -1;
-    int di = e->bank[e->p.sample][pad - 1] - 1;
+    const int lp = pg * TS_NUM_CLIPS + pad;
+    int di = e->bank[e->p.sample][lp - 1] - 1;
     if (di >= 0 && e->kept[di].used) taste_event(e, 'D', &e->kept[di], e->p.sample, &e->clip_data[di], 0.0);      /* (a clip you kept, deleted) */
-    return drop_pad(e, e->p.sample, pad, 1);
+    return drop_pad(e, e->p.sample, lp, 1);
 }
 
-/* A kept clip back on its pad: from its saved data if there is any (so a clip you chose sounds the same whatever the generator has become
+/* A kept clip back on its pad (pad here is a place in the library, page * 16 + pad): from its saved data if there is any (so a clip you chose sounds the same whatever the generator has become
  * since), otherwise made again from its recipe. */
 static int restore_kept_from(ts_engine_t *e, int sample, int pad, int style, uint32_t seed, int bars, const ts_clip_t *data, int fwd, int bpm, int fin, int echo)
 {
     if (!e || sample < 0 || sample >= TS_SLOTS) return -1;
     if (find_recipe(e, sample, clampi(style, 0, TS_GEN_STYLES - 1), bars, seed) > 0) return -2;            /* it is there already */
-    if (pad >= 1 && pad <= TS_CLIP_PADS && e->bank[sample][pad - 1] > 0) {     /* a clip you kept takes its pad back from a built-in one (they come and go with clips.bin) */
+    if (lp_ok(pad) && e->bank[sample][pad - 1] > 0) {                           /* a clip you kept takes its pad back from a built-in one (they come and go with clips.bin) */
         int idx = e->bank[sample][pad - 1] - 1;
         if (!e->kept[idx].used) { e->bank[sample][pad - 1] = 0; e->removed[sample][pad - 1] = 1; }
     }
-    if (pad < 1 || pad > TS_CLIP_PADS || e->bank[sample][pad - 1] != 0) pad = first_free_pad(e, sample);     /* its pad is taken: the next free one */
+    if (!lp_ok(pad) || e->bank[sample][pad - 1] != 0) pad = first_free_lp(e, sample);     /* its pad is taken: the next free one */
     if (pad < 0) return -1;
     static ts_clip_t tmp, again;                                                /* (called from the thread that sets parameters, one at a time) */
     const int st = clampi(style, 0, TS_GEN_STYLES - 1);
@@ -1501,11 +1533,11 @@ static void save_kept(ts_engine_t *e)
     FILE *f = fopen(tmp, "wb");
     if (!f) return;
     int count = 0;
-    for (int s = 0; s < TS_SLOTS; s++) for (int pad = 1; pad <= TS_NUM_CLIPS; pad++) { int idx = e->bank[s][pad - 1] - 1; count += idx >= 0 && e->kept[idx].used; }
+    for (int s = 0; s < TS_SLOTS; s++) for (int pad = 1; pad <= TS_BANK; pad++) { int idx = e->bank[s][pad - 1] - 1; count += idx >= 0 && e->kept[idx].used; }
     uint8_t h[6] = { 'T', 'S', 'K', 'P', 1, 0 };
     int ok = fwrite(h, 1, 5, f) == 5 && fputc(count & 255, f) != EOF && fputc(count >> 8, f) != EOF;
     for (int s = 0; s < TS_SLOTS && ok; s++)
-        for (int pad = 1; pad <= TS_NUM_CLIPS && ok; pad++) {
+        for (int pad = 1; pad <= TS_BANK && ok; pad++) {                      /* (the pad byte is page * 16 + pad: the first page as it always was) */
             int idx = e->bank[s][pad - 1] - 1;
             if (idx < 0 || !e->kept[idx].used) continue;
             const ts_clip_t *c = &e->clip_data[idx];
@@ -1551,8 +1583,10 @@ void ts_engine_select_sample(ts_engine_t *e, int s)
 {
     if (!e || s < 0 || s >= TS_SLOTS || s == e->p.sample) return;
     e->bank_last[e->p.sample] = e->p.clip;                                      /* remember what this one had... */
+    e->bank_last_page[e->p.sample] = e->p.clip_page;
     e->p.sample = s;
     e->p.clip = e->bank_last[s];                                                /* ...and bring back what the next had */
+    e->p.clip_page = e->view_page = e->bank_last_page[s];
     recount_clips(e);
 }
 
@@ -1583,7 +1617,7 @@ int ts_engine_load_recipes(ts_engine_t *e)
         int sample, pad, style, bars;
         unsigned long seed;
         if (line[0] == '-') {                                                   /* "- sample pad": a built-in or imported clip taken off its pad */
-            if (sscanf(line, "- %d %d", &sample, &pad) == 2 && sample >= 0 && sample < TS_SLOTS && pad >= 1 && pad <= TS_NUM_CLIPS &&
+            if (sscanf(line, "- %d %d", &sample, &pad) == 2 && sample >= 0 && sample < TS_SLOTS && pad >= 1 && pad <= TS_BANK &&
                 e->bank[sample][pad - 1] > 0 && !e->kept[e->bank[sample][pad - 1] - 1].used) {
                 e->bank[sample][pad - 1] = 0;
                 e->removed[sample][pad - 1] = 1;
@@ -1621,10 +1655,10 @@ static void save_recipes(ts_engine_t *e)
     if (!f) return;
     int ok = 1;
     for (int s = 0; s < TS_SLOTS && ok; s++)                                     /* the clips taken off their pads first, so they are gone before the kept ones are placed */
-        for (int pad = 1; pad <= TS_NUM_CLIPS && ok; pad++)
+        for (int pad = 1; pad <= TS_BANK && ok; pad++)
             if (e->removed[s][pad - 1] && e->bank[s][pad - 1] == 0) ok = fprintf(f, "- %d %d\n", s, pad) > 0;
     for (int s = 0; s < TS_SLOTS && ok; s++)
-        for (int pad = 1; pad <= TS_NUM_CLIPS && ok; pad++) {
+        for (int pad = 1; pad <= TS_BANK && ok; pad++) {
             int idx = e->bank[s][pad - 1] - 1;
             if (idx >= 0 && e->kept[idx].used)
                 ok = fprintf(f, "%d %d %d %d %lu %d %d %d %d\n", s, pad, e->kept[idx].style, e->kept[idx].bars, (unsigned long)e->kept[idx].seed, e->kept[idx].fwd, e->kept[idx].bpm > 0 ? e->kept[idx].bpm : 120, e->kept[idx].fin, e->kept[idx].echo) > 0;
@@ -1654,6 +1688,7 @@ void ts_params_default(ts_params_t *p)
     p->cut_from = TS_CUT_NOTE;
     p->pads = 1;
     p->cues = 1;
+    p->clip_page = 0;
     p->taste_log = 1;                    /* on: it stays on this Move, and nothing reads it or sends it anywhere (it is for the taste feature, later) */
     p->clip = TS_CLIP_AUTO;              /* the clips in turn: a routine from the first press */
     p->gen_style = 0;
@@ -1681,6 +1716,7 @@ void ts_params_sanitize(ts_params_t *p)
     p->cut_from = clampi(p->cut_from, 0, 127);
     p->pads = p->pads ? 1 : 0;
     p->cues = p->cues ? 1 : 0;
+    p->clip_page = clampi(p->clip_page, 0, TS_PAGES - 1);
     p->taste_log = p->taste_log ? 1 : 0;
     p->clip = clampi(p->clip, 0, TS_CLIP_TRY);
     p->gen_style = clampi(p->gen_style, 0, TS_GEN_STYLES - 1);
@@ -1743,7 +1779,9 @@ void ts_engine_set_params(ts_engine_t *e, const ts_params_t *in)
     int switched = n.sample != e->p.sample;
     if (switched) {                                       /* another sample: its own clip pads, and the clip it last had */
         e->bank_last[e->p.sample] = e->p.clip;
-        if (n.clip == e->p.clip) n.clip = e->bank_last[n.sample];        /* (unless the caller chose a clip in the same breath) */
+        e->bank_last_page[e->p.sample] = e->p.clip_page;
+        if (n.clip == e->p.clip) { n.clip = e->bank_last[n.sample]; n.clip_page = e->bank_last_page[n.sample]; }        /* (unless the caller chose a clip in the same breath) */
+        e->view_page = n.clip_page;
     }
     e->p = n;
     if (switched) recount_clips(e);
@@ -1827,6 +1865,11 @@ void ts_engine_pad_raw(ts_engine_t *e, int on)
         e->pad_cuts = 0;
         e->pad_held = 0;
     }
+}
+
+void ts_engine_set_page(ts_engine_t *e, int page)
+{
+    if (e) e->view_page = clampi(page, 0, TS_PAGES - 1);
 }
 
 void ts_engine_set_zoom(ts_engine_t *e, int zoom)
@@ -2282,7 +2325,7 @@ void ts_engine_service(ts_engine_t *e)
         e->clear_req = 0;
         int slot = req - 1;
         if (slot >= 2 && slot < TS_SLOTS && e->slot[slot].loaded) {
-            for (int pad = 1; pad <= TS_NUM_CLIPS; pad++) drop_kept(e, slot, pad);   /* the clips kept for it go with it: the next sample starts clean */
+            for (int pad = 1; pad <= TS_BANK; pad++) drop_kept(e, slot, pad);        /* the clips kept for it go with it: the next sample starts clean */
             memset(e->removed[slot], 0, sizeof e->removed[slot]);
             char was[TS_NAME_LEN];                                               /* (read before the render thread swaps the empty slot in) */
             snprintf(was, sizeof was, "%s", e->slot[slot].file);
@@ -2438,7 +2481,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         else if (held) { e->held_clock += spb; e->mclock = e->held_clock; }
         e->running = running;
         const int live = running || held;
-        int clip = p->clip;
+        int clip = play_cid(p);                                              /* (the pad and the page of the clip that is playing) */
         double t0 = 0.0;                                                    /* where the clip's turn began: Auto plays each clip from its own start */
         if (clip == TS_CLIP_AUTO) {                                         /* a clip right through, then a random other one */
             if (e->mclock < e->auto_start || e->mclock >= e->auto_end || e->auto_sample != p->sample || e->auto_nc != (int)e->clips_ver) {
@@ -2580,6 +2623,12 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     const ts_clip_t *shown_clip = p->clip ? clip_at(e, e->clip_now) : NULL;
     const int lane_beats = shown_clip ? shown_clip->len : TS_LANE_BEATS;
     const ts_recipe_t *rec = shown_clip ? recipe_at(e, e->clip_now) : NULL;     /* how the clip on the screen was made */
+    char page_flags[TS_PAGES + 1];                                             /* which pages have a clip on them (for the page marks) */
+    for (int pg = 0; pg < TS_PAGES; pg++) {
+        page_flags[pg] = '0';
+        for (int k = 1; k <= TS_NUM_CLIPS; k++) if (bank_clip(e, p->sample, pg * CID_PAGE + k)) { page_flags[pg] = '1'; break; }
+    }
+    page_flags[TS_PAGES] = 0;
 
     char cue_cols[17];                                                         /* where the eight cue pads drop the needle, a column each (two hex digits) */
     float cue_at[8];
@@ -2595,14 +2644,15 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     jw(&j, "\",\"ld\":\"");
     for (int i = 0; i < TS_SLOTS; i++) jw(&j, "%c", e->slot[i].loaded ? '1' : '0');
     jw(&j, "\",\"x\":%d,\"tx\":%d,\"p\":%.4f,\"tt\":%.3f,\"vl\":%.2f,\"dr\":%.2f,\"gn\":%.1f,\"ng\":%d,\"vv\":%d,\"no\":%d,\"lk\":%d,"
-           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"fn\":%.2f,\"ec\":%.2f,\"hu\":%.2f,\"cs\":%d,\"cq\":%d,\"cu\":\"%s\",\"cy\":%d,\"cx\":%d,\"w\":\"",
+           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"fn\":%.2f,\"ec\":%.2f,\"hu\":%.2f,\"cs\":%d,\"cq\":%d,\"cu\":\"%s\",\"cy\":%d,\"cx\":%d,\"pg\":%d,\"cp\":%d,\"pf\":\"%s\",\"w\":\"",
        x, tx, e->pos, (double)p->turntable, (double)e->vel_out, (double)p->drag, (double)p->gain_db, p->note_gate, p->vel_to_vol, p->normalise, p->lock,
-       p->cut_from, e->gate > 0.5f, e->notes_held + e->pad_held, e->transport, e->lane_col, p->clip ? e->clip_now : 0, p->clip, e->running, e->last_note, e->pad_raw > 0, lane_beats, e->nclips,
+       p->cut_from, e->gate > 0.5f, e->notes_held + e->pad_held, e->transport, e->lane_col, p->clip ? e->clip_now % CID_PAGE : 0, p->clip, e->running, e->last_note, e->pad_raw > 0, lane_beats, e->nclips,
        e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
        e->try_valid, e->try_valid ? e->try_recipe.style : 0, e->view_seq,
        (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin, (double)p->gen_echo, (double)p->humanise,
        p->cues, e->cue_on ? e->cue_pad : -1, cue_cols,
-       rec ? rec->style : -1, rec && (shown_clip->extras & TS_EX_KNOWN) ? shown_clip->extras & 7 : -1);
+       rec ? rec->style : -1, rec && (shown_clip->extras & TS_EX_KNOWN) ? shown_clip->extras & 7 : -1,
+       e->view_page, p->clip ? e->clip_now / CID_PAGE : 0, page_flags);
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->pk[c] : 0);       /* the waveform: peak, then body */
     jw(&j, "\",\"wr\":\"");
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->rms[c] : 0);
@@ -2636,9 +2686,9 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
         jw(&j, "\",\"lhg\":\"%s", hg);
     }
     jw(&j, "\",\"cf\":\"");                                                   /* which clip pads have a clip, and which of those you made */
-    for (int k = 0; k < TS_NUM_CLIPS && j.len >= 0; k++) jw(&j, "%c", bank_clip(e, p->sample, k + 1) ? '1' : '0');
+    for (int k = 0; k < TS_NUM_CLIPS && j.len >= 0; k++) jw(&j, "%c", bank_clip(e, p->sample, e->view_page * CID_PAGE + k + 1) ? '1' : '0');       /* the pads of the page the screen shows */
     jw(&j, "\",\"kp\":\"");
-    for (int k = 0; k < TS_NUM_CLIPS && j.len >= 0; k++) jw(&j, "%c", (e->bank[p->sample][k] > 0 && e->kept[e->bank[p->sample][k] - 1].used) ? '1' : '0');
+    for (int k = 0; k < TS_NUM_CLIPS && j.len >= 0; k++) { const int at = e->view_page * TS_NUM_CLIPS + k; jw(&j, "%c", (e->bank[p->sample][at] > 0 && e->kept[e->bank[p->sample][at] - 1].used) ? '1' : '0'); }
     jw(&j, "\",\"zm\":%d", e->zoom);
     if (e->zoom > 0) {                       /* the zoomed view: the next few beats of the clip, round the clock, a column each */
         const double w = e->zoom == 1 ? 4.0 : (e->zoom == 2 ? 2.0 : 1.0), start = e->mclock - 0.25 * w;

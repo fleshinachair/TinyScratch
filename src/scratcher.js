@@ -19,6 +19,9 @@
 
     var STYLES = ["IMPROV", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
     var CLIP_PADS = 14;                                 /* clip pads 1-14; the next two places are Generate (15) and Auto (16) */
+    var PAGES = 4;                                      /* pages of clip pads: < and > turn them (the Move's left and right buttons, CC 62 and 63) */
+    var LEFT_CC = 62, RIGHT_CC = 63;
+    var PAGE_CLIP = [23, 16, 26, 8];                    /* a clip pad's colour on each page (the palette: purple, azure, magenta, yellow) */
     var CLIP_AUTO = 17, CLIP_TRY = 18;               /* the clip parameter: 0 off, 1..16 a clip, 17 auto, 18 the clip just generated */
     var HOLD_MS = 1500;                                /* hold a clip you made, or a User sample, this long to delete / unload it (the Delete button never reaches a screen) */
     var TOAST_MS = 1600;                               /* how long a dial's new value stays on the screen */
@@ -232,10 +235,25 @@
         return num(v.cm, 0) > 0 && cy >= 0 && cy <= 12 ? cy : -1;
     }
 
+    /* The pages of clip pads, a mark each, top right: the page the pads show is solid, a page with clips is a box and an empty one a dot. While the
+     * clip playing is on another page its mark blinks, so you know where it is without reading. */
+    function drawPages(ctx, v, extra) {
+        var pg = clamp(Math.round(num(v.pg, 0)), 0, PAGES - 1), cp = clamp(Math.round(num(v.cp, 0)), 0, PAGES - 1), pf = typeof v.pf === "string" ? v.pf : "";
+        var playing = num(v.cm, 0) > 0 && cp !== pg, on = !((extra && extra.now) > 0) || Math.floor((extra.now || 0) / 300) % 2 === 0;
+        for (var i = 0; i < PAGES; i++) {
+            var x = 108 + i * 5, y = 28;
+            if (i === pg) ctx.fillRect(x, y, 4, 4, 1);
+            else if (playing && i === cp) { if (on) ctx.fillRect(x, y, 4, 4, 1); else box(ctx, x, y, 4, 4); }
+            else if (pf[i] === "1") box(ctx, x, y, 4, 4);
+            else px(ctx, x + 1, y + 1);
+        }
+    }
+
     function clipLabel(v, plain) {
         var cm = clamp(Math.round(num(v.cm, 0)), 0, 18), cl = clamp(Math.round(num(v.cl, 0)), 0, 18);
         var ln = Math.round(num(v.ln, 0)), tg = clamp(Math.round(num(v.tg, 0)), 0, 12), cy = clipStyle(v);
-        var head = cm === CLIP_TRY ? "TRY " + STYLES[tg].slice(0, 5) : (cm ? (cm === CLIP_AUTO ? "AUTO " : "CLIP ") + cl + (cy >= 0 ? " " + STYLE_SHORT[cy] : "") : "HAND");
+        var cp = clamp(Math.round(num(v.cp, 0)), 0, PAGES - 1), pgl = cp > 0 ? (cp + 1) + "." : "";                  /* a clip on another page than the first: CLIP 2.3 */
+        var head = cm === CLIP_TRY ? "TRY " + STYLES[tg].slice(0, 5) : (cm ? (cm === CLIP_AUTO ? "AUTO " : "CLIP ") + pgl + cl + (cy >= 0 ? " " + STYLE_SHORT[cy] : "") : "HAND");
         return head + (ln > 0 && !plain ? " N" + ln : "");                                          /* N: the last note that arrived */
     }
 
@@ -276,6 +294,7 @@
             text(ctx, 86, L.laneY + 9, waiting(v) ? "PRESS PLAY" : (v.g ? "CUT" : ""), 1);
             return;
         }
+        drawPages(ctx, v, extra);
         /* P: the last raw pad pressed. RAW: the DSP is reading the pads raw (the Move's octave does not matter); NOTE: it is
          * reading the notes the Move sends for them, which move with the octave. LED: whether the pad lights are being written. */
         var notice = bottomNotice(ctx, extra, v);
@@ -355,8 +374,9 @@
         if (n > CLIP_PADS + 1) return cm === CLIP_AUTO ? COL.white : COL.clipAuto;    /* Auto, the last pad of the clip rows */
         if (cf[n - 1] !== "1") return COL.off;                                        /* an empty pad is dark, until a clip is kept on it */
         if (st.hold && st.hold.ok && st.hold.kind === "clip" && st.hold.n === n) return COL.cut;     /* held to delete: red */
-        if (cm === n) return COL.white;
-        return cm === CLIP_AUTO && num(v.cl, 0) === n ? COL.clipNow : COL.clip;      /* in auto, the one playing now */
+        var pg = clamp(Math.round(num(v.pg, 0)), 0, PAGES - 1), here = clamp(Math.round(num(v.cp, 0)), 0, PAGES - 1) === pg;      /* (a clip playing on another page is not lit on this one) */
+        if (cm === n && here) return COL.white;
+        return cm === CLIP_AUTO && here && num(v.cl, 0) === n ? COL.clipNow : PAGE_CLIP[pg];      /* in auto, the one playing now */
     }
 
     function flushLeds(st) {
@@ -590,7 +610,7 @@
             return;
         }
         setNow(ctx, "clip_pad", String(n));
-        if (v) v.cm = n;
+        if (v) { v.cm = n; v.cp = num(v.pg, 0); }
         var cf = v && typeof v.cf === "string" ? v.cf : "";
         if (cf[n - 1] === "1") st.hold = { kind: "clip", n: n, idx: idx, since: ctx.now(), ok: true };     /* held: the clip is deleted */
     }
@@ -669,6 +689,18 @@
                         if (z !== st.zoom) { st.zoom = z; setNow(ctx, "zoom", String(z)); if (st.view) st.view.zm = z; }
                     }
                 }
+                return;
+            }
+            if (status === 0xB0 && val > 0 && (num1 === LEFT_CC || num1 === RIGHT_CC) && st.view) {      /* < and >: turn the page of clip pads */
+                var cur = clamp(Math.round(num(st.view.pg, 0)), 0, PAGES - 1), np = clamp(cur + (num1 === RIGHT_CC ? 1 : -1), 0, PAGES - 1);
+                if (np !== cur) {
+                    setNow(ctx, "page", String(np));
+                    st.view.pg = np;
+                    st.hold = null;
+                    for (var li = 0; li < 32; li++) st.led[li] = -1;
+                }
+                var pfl = typeof st.view.pf === "string" ? st.view.pf : "";
+                st.toast = { text: "CLIPS PAGE " + (np + 1) + " OF " + PAGES + (np > 0 && pfl[np] !== "1" ? " (EMPTY)" : ""), until: ctx.now() + TOAST_MS };
                 return;
             }
             if (status === 0xB0 && val > 0 && !(num1 >= KNOB_CC && num1 < KNOB_CC + 8) && num1 !== JOG_CC) st.lastCc = num1;     /* which button it was */

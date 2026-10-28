@@ -754,6 +754,54 @@ fixtures.forEach((v, i) => {
         const tick = (view, col) => draw(box, view).on(Math.round(col * 105 / 127), 31);
         check(tick(cueView, 0x10) && tick(cueView, 0x7f) && !tick(clipView, 0x10) && !tick(offView, 0x10), "the waveform has a tick under each cue, only in cue mode");
     }
+    // pages of clip pads: < and > turn the page; the pads show it; a clip playing on another page is not lit here, and its page mark blinks
+    {
+        const T = box.__tinyscratch;
+        const flags = "0010000000000000";
+        const base = Object.assign({}, fixtures[0], { cf: flags, cs: 0, pf: "1100" });
+        const col = (view) => T.padColor({ view, held: {} }, 26);                  // clip pad 3: row 3, column 2
+        check(col(Object.assign({}, base, { cm: 0, pg: 0 })) === 23 && col(Object.assign({}, base, { cm: 0, pg: 1 })) === 16 && col(Object.assign({}, base, { cm: 0, pg: 3 })) === 8,
+              "a clip pad has the colour of its page");
+        check(col(Object.assign({}, base, { cm: 3, cp: 0, pg: 0 })) === T.COL.white, "the clip playing is white on its own page");
+        check(col(Object.assign({}, base, { cm: 3, cp: 1, pg: 0 })) === 23 && col(Object.assign({}, base, { cm: 3, cp: 1, pg: 1 })) === T.COL.white, "...and not lit on another page");
+        check(col(Object.assign({}, base, { cm: 17, cp: 1, pg: 1, cl: 3 })) === T.COL.clipNow && col(Object.assign({}, base, { cm: 17, cp: 1, pg: 0, cl: 3 })) === 23, "in Auto the one playing now is marked only on its own page");
+        check(T.padColor({ view: Object.assign({}, base, { pg: 1, cf: "0000000000000000" }), held: {} }, 26) === T.COL.off, "an empty pad is dark on any page");
+
+        const marks = (view, now) => { const cx = makeCtx(); box.__tinyscratch.drawView(cx, view, false, { now }); return cx; };
+        const region = (cx) => cx.count(106, 27, 127, 32);
+        const one = marks(Object.assign({}, base, { pg: 0, cm: 0 }), 0), two = marks(Object.assign({}, base, { pg: 1, cm: 0 }), 0);
+        check(region(one) > 15 && JSON.stringify([...one.px]) !== JSON.stringify([...two.px]), "the page marks are on the screen, and the one shown moves with the page (" + region(one) + " pixels)");
+        const solid = (cx, i) => cx.on(108 + i * 5 + 1, 29);
+        check(solid(one, 0) && !solid(one, 1) && solid(two, 1) && !solid(two, 0), "the page shown is solid, a page with clips a box");
+        const blink = (now) => marks(Object.assign({}, base, { pg: 0, cm: 3, cp: 1 }), now);
+        check(solid(blink(0), 1) !== solid(blink(300), 1), "the playing clip's page blinks while you are on another page");
+        check(!solid(marks(Object.assign({}, base, { pg: 0, cm: 3, cp: 0 }), 0), 1) && !solid(marks(Object.assign({}, base, { pg: 0, cm: 3, cp: 0 }), 300), 1), "...and not when it is on this one");
+        const label = (view) => { const cx = makeCtx(); box.__tinyscratch.drawView(cx, view, false, {}); return JSON.stringify([...cx.px].filter(([k, v]) => v && +k.split(",")[1] >= 58)); };
+        check(label(Object.assign({}, base, { pg: 0, cm: 3, cp: 0, cl: 3 })) !== label(Object.assign({}, base, { pg: 0, cm: 3, cp: 1, cl: 3 })), "a clip on another page says so in its label (CLIP 2.3)");
+
+        // the buttons
+        const bp = load(() => true), c = makeCtx({ values: {} });
+        bp.canvas_overlay.onOpen(c);
+        bp.canvas_overlay.onValues(c, { values: { view: JSON.stringify(Object.assign({}, base, { pg: 0, cm: 0 })) } });
+        const pageSets = () => c.sets.filter((x) => (x.key || x[0]) === "page").map((x) => String(x.value !== undefined ? x.value : x[1]));
+        bp.canvas_overlay.onMidi(c, { data: [0xB0, 63, 127] });
+        bp.canvas_overlay.onMidi(c, { data: [0xB0, 63, 127] });
+        bp.canvas_overlay.onMidi(c, { data: [0xB0, 62, 127] });
+        check(JSON.stringify(pageSets()) === '["1","2","1"]', "> turns to the next page, < back (" + JSON.stringify(pageSets()) + ")");
+        bp.canvas_overlay.onMidi(c, { data: [0xB0, 62, 127] });
+        bp.canvas_overlay.onMidi(c, { data: [0xB0, 62, 127] });
+        check(JSON.stringify(pageSets()) === '["1","2","1","0"]', "< on the first page does nothing more");
+        for (let i = 0; i < 6; i++) bp.canvas_overlay.onMidi(c, { data: [0xB0, 63, 127] });
+        check(JSON.stringify(pageSets().slice(4)) === '["1","2","3"]', "> stops at the last page (" + JSON.stringify(pageSets()) + ")");
+        const before = c.sets.length;
+        bp.canvas_overlay.onMidi(c, { data: [0xB0, 63, 0] });
+        check(c.sets.length === before, "letting go of the button does nothing");
+        c.clear(); bp.canvas_overlay.draw(hostCtx(c));
+        check(c.count(0, 57, 127, 63) > 40, "turning the page says which on the bottom line");
+        // a tap plays the page that is shown
+        bp.canvas_overlay.onMidi(c, { data: [0x90, 68 + 26, 100] });
+        check(has(c, "clip_pad", "3"), "tapping a clip pad plays it (the page it is on is the one the pads show)");
+    }
 
     // an empty User slot, held, records for as long as it is held
     {

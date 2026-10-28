@@ -2149,6 +2149,94 @@ static void test_taste_log(void)
     remove(log); remove(old);
 }
 
+/* pages of clip pads: < and > turn the page the pads show; a clip keeps playing on its own page; Auto plays them all */
+static void test_clip_pages(void)
+{
+    printf("pages of clips" "\n");
+    const char *lib = TDIR "/rec/recipes.txt";
+    static char js[8192], flags[64], text[8192];
+    remove(lib); remove(TDIR "/rec/kept.bin"); remove(TDIR "/rec/taste_log.csv");
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_engine_set_recipes_path(e, lib);
+    load_sample(e, 2, "user1.wav", SMP_SINE, 0.5f, 44100);
+    ts_params_t p;
+    ts_params_default(&p);
+    p.sample = 2; p.pads = 0; p.clip = 0; p.gen_style = GS_ANY; p.gen_bars = 0;
+    ts_engine_set_params(e, &p);
+    CHECK(e->view_page == 0 && e->p.clip_page == 0, "the pads start on page 1 (0)");
+    ts_engine_set_page(e, 9); CHECK(e->view_page == TS_PAGES - 1, "a page past the last is the last");
+    ts_engine_set_page(e, -3); CHECK(e->view_page == 0, "...and before the first, the first");
+
+    ts_engine_generate(e);
+    int pad_a = ts_engine_keep(e, 3);                                      /* page 1, pad 3 */
+    ts_engine_set_page(e, 1);
+    ts_engine_generate(e);
+    ts_engine_clip_pad(e, 3);                                              /* the clip just made, kept on page 2, pad 3 */
+    CHECK(pad_a == 3 && e->bank[2][2] > 0 && e->bank[2][TS_NUM_CLIPS + 2] > 0 && e->bank[2][2] != e->bank[2][TS_NUM_CLIPS + 2],
+          "the same pad on two pages holds two different clips");
+    CHECK(e->p.clip == 3 && e->p.clip_page == 1, "a clip kept on page 2 plays from page 2 (pad %d, page %d)", e->p.clip, e->p.clip_page);
+    play_a_little(e);
+    CHECK(e->clip_now == 1 * 32 + 3 && view_int(e, "pg") == 1 && view_int(e, "cp") == 1 && view_int(e, "cl") == 3, "the view says the page shown, the page playing and the pad");
+
+    ts_engine_set_page(e, 0);                                              /* look at page 1 while page 2's clip plays */
+    play_a_little(e);
+    ts_engine_view(e, js, sizeof js);
+    json_str(js, "cf", flags, sizeof flags);
+    CHECK(e->clip_now == 1 * 32 + 3 && e->p.clip_page == 1, "turning the page does not touch what is playing");
+    CHECK(view_int(e, "pg") == 0 && view_int(e, "cp") == 1 && !strncmp(flags, "0010000000000000", 16), "the pads show the page you are on (%s) while the playing clip says its own page", flags);
+    json_str(js, "pf", flags, sizeof flags);
+    CHECK(!strcmp(flags, "1100"), "the view says which pages have clips (%s)", flags);
+
+    ts_engine_clip_pad(e, 3);                                              /* tap pad 3 of page 1: that clip plays now */
+    play_a_little(e);
+    CHECK(e->p.clip == 3 && e->p.clip_page == 0 && e->clip_now == 3, "tapping a pad plays that page's clip");
+
+    /* Auto plays the clips of every page */
+    e->p.clip = TS_CLIP_AUTO;
+    int got3 = 0, got35 = 0, other = 0;
+    for (long long bar = 0; bar < 200; bar++) { int c = ts_clip_auto(e, bar); got3 += c == 3; got35 += c == 35; other += c != 3 && c != 35; }
+    CHECK(got3 > 20 && got35 > 20 && other == 0, "Auto plays the clips of both pages (%d, %d, %d others)", got3, got35, other);
+    CHECK(e->nclips == 2, "the count is across the pages");
+
+    /* the library keeps the page: the pad byte is page * 16 + pad */
+    ts_engine_service(e);
+    read_text(lib, text, sizeof text);
+    CHECK(strstr(text, "2 3 0 ") && strstr(text, "2 19 0 "), "the library says page 1 pad 3 (3) and page 2 pad 3 (19):" "\n" "%s", text);
+    uint32_t seed_a = e->kept[e->bank[2][2] - 1].seed, seed_b = e->kept[e->bank[2][TS_NUM_CLIPS + 2] - 1].seed;
+    ts_engine_destroy(e);
+    e = ts_engine_create(44100.0f);
+    ts_engine_set_recipes_path(e, lib);
+    load_sample(e, 2, "user1.wav", SMP_SINE, 0.5f, 44100);
+    CHECK(ts_engine_load_recipes(e) == 2, "(both load)");
+    ts_params_default(&p);
+    p.sample = 2; p.pads = 0; p.clip = 0;
+    ts_engine_set_params(e, &p);
+    CHECK(e->bank[2][2] > 0 && e->bank[2][TS_NUM_CLIPS + 2] > 0 && e->kept[e->bank[2][2] - 1].seed == seed_a && e->kept[e->bank[2][TS_NUM_CLIPS + 2] - 1].seed == seed_b,
+          "a new instance puts each clip back on its page and pad");
+
+    /* deleting takes the clip of the page shown only */
+    ts_engine_set_page(e, 1);
+    e->p.clip = 3; e->p.clip_page = 1;
+    ts_engine_clear_clip(e, 3);
+    CHECK(e->bank[2][TS_NUM_CLIPS + 2] == 0 && e->bank[2][2] > 0 && e->p.clip == TS_CLIP_AUTO, "deleting pad 3 of page 2 leaves page 1's clip, and the playing one goes to Auto");
+
+    /* a full page: keeping goes no further than the page shown */
+    ts_engine_set_page(e, 3);
+    int kept_n = 0;
+    for (int i = 0; i < TS_CLIP_PADS + 1; i++) { ts_engine_generate(e); kept_n += ts_engine_keep(e, 0) > 0; }
+    CHECK(kept_n == TS_CLIP_PADS, "a page holds 14 clips: the 15th is not kept (%d kept)", kept_n);
+    CHECK(e->bank[2][3 * TS_NUM_CLIPS + 13] > 0 && e->bank[2][3 * TS_NUM_CLIPS + 14] == 0 && e->bank[2][3 * TS_NUM_CLIPS + 15] == 0, "...and pads 15 and 16 of a page stay Generate and Auto");
+
+    /* another sample brings back its own page */
+    e->p.clip = 5; e->p.clip_page = 2;
+    ts_engine_select_sample(e, 3);
+    CHECK(e->p.clip_page == 0, "another sample starts where it left off");
+    ts_engine_select_sample(e, 2);
+    CHECK(e->p.clip == 5 && e->p.clip_page == 2 && e->view_page == 2, "...and coming back, the sample's page is shown again");
+    ts_engine_destroy(e);
+    remove(lib); remove(TDIR "/rec/kept.bin");
+}
+
 static void test_cues(void)
 {
     printf("cue pads\n");
@@ -3871,7 +3959,7 @@ static void test_manifest(void)
         else agree &= p->lo < p->hi && p->def >= p->lo && p->def <= p->hi;
         int found = 0;
         for (int k = 0; k < N_(kn_root); k++) found |= kn_root[k] == i;
-        static const char *const off_dial[] = { "sample", "clip", "cut_from", "pads", "lock", "normalise", "turntable" };   /* set from the pads, or kept at the default */
+        static const char *const off_dial[] = { "sample", "clip", "clip_page", "cut_from", "pads", "lock", "normalise", "turntable" };   /* set from the pads, or kept at the default */
         for (size_t k = 0; k < sizeof off_dial / sizeof off_dial[0]; k++) found |= strcmp(p->key, off_dial[k]) == 0;
         for (int g = 0; g < N_(k_pages); g++) for (int k = 0; k < k_pages[g].nparams; k++) found |= k_pages[g].params[k] == i;
         on_page &= found;
@@ -3923,6 +4011,7 @@ int main(int argc, char **argv)
     test_cues();
     test_clip_recipe_view();
     test_taste_log();
+    test_clip_pages();
     test_shipped_clips();
     test_pad_runs_clip();
     test_unload_files();

@@ -32,7 +32,7 @@ static const char *const k_recipe_file = "/data/UserData/schwung/modules/sound_g
 
 enum { K_ENUM, K_FLOAT, K_INT, K_CANVAS, K_STRING, K_FILEPATH };
 enum { P_SAMPLE, P_TURNTABLE, P_DRAG, P_GAIN, P_NOTE_GATE, P_VEL_VOL, P_NORMALISE,
-       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_BITE, P_GEN_FIN, P_GEN_ECHO, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_TASTE_LOG, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_SAMPLE_FILE,
+       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_BITE, P_GEN_FIN, P_GEN_ECHO, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_TASTE_LOG, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_PAGE, P_CLIP_PAGE, P_SAMPLE_FILE,
        P_PAD_RAW, P_PAD_CUTS,
        P_VIEW, P_WAVE, P_FULL, P_STATUS,
        P_COUNT };
@@ -86,6 +86,9 @@ static const pdef_t k_params[P_COUNT] = {
     [P_TASTE_LOG]   = { "taste_log", "Taste Log", K_ENUM, o_onoff, 2, 0, 1, 1, 0, NULL },
     [P_CLIP_DEL]    = { "clip_delete", "Delete Clip", K_INT, NULL, 0, 0, 16, 0, 1, NULL },
     [P_ZOOM]        = { "zoom", "Zoom", K_INT, NULL, 0, 0, 3, 0, 1, NULL },
+    /* clip pages: the Pads screen shows one page of 14 clip pads (page, written by the screen when < or > is pressed); clip_page is the page of the clip playing */
+    [P_PAGE]        = { "page", "Page", K_INT, NULL, 0, 0, 3, 0, 1, NULL },
+    [P_CLIP_PAGE]   = { "clip_page", "Clip Page", K_INT, NULL, 0, 0, 3, 0, 1, NULL },
     /* sampling: Record takes the audio input into the selected User slot (4 s at most, or until it is turned off; cropped to its sound), Clear empties it */
     [P_RECORD]      = { "record", "Record", K_ENUM, o_record, 2, 0, 1, 0, 0, NULL },
     [P_CLEAR]       = { "clear", "Clear Sample", K_ENUM, o_clear, 2, 0, 1, 0, 0, NULL },
@@ -149,6 +152,7 @@ static float pget(const ts_params_t *p, int i)
     case P_CUT_FROM: return (float)p->cut_from;
     case P_PADS: return (float)p->pads;
     case P_CLIP: return (float)p->clip;
+    case P_CLIP_PAGE: return (float)p->clip_page;
     case P_GEN_STYLE: return (float)p->gen_style;
     case P_GEN_BARS: return (float)p->gen_bars;
     case P_GEN_FWD: return p->gen_fwd;
@@ -179,6 +183,7 @@ static void pset(ts_params_t *p, int i, float v)
     case P_CUT_FROM: p->cut_from = (int)lrintf(v); break;
     case P_PADS: p->pads = v >= 0.5f; break;
     case P_CLIP: p->clip = (int)lrintf(v); break;
+    case P_CLIP_PAGE: p->clip_page = (int)lrintf(v); break;
     case P_GEN_STYLE: p->gen_style = (int)lrintf(v); break;
     case P_GEN_BARS: p->gen_bars = (int)lrintf(v); break;
     case P_GEN_FWD: p->gen_fwd = v; break;
@@ -340,7 +345,7 @@ static int find_param(const char *key)
 static int is_transient(int i)
 {
     return i == P_PAD_RAW || i == P_PAD_CUTS || i == P_RECORD || i == P_CLEAR || i == P_GENERATE ||
-           i == P_CLIP_PAD || i == P_CLIP_DEL || i == P_ZOOM;
+           i == P_CLIP_PAD || i == P_CLIP_DEL || i == P_ZOOM || i == P_PAGE;
 }
 
 static int build_state(const ts_inst_t *in, char *buf, int cap)
@@ -436,6 +441,7 @@ static void ts_set_param(void *h, const char *key, const char *val)
     }
     if (i == P_SAMPLE_FILE) return;                                                    /* (a path: handled before the number is read) */
     if (i == P_ZOOM) { ts_engine_set_zoom(in->eng, (int)lrintf(v)); return; }           /* the Pads screen's zoomed view */
+    if (i == P_PAGE) { ts_engine_set_page(in->eng, (int)lrintf(v)); return; }           /* the page of clip pads the screen shows */
     if (i == P_GENERATE) {                                                            /* a new clip to try */
         if (v >= 0.5f) ts_engine_generate(in->eng);
         in->p = in->eng->p;

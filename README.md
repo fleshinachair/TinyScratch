@@ -32,6 +32,11 @@ plays each clip right through, from its start, then a random other one) will inc
 **4. Delete it.** Hold a clip pad for a second and a half (a bar fills the screen and the pad goes red). **Any clip can be deleted**,
 including the ones that come with the module. The other pads stay where they are.
 
+**More clips: pages.** Each sample has **four pages of 14 clip pads**. Press **>** and **<** (the Move's right and left arrow buttons)
+to turn the page: only the 14 clip pads change, everything else stays as it is. A clip keeps playing on its own page while you look at
+another (its page mark, top right, blinks), a tap plays the clip of the page you are on, and **Auto** plays the clips of every page.
+Each page has its own colour, and a clip on another page than the first is labelled with its page (CLIP 2.3).
+
 **5. Add your own sample.** Best at one to two seconds, noisy and aggressive, with a little silence at each end.
 
 - **Record it:** hold an **empty User pad** (row 3) and make the sound into the Move's input; let go and it is kept (up to four seconds).
@@ -39,7 +44,7 @@ including the ones that come with the module. The other pads stay where they are
 - **Or load a file:** pick **Load Sample** in the first menu and choose a `.wav` from the Move's library.
 - **Remove it:** hold its pad for a second and a half. The clips you kept for it go with it.
 
-Then generate and keep scratches for it, exactly as above. Every sample has its own 16 clip pads.
+Then generate and keep scratches for it, exactly as above. Every sample has its own pages of clip pads.
 
 ## Playing
 
