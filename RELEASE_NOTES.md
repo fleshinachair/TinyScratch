@@ -1,5 +1,17 @@
 # TinyScratch release notes
 
+## v1.0.0
+
+- **Groove.** A new dial that makes **Improv** keep to a drum groove, the way a scratch DJ plays over a beat. It is dial 8 on the Main page,
+  and dial 5 on the Pads screen (in the place of Swing, which is on the Playback page), so you can tweak it while you generate. At 0%,
+  the default, Improv is exactly what it was. Turned up, each clip keeps to one of seven drum patterns (Boom-bap, Four on the floor, Breaks,
+  Half-time, Funk, Dembow, Open): strokes land on the snare or a step ahead of a hit, the fader leaves the kicks clear and rests in the gaps,
+  the bars breathe, build or drop, and each phrase ends in a fill. **Groove leaves room for a beat**: on its own a clip can sound thin,
+  over a song it sits in the gaps. It does nothing to the named styles.
+- A clip made with Groove above 0 shows **GRV60** (its percentage) on the bottom line when it plays.
+- **Taste Log.** It now also records each clip's Groove and which groove it kept to (the last two columns). It stays on your Move and is
+  never sent anywhere. Libraries and logs from earlier versions still read as they did (the library line gains a tenth number, the Groove).
+
 ## v0.9.5
 
 - **Pages of clips.** Each sample now has **four pages of 14 clip pads**. Press **>** and **<** (the Move's right and left arrow buttons)
