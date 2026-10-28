@@ -1303,6 +1303,7 @@ static void taste_event(ts_engine_t *e, char ev, const ts_recipe_t *r, int sampl
     if (q->full) return;                                                        /* the service call is behind: this one is dropped */
     double secs = beats > 0.0 ? beats * 60.0 / (double)clampf(e->bpm, 20.0f, 400.0f) : 0.0;
     q->groove = r->groove;
+    q->tmpl = (c->extras & TS_EX_KNOWN) ? (c->extras >> TS_EX_TMPL_SHIFT) & 15 : 0;               /* which groove it kept to (1..7), 0 for none */
     q->ev = ev; q->style = r->style; q->bars = r->bars; q->fwd = r->fwd; q->fin = r->fin; q->echo = r->echo; q->bpm = r->bpm; q->seed = r->seed;
     q->sample = sample < 2 ? sample : 2;                                        /* 0 Ahhh, 1 Fresssh, 2 a User sample (its name is not recorded) */
     q->extras = (c->extras & TS_EX_KNOWN) ? (c->extras & 7) : -1;
@@ -1342,8 +1343,8 @@ static void taste_flush(ts_engine_t *e)
     if (f && size == 0)
         fprintf(f, "# TinyScratch taste log, format 1, generator %d. It stays on this Move: nothing reads it or sends it anywhere. Delete the file to clear it.\n"
                    "# event: K kept, P passed over (Generate pressed again without keeping it), D deleted. sample: 0 Ahhh, 1 Fresssh, 2 a User sample.\n"
-                   "# played_ds: tenths of a second it played before the decision (0 for D). extras: 1 echo, 2 forward, 4 finish, -1 not known. Then 14 measurements (x1000), then groove (0-100; a line from before it existed has no such column).\n"
-                   "event,style,bars,fwd,fin,echo,bpm,sample,seed,played_ds,extras,strokes,stroke_size,stroke_size_sd,open,cutins,speed,speed_p90,rest,range,mean_pos,open_run,levels,open_fast,repeats,groove\n",
+                   "# played_ds: tenths of a second it played before the decision (0 for D). extras: 1 echo, 2 forward, 4 finish, -1 not known. Then 14 measurements (x1000), then groove (0-100) and groove_template (0 none, 1 Boom-bap, 2 Four on the floor, 3 Breaks, 4 Half-time, 5 Funk, 6 Dembow, 7 Open); a line from before those existed lacks them.\n"
+                   "event,style,bars,fwd,fin,echo,bpm,sample,seed,played_ds,extras,strokes,stroke_size,stroke_size_sd,open,cutins,speed,speed_p90,rest,range,mean_pos,open_run,levels,open_fast,repeats,groove,groove_template\n",
                 TS_GENERATOR_VERSION);
     for (int k = 0; k < TS_TASTE_Q; k++) {
         taste_ev_t *q = &e->taste_q[e->taste_r % TS_TASTE_Q];
@@ -1351,7 +1352,7 @@ static void taste_flush(ts_engine_t *e)
         if (f) {
             fprintf(f, "%c,%d,%d,%d,%d,%d,%d,%d,%lu,%d,%d", q->ev, q->style, q->bars, q->fwd, q->fin, q->echo, q->bpm, q->sample, (unsigned long)q->seed, q->played_ds, q->extras);
             for (int j = 0; j < TS_TASTE_NF; j++) fprintf(f, ",%d", (int)lrintf(q->f[j] * 1000.0f));
-            fprintf(f, ",%d", q->groove);
+            fprintf(f, ",%d,%d", q->groove, q->tmpl);
             fputc(10, f);
         }
         __atomic_store_n(&q->full, 0, __ATOMIC_RELEASE);
@@ -2729,14 +2730,14 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     jw(&j, "\",\"ld\":\"");
     for (int i = 0; i < TS_SLOTS; i++) jw(&j, "%c", e->slot[i].loaded ? '1' : '0');
     jw(&j, "\",\"x\":%d,\"tx\":%d,\"p\":%.4f,\"tt\":%.3f,\"vl\":%.2f,\"dr\":%.2f,\"gn\":%.1f,\"ng\":%d,\"vv\":%d,\"no\":%d,\"lk\":%d,"
-           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"fn\":%.2f,\"ec\":%.2f,\"hu\":%.2f,\"gg\":%.2f,\"cs\":%d,\"cq\":%d,\"cu\":\"%s\",\"cy\":%d,\"cx\":%d,\"pg\":%d,\"cp\":%d,\"pf\":\"%s\",\"w\":\"",
+           "\"cn\":%d,\"g\":%d,\"nh\":%d,\"tp\":%d,\"lcol\":%d,\"cl\":%d,\"cm\":%d,\"ru\":%d,\"ln\":%d,\"rw\":%d,\"lb\":%d,\"nc\":%d,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"tv\":%d,\"tg\":%d,\"sq\":%u,\"cd\":%.2f,\"co\":%.2f,\"gs\":%d,\"gb\":%d,\"gf\":%.2f,\"sw\":%.2f,\"fn\":%.2f,\"ec\":%.2f,\"hu\":%.2f,\"gg\":%.2f,\"cs\":%d,\"cq\":%d,\"cu\":\"%s\",\"cy\":%d,\"cx\":%d,\"cg\":%d,\"pg\":%d,\"cp\":%d,\"pf\":\"%s\",\"w\":\"",
        x, tx, e->pos, (double)p->turntable, (double)e->vel_out, (double)p->drag, (double)p->gain_db, p->note_gate, p->vel_to_vol, p->normalise, p->lock,
        p->cut_from, e->gate > 0.5f, e->notes_held + e->pad_held, e->transport, e->lane_col, p->clip ? e->clip_now % CID_PAGE : 0, p->clip, e->running, e->last_note, e->pad_raw > 0, lane_beats, e->nclips,
        e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
        e->try_valid, e->try_valid ? e->try_recipe.style : 0, e->view_seq,
        (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin, (double)p->gen_echo, (double)p->humanise, (double)p->gen_groove,
        p->cues, e->cue_on ? e->cue_pad : -1, cue_cols,
-       rec ? rec->style : -1, rec && (shown_clip->extras & TS_EX_KNOWN) ? shown_clip->extras & 7 : -1,
+       rec ? rec->style : -1, rec && (shown_clip->extras & TS_EX_KNOWN) ? shown_clip->extras & 7 : -1, rec ? rec->groove : 0,
        e->view_page, p->clip ? e->clip_now / CID_PAGE : 0, page_flags);
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->pk[c] : 0);       /* the waveform: peak, then body */
     jw(&j, "\",\"wr\":\"");

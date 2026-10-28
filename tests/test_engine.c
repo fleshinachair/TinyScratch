@@ -2101,7 +2101,7 @@ static void test_taste_log(void)
     while (row && strstr(row + 1, "\nP,")) row = strstr(row + 1, "\nP,");          /* the last one: made after the log was on, and played a while */
     int commas = 0;
     if (row) for (const char *c = row + 1; *c && *c != '\n'; c++) commas += *c == ',';
-    CHECK(row && commas == 10 + TS_TASTE_NF + 1, "a line has its recipe, what happened, and %d measurements (%d commas)", TS_TASTE_NF, commas);
+    CHECK(row && commas == 10 + TS_TASTE_NF + 2, "a line has its recipe, what happened, and %d measurements (%d commas)", TS_TASTE_NF, commas);
     unsigned long seed = 0; int style = -1, bars = -1, fwd, fin = -1, echo = -1, bpm, sm = -1, ds = -1, ex = -9;
     CHECK(row && sscanf(row + 3, "%d,%d,%d,%d,%d,%d,%d,%lu,%d,%d", &style, &bars, &fwd, &fin, &echo, &bpm, &sm, &seed, &ds, &ex) == 10 && style == GS_ANY && bars == 2 && fin == 50 && echo == 50 && sm == 0 && seed != 0 && ds >= 10 && ex >= 0,
           "...which says what it was (style %d, bars %d, Finish %d, Echo %d, sample %d, played %d tenths, extras %d)", style, bars, fin, echo, sm, ds, ex);
@@ -2312,6 +2312,8 @@ static void test_groove(void)
     int pad = ts_engine_keep(e, 2);
     static ts_clip_t made;
     memcpy(&made, &e->clip_data[e->bank[2][pad - 1] - 1], sizeof made);
+    play_a_little(e);
+    CHECK(view_int(e, "cg") == 60, "the screen is told the Groove the clip playing was made with (%d)", view_int(e, "cg"));
     ts_engine_service(e);
     read_text(lib, text, sizeof text);
     int col = 0; unsigned long sdv = 0; int smp = -1, pd = -1, sty = -1, bs = -1, fw = -1, bp = -1, fn = -1, ec = -1, gr = -1;
@@ -2319,9 +2321,10 @@ static void test_groove(void)
     CHECK(col == 10 && gr == 60 && sty == GS_ANY, "the library line ends with the Groove it was made with (%s)", text);
     read_text(TDIR "/rec/taste_log.csv", text, sizeof text);
     const char *k = strstr(text, "K,");
-    int nc = 0; const char *last = NULL;
-    if (k) { for (const char *c = k; *c && *c != '\n'; c++) { if (*c == ',') { nc++; last = c; } } }
-    CHECK(k && nc == 10 + TS_TASTE_NF + 1 && last && atoi(last + 1) == 60, "the taste log records the Groove too (the last column)");
+    int nc = 0; const char *last = NULL, *prev = NULL;
+    if (k) { for (const char *c = k; *c && *c != '\n'; c++) { if (*c == ',') { nc++; prev = last; last = c; } } }
+    CHECK(k && nc == 10 + TS_TASTE_NF + 2 && prev && atoi(prev + 1) == 60, "the taste log records the Groove (the last but one column)");
+    CHECK(last && atoi(last + 1) >= 1 && atoi(last + 1) <= N_GROOVE, "...and which groove it kept to (the last column: %d)", last ? atoi(last + 1) : -1);
     ts_engine_destroy(e);
 
     /* a library with no saved data makes the clip again from its recipe, Groove and all */

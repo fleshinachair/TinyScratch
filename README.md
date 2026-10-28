@@ -73,7 +73,7 @@ clip never changes):
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |
 | **Echo** (10%) | how often a bar holds an echo scratch: a short stab four times over two beats, each at a lower fader level |
-| **Groove** (0%) | how far **Improv** keeps to a drum groove (see below); 0% is Improv exactly as it was. It does nothing to the named styles |
+| **Groove** (0%) | how far **Improv** keeps to a drum groove (see below); 0% is Improv exactly as it was. It leaves room for a beat, so on its own a clip with Groove up can sound thin; over a song it sits in the gaps. It does nothing to the named styles |
 
 **Playback: how clips play.** These change how a clip sounds as it plays, never the clip itself:
 
@@ -173,6 +173,10 @@ The **Groove** dial says how far the clip keeps to it. At 0% nothing changes. As
 wants one (the snare, a step ahead of a hit), the fader is shut on the kicks more often (more at 100%: in tests about seven kick steps in ten
 are left empty, against one in six), a quiet bar can follow a busy one (the bars breathe, build or drop), and the last beat of each
 phrase becomes a fill of sixteenths. No two clips are alike at any setting.
+
+**Groove leaves room for a beat.** On its own a clip with Groove up can sound thin, because the gaps it leaves are where the drums of a song would be; over a
+track it sits in them. Keep it at 0% for clips that should stand alone, and judge it over music. The seven grooves are standard patterns, not the
+song's own drums, so some fit a track better than others. (With the Taste Log on, each clip's groove is recorded.)
 
 ## Samples
 

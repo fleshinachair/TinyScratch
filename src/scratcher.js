@@ -258,10 +258,15 @@
     }
 
     /* besides its style, which of Echo, Forwards and Finish are really in the clip (cx, from the generator: a bit each; -1, or none of them: nothing) */
-    function clipExtras(v) {
-        var x = Math.round(num(v.cx, -1));
-        if (x < 0) return "";
-        return [x & 1 ? "ECHO" : "", x & 2 ? "FWD" : "", x & 4 ? "FIN" : ""].filter(Boolean).join(" ");
+    /* ...and the Groove it was made with, when it was not 0 (GRV60). When the two do not fit beside the label, the extras are initials: E F N. */
+    function clipExtras(v, leftLen) {
+        var x = Math.round(num(v.cx, -1)), g = clamp(Math.round(num(v.cg, 0)), 0, 100);
+        var words = x < 0 ? [] : [x & 1 ? "ECHO" : "", x & 2 ? "FWD" : "", x & 4 ? "FIN" : ""].filter(Boolean);
+        var grv = g > 0 ? "GRV" + g : "";
+        var full = words.concat(grv ? [grv] : []).join(" ");
+        if (leftLen !== undefined && (leftLen + 1 + full.length) * 4 > 126)
+            full = words.map(function (w) { return w[0]; }).concat(grv ? [grv] : []).join(" ");
+        return full;
     }
 
     /* the transport is stopped and a clip is waiting for it: nothing plays by itself */
@@ -303,7 +308,7 @@
         var made = clipStyle(v) >= 0;
         text(ctx, 1, 59, notice || (clipLabel(v) + (made ? "" : (pad !== undefined && pad >= 0 ? " P" + pad : "") + (cc !== undefined && cc >= 0 ? " C" + cc : ""))), inv ? 0 : 1);
         /* a clip with a recipe: its style is in the label and here is what else it was made with; otherwise what Generate makes (the dials 1 and 2), then how the pads are being read */
-        var right = made ? clipExtras(v) : (STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : ""));
+        var right = made ? clipExtras(v, clipLabel(v).length) : (STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : ""));
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 
@@ -341,8 +346,9 @@
         var notice = bottomNotice(ctx, extra, v);
         var inv = !!extra.touchText && notice === extra.touchText;
         if (inv) ctx.fillRect(0, 57, 128, 7, 1);
-        text(ctx, 1, 59, notice || ("BAR " + bar + " BEAT " + beat + (pad !== undefined && pad >= 0 ? "  P" + pad : "")), inv ? 0 : 1);
-        var right = clipStyle(v) >= 0 ? clipExtras(v) : STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
+        var zl = "BAR " + bar + " BEAT " + beat + (pad !== undefined && pad >= 0 ? "  P" + pad : "");
+        text(ctx, 1, 59, notice || zl, inv ? 0 : 1);
+        var right = clipStyle(v) >= 0 ? clipExtras(v, zl.length) : STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 

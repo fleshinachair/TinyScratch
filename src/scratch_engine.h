@@ -109,7 +109,7 @@ typedef struct { int used, style, bars; uint32_t seed; int fwd; int bpm; int fin
 typedef struct {
     volatile int full;
     char  ev;                   /* K kept, P passed over (Generate pressed again without keeping it), D deleted */
-    int   style, bars, fwd, fin, echo, bpm, sample, extras, played_ds, groove;
+    int   style, bars, fwd, fin, echo, bpm, sample, extras, played_ds, groove, tmpl;
     uint32_t seed;
     float f[TS_TASTE_NF];
 } taste_ev_t;
