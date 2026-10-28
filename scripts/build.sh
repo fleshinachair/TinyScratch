@@ -28,6 +28,7 @@ echo "== cross compiler: ${CROSSCC[*]}"
     -o "$OUT/dsp.so"
 
 cp samples/*.wav "$OUT/samples/"
+cp LICENSE samples/CREDITS.txt "$OUT/"                # the licence, and where the two samples come from
 cp src/scratcher.js src/waveform.js "$OUT/"          # the screens (canvas scripts)
 cp clips/recipes.txt "$OUT/recipes.txt"              # the clips every new instance starts with (more are kept on the Move)
 cp clips/kept.bin "$OUT/kept.bin"                    # ...and their saved data, so they sound exactly as they were made

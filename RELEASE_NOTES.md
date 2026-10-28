@@ -6,6 +6,7 @@
   or Session view it opened another Set or launched a clip. The Pads screen now keeps its pads to itself while it is up.
 - **Pads screen.** The clip playing now shows its style next to its number (CLIP 3 BABY), and, bottom right, which of Echo, Forwards
   and Finish are really in it (nothing if none). Humanise now starts at 35% and Bite at 10%.
+- **Licence.** TinyScratch's code is now released under the MIT licence (`LICENSE`, also in the package).
 
 ## v0.9.0
 

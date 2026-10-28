@@ -175,6 +175,11 @@ bottom left, for playing the pads without the Pads screen.
 cut with). TinyScratch is an independent project, written from scratch. The generator is TinyScratch's own: its vocabulary comes from scratch notation (the Turntablist Transcription Methodology,
 TTM), and it was tuned against published measurements of real scratching and overall statistics of example clips.
 
+## Licence
+
+TinyScratch's code is released under the [MIT licence](LICENSE). The two sample clips, Ahhh and Fresssh, are described in
+`samples/CREDITS.txt`; clips you import from a Live Pack are someone else's work and are not covered.
+
 ## Development
 
     scripts/test.sh                   engine + plugin tests (UBSan, leak and overrun checks) and the screen test
