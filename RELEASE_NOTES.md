@@ -1,5 +1,14 @@
 # TinyScratch release notes
 
+## v0.9.5
+
+- **Pages of clips.** Each sample now has **four pages of 14 clip pads**. Press **>** and **<** (the Move's right and left arrow buttons)
+  to turn the page; only the 14 clip pads change, everything else stays as it is. A clip keeps playing on its own page while you look at
+  another (its page mark, top right, blinks), a tap plays the clip of the page you are on, tapping an empty pad keeps the generated clip
+  on the page you are viewing, and **Auto** plays the clips of every page. Each page has its own pad colour, and a clip on another page
+  than the first is labelled with it (CLIP 2.3). The clips you have already kept stay on the first page exactly as they were.
+- The Taste Log (on by default, local to your Move, never sent anywhere) carries on as in 0.9.3.
+
 ## v0.9.3
 
 - **Taste Log is now on by default.** It is the groundwork for a future feature (a generator that learns what you like), and it needs
