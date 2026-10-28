@@ -1,5 +1,13 @@
 # TinyScratch release notes
 
+## v0.9.2
+
+- **Taste Log** (Pad Play page), groundwork for a future feature: a generator that learns what you like. **It is switched off by default
+  and nothing uses it yet**; this release only adds the log. Turned on, TinyScratch appends a line to `taste_log.csv` in the module's
+  folder each time you keep a clip, pass one over (press Generate again) or delete one you kept: its style, length and settings, the seed,
+  how long it played, and 14 numbers measured from the clip. No audio, sample name or clip data. It stays on your Move: nothing reads it
+  or sends it anywhere, and it is kept to about 800 kB.
+
 ## v0.9.1
 
 - **Bug fix.** Tapping a clip pad on the Pads screen could also reach the Move itself, and if the Move was sitting in its Set overview

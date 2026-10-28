@@ -1134,6 +1134,140 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     out->extras = (uint8_t)(TS_EX_KNOWN | g.used);
 }
 
+/* ---- the taste log ---- */
+
+/* What a clip is like, in TS_TASTE_NF numbers: strokes a beat (log), stroke size, its spread, the part of the clip with the sound in, cut-ins a beat,
+ * mean speed (log), fast speed (log), the part at rest, the range of the playhead, its mean place, the longest stretch of sound in with the playhead
+ * going one way (in beats), the part with the fader at a level above the first (an echo), the part of fast movement with the sound in, and how much
+ * the first half of the clip is the second. Speeds are in sample lengths a beat. */
+void ts_clip_features(const ts_clip_t *c, float *f)
+{
+    for (int j = 0; j < TS_TASTE_NF; j++) f[j] = 0.0f;
+    if (!c || c->n < 4 || c->len < 1 || c->n > TS_CLIP_MAX_BEATS * TS_CLIP_RES) return;
+    const int n = c->n;
+    const float spb = (float)n / (float)c->len;
+    float sp[TS_CLIP_MAX_BEATS * TS_CLIP_RES], sorted[TS_CLIP_MAX_BEATS * TS_CLIP_RES];
+    double sum_sp = 0, rest = 0, open = 0, rises = 0, lv = 0, fast = 0, fast_open = 0, pmin = 1, pmax = 0, pmean = 0;
+    for (int i = 0; i < n; i++) {
+        int j = (i + 1) % n;
+        float p = (float)c->pos[i] / 65535.0f, d = ((float)c->pos[j] - (float)c->pos[i]) / 65535.0f * spb;
+        sp[i] = fabsf(d);
+        sum_sp += sp[i];
+        rest += sp[i] < 0.05f;
+        open += c->gate[i] > 0;
+        lv += c->gate[i] > 1;
+        rises += c->gate[i] > 0 && c->gate[(i + n - 1) % n] == 0;
+        if (sp[i] > 1.0f) { fast++; fast_open += c->gate[i] > 0; }
+        if (p < pmin) pmin = p;
+        if (p > pmax) pmax = p;
+        pmean += p;
+    }
+    float last = (float)c->pos[0] / 65535.0f, lo = last, hi = last, sizes[512];        /* strokes: a turn after a move of at least 4% of the sample */
+    int sdir = 0, ns = 0;
+    for (int i = 1; i <= n; i++) {
+        float p = (float)c->pos[i % n] / 65535.0f;
+        if (sdir >= 0 && p > hi) { hi = p; if (sdir == 0 && hi - lo > 0.04f) sdir = 1; }
+        if (sdir <= 0 && p < lo) { lo = p; if (sdir == 0 && hi - lo > 0.04f) sdir = -1; }
+        if (sdir == 1 && hi - p > 0.04f) { if (ns < 512) sizes[ns++] = hi - lo; sdir = -1; lo = p; }
+        else if (sdir == -1 && p - lo > 0.04f) { if (ns < 512) sizes[ns++] = hi - lo; sdir = 1; hi = p; }
+    }
+    double ms = 0, vs = 0;
+    for (int i = 0; i < ns; i++) ms += sizes[i];
+    ms = ns ? ms / ns : 0;
+    for (int i = 0; i < ns; i++) vs += (sizes[i] - ms) * (sizes[i] - ms);
+    vs = ns ? sqrt(vs / ns) : 0;
+    int run = 0, best = 0, rd = 0;
+    for (int i = 0; i < n; i++) {
+        int j = (i + 1) % n, d = c->pos[j] > c->pos[i] ? 1 : (c->pos[j] < c->pos[i] ? -1 : 0);
+        if (c->gate[i] > 0 && d != 0 && (rd == 0 || d == rd)) { run++; rd = d; } else { run = (c->gate[i] > 0 && d != 0) ? 1 : 0; rd = d; }
+        if (run > best) best = run;
+    }
+    memcpy(sorted, sp, sizeof(float) * (size_t)n);
+    for (int i = 1; i < n; i++) { float v = sorted[i]; int k = i - 1; while (k >= 0 && sorted[k] > v) { sorted[k + 1] = sorted[k]; k--; } sorted[k + 1] = v; }
+    double rep = 0;
+    int h = n / 2;
+    for (int i = 0; i < h; i++) rep += fabs((double)c->pos[i] - (double)c->pos[i + h]) / 65535.0;
+    rep = 1.0 - rep / h;
+    f[0] = log1pf((float)ns / (float)c->len);
+    f[1] = (float)ms;
+    f[2] = (float)vs;
+    f[3] = (float)(open / n);
+    f[4] = (float)(rises / c->len);
+    f[5] = log1pf((float)(sum_sp / n));
+    f[6] = log1pf(sorted[(int)(0.9 * (n - 1))]);
+    f[7] = (float)(rest / n);
+    f[8] = (float)(pmax - pmin);
+    f[9] = (float)(pmean / n);
+    f[10] = (float)best / spb;
+    f[11] = (float)(lv / n);
+    f[12] = fast > 0 ? (float)(fast_open / fast) : 0.0f;
+    f[13] = (float)rep;
+}
+
+/* queued where it happens (maybe on the audio thread: nothing is written here) and written by ts_engine_service */
+static void taste_event(ts_engine_t *e, char ev, const ts_recipe_t *r, int sample, const ts_clip_t *c, double beats)
+{
+    if (!e || !e->p.taste_log || !r || !c || c->n <= 0 || !e->recipes_path[0]) return;
+    unsigned w = __atomic_fetch_add(&e->taste_w, 1u, __ATOMIC_ACQ_REL);
+    taste_ev_t *q = &e->taste_q[w % TS_TASTE_Q];
+    if (q->full) return;                                                        /* the service call is behind: this one is dropped */
+    double secs = beats > 0.0 ? beats * 60.0 / (double)clampf(e->bpm, 20.0f, 400.0f) : 0.0;
+    q->ev = ev; q->style = r->style; q->bars = r->bars; q->fwd = r->fwd; q->fin = r->fin; q->echo = r->echo; q->bpm = r->bpm; q->seed = r->seed;
+    q->sample = sample < 2 ? sample : 2;                                        /* 0 Ahhh, 1 Fresssh, 2 a User sample (its name is not recorded) */
+    q->extras = (c->extras & TS_EX_KNOWN) ? (c->extras & 7) : -1;
+    q->played_ds = clampi((int)lrint(secs * 10.0), 0, 99999);
+    ts_clip_features(c, q->f);
+    __atomic_store_n(&q->full, 1, __ATOMIC_RELEASE);
+}
+
+#define TASTE_MAX_BYTES 400000L                 /* a log past this is kept as taste_log.old.csv and a new one begins: at most about 800 kB in all */
+
+static void taste_flush(ts_engine_t *e)
+{
+    int any = 0;
+    for (int i = 0; i < TS_TASTE_Q; i++) any |= e->taste_q[i].full;
+    if (!any) return;
+    char path[520], old[540];
+    snprintf(path, sizeof path, "%s", e->recipes_path);
+    char *cut = strrchr(path, '/'), *bs = strrchr(path, '\\');
+    if (bs && (!cut || bs > cut)) cut = bs;
+    if (cut) cut[1] = 0; else path[0] = 0;
+    snprintf(old, sizeof old, "%staste_log.old.csv", path);
+    size_t len = strlen(path);
+    snprintf(path + len, sizeof path - len, "taste_log.csv");
+    FILE *f = e->recipes_path[0] ? fopen(path, "ab") : NULL;
+    long size = 0;
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        size = ftell(f);
+        if (size > TASTE_MAX_BYTES) {
+            fclose(f);
+            remove(old);
+            rename(path, old);
+            f = fopen(path, "ab");
+            size = 0;
+        }
+    }
+    if (f && size == 0)
+        fprintf(f, "# TinyScratch taste log, format 1, generator %d. It stays on this Move: nothing reads it or sends it anywhere. Delete the file to clear it.\n"
+                   "# event: K kept, P passed over (Generate pressed again without keeping it), D deleted. sample: 0 Ahhh, 1 Fresssh, 2 a User sample.\n"
+                   "# played_ds: tenths of a second it played before the decision (0 for D). extras: 1 echo, 2 forward, 4 finish, -1 not known. The last 14 are x1000.\n"
+                   "event,style,bars,fwd,fin,echo,bpm,sample,seed,played_ds,extras,strokes,stroke_size,stroke_size_sd,open,cutins,speed,speed_p90,rest,range,mean_pos,open_run,levels,open_fast,repeats\n",
+                TS_GENERATOR_VERSION);
+    for (int k = 0; k < TS_TASTE_Q; k++) {
+        taste_ev_t *q = &e->taste_q[e->taste_r % TS_TASTE_Q];
+        if (!q->full) break;
+        if (f) {
+            fprintf(f, "%c,%d,%d,%d,%d,%d,%d,%d,%lu,%d,%d", q->ev, q->style, q->bars, q->fwd, q->fin, q->echo, q->bpm, q->sample, (unsigned long)q->seed, q->played_ds, q->extras);
+            for (int j = 0; j < TS_TASTE_NF; j++) fprintf(f, ",%d", (int)lrintf(q->f[j] * 1000.0f));
+            fputc(10, f);
+        }
+        __atomic_store_n(&q->full, 0, __ATOMIC_RELEASE);
+        e->taste_r++;
+    }
+    if (f) fclose(f);
+}
+
 /* How much of a clip is heard: the sound is cut in and the playhead is moving (a stopped playhead is silence, whatever the fader does). */
 static float gen_audible(const ts_clip_t *c)
 {
@@ -1196,6 +1330,7 @@ int ts_engine_generate(ts_engine_t *e)
 {
     if (!e) return -1;
     int style = clampi(e->p.gen_style, 0, TS_GEN_STYLES - 1), bars = e->p.gen_bars <= 0 ? 1 : (e->p.gen_bars == 1 ? 2 : 4);
+    if (e->try_valid && !e->try_kept) taste_event(e, 'P', &e->try_recipe, e->try_sample, &e->clip_data[e->try_idx], e->free_clock - e->try_t0);     /* (passed over) */
     int idx = e->try_valid && e->try_idx == TS_POOL ? TS_POOL + 1 : TS_POOL;               /* the one that is not playing */
     uint32_t seed = gen_seed(e);
     ts_clip_generate_for(&e->clip_data[idx], style, seed, bars, &e->slot[e->p.sample], e->p.gen_fwd, e->bpm, e->p.gen_fin, e->p.gen_echo);
@@ -1207,6 +1342,7 @@ int ts_engine_generate(ts_engine_t *e)
     e->try_recipe.echo = (int)lrintf(e->p.gen_echo * 100.0f);
     e->try_idx = idx;
     e->try_valid = 1;
+    e->try_t0 = e->free_clock; e->try_kept = 0; e->try_sample = e->p.sample;
     e->p.clip = TS_CLIP_TRY;
     return style;
 }
@@ -1266,6 +1402,8 @@ int ts_engine_keep(ts_engine_t *e, int pad)
     if (pad <= 0) pad = first_free_pad(e, sample);
     if (pad < 1 || pad > TS_CLIP_PADS || e->bank[sample][pad - 1] != 0) return -1;
     if (install_clip(e, sample, pad, &e->clip_data[e->try_idx], &e->try_recipe) != 0) return -1;
+    taste_event(e, 'K', &e->try_recipe, sample, &e->clip_data[e->try_idx], e->free_clock - e->try_t0);
+    e->try_kept = 1;
     e->p.clip = pad;
     return pad;
 }
@@ -1304,6 +1442,8 @@ int ts_engine_clear_clip(ts_engine_t *e, int pad)
     if (!e) return -1;
     if (pad <= 0) pad = e->p.clip;
     if (pad < 1 || pad > TS_NUM_CLIPS) return -1;
+    int di = e->bank[e->p.sample][pad - 1] - 1;
+    if (di >= 0 && e->kept[di].used) taste_event(e, 'D', &e->kept[di], e->p.sample, &e->clip_data[di], 0.0);      /* (a clip you kept, deleted) */
     return drop_pad(e, e->p.sample, pad, 1);
 }
 
@@ -1514,6 +1654,7 @@ void ts_params_default(ts_params_t *p)
     p->cut_from = TS_CUT_NOTE;
     p->pads = 1;
     p->cues = 1;
+    p->taste_log = 0;                    /* the log is opt-in */
     p->clip = TS_CLIP_AUTO;              /* the clips in turn: a routine from the first press */
     p->gen_style = 0;
     p->gen_bars = 1;                     /* two bars */
@@ -1540,6 +1681,7 @@ void ts_params_sanitize(ts_params_t *p)
     p->cut_from = clampi(p->cut_from, 0, 127);
     p->pads = p->pads ? 1 : 0;
     p->cues = p->cues ? 1 : 0;
+    p->taste_log = p->taste_log ? 1 : 0;
     p->clip = clampi(p->clip, 0, TS_CLIP_TRY);
     p->gen_style = clampi(p->gen_style, 0, TS_GEN_STYLES - 1);
     p->gen_bars = clampi(p->gen_bars, 0, 2);
@@ -2128,6 +2270,7 @@ void ts_engine_service(ts_engine_t *e)
 {
     if (!e) return;
     if (e->recipes_dirty) { e->recipes_dirty = 0; save_recipes(e); }               /* the kept clips changed: write the library */
+    taste_flush(e);                                                             /* ...and the taste log, if it is on */
     for (int i = 0; i < TS_SLOTS + 2; i++) {                                    /* what the render thread replaced */
         float *g = __atomic_exchange_n(&e->garbage[i], NULL, __ATOMIC_ACQ_REL);
         TS_FREE(g);

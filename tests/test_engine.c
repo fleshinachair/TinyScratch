@@ -2039,6 +2039,114 @@ static void test_clip_recipe_view(void)
     ts_engine_destroy(e);
 }
 
+/* the taste log: off until it is turned on; then a line for each clip kept, passed over or deleted, with numbers measured from it */
+static int count_lines_starting(const char *text, const char *prefix)
+{
+    int n = 0;
+    size_t pl = strlen(prefix);
+    for (const char *l = text; l && *l; l = strchr(l, '\n') ? strchr(l, '\n') + 1 : NULL)
+        n += strncmp(l, prefix, pl) == 0;
+    return n;
+}
+
+static void read_text(const char *path, char *buf, size_t cap)
+{
+    buf[0] = 0;
+    FILE *f = fopen(path, "rb");
+    if (!f) return;
+    size_t n = fread(buf, 1, cap - 1, f);
+    buf[n] = 0;
+    fclose(f);
+}
+
+static void test_taste_log(void)
+{
+    printf("the taste log\n");
+    const char *lib = TDIR "/rec/recipes.txt", *log = TDIR "/rec/taste_log.csv", *old = TDIR "/rec/taste_log.old.csv";
+    static char text[65536];
+    remove(log); remove(old);
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_engine_set_recipes_path(e, lib);
+    load_sample(e, 0, "ahhh.wav", SMP_SINE, 0.5f, 44100);
+    ts_params_t p;
+    ts_params_default(&p);
+    CHECK(p.taste_log == 0, "the log is off by default");
+    p.pads = 0; p.clip = 0; p.gen_style = GS_ANY; p.gen_bars = 1; p.gen_echo = 0.5f; p.gen_fin = 0.5f;
+    ts_engine_set_params(e, &p);
+    ts_engine_generate(e);
+    ts_engine_generate(e);
+    ts_engine_keep(e, 0);
+    ts_engine_generate(e);
+    ts_engine_service(e);
+    FILE *f = fopen(log, "rb");
+    CHECK(f == NULL, "off: nothing is written, not even an empty file");
+    if (f) fclose(f);
+
+    p.taste_log = 1;
+    ts_engine_set_params(e, &p);
+    ts_engine_generate(e);                                    /* the clip just made is passed over by the next... */
+    for (int b = 0; b < 600; b++) { float blk[128]; ts_engine_render(e, blk, 128); }
+    ts_engine_generate(e);                                    /* ...which is kept... */
+    int pad = ts_engine_keep(e, 0);
+    ts_engine_generate(e);                                    /* ...so the next passes over nothing... */
+    ts_engine_clear_clip(e, pad);                             /* ...and the kept one is deleted */
+    ts_engine_service(e);
+    read_text(log, text, sizeof text);
+    int pass = count_lines_starting(text, "P,"), keep = count_lines_starting(text, "K,"), del = count_lines_starting(text, "D,");
+    CHECK(pass == 2 && keep == 1 && del == 1, "the clip left from before it was on and the one made after are passed over, one is kept, one deleted (%d P, %d K, %d D)", pass, keep, del);
+    CHECK(text[0] == '#' && strstr(text, "nothing reads it or sends it anywhere") && strstr(text, "event,style,bars"), "a header says what the file is and that it stays on the Move");
+    const char *row = strstr(text, "\nP,");
+    while (row && strstr(row + 1, "\nP,")) row = strstr(row + 1, "\nP,");          /* the last one: made after the log was on, and played a while */
+    int commas = 0;
+    if (row) for (const char *c = row + 1; *c && *c != '\n'; c++) commas += *c == ',';
+    CHECK(row && commas == 10 + TS_TASTE_NF, "a line has its recipe, what happened, and %d measurements (%d commas)", TS_TASTE_NF, commas);
+    unsigned long seed = 0; int style = -1, bars = -1, fwd, fin = -1, echo = -1, bpm, sm = -1, ds = -1, ex = -9;
+    CHECK(row && sscanf(row + 3, "%d,%d,%d,%d,%d,%d,%d,%lu,%d,%d", &style, &bars, &fwd, &fin, &echo, &bpm, &sm, &seed, &ds, &ex) == 10 && style == GS_ANY && bars == 2 && fin == 50 && echo == 50 && sm == 0 && seed != 0 && ds >= 10 && ex >= 0,
+          "...which says what it was (style %d, bars %d, Finish %d, Echo %d, sample %d, played %d tenths, extras %d)", style, bars, fin, echo, sm, ds, ex);
+    CHECK(strstr(text, "ahhh") == NULL && strstr(text, ".wav") == NULL, "no sample name is recorded");
+
+    ts_clip_t c;
+    float a[TS_TASTE_NF], b2[TS_TASTE_NF];
+    ts_clip_generate_for(&c, GS_ANY, 5, 2, &e->slot[0], 0.0f, 120.0f, 0.0f, 0.0f);
+    ts_clip_features(&c, a);
+    ts_clip_generate_for(&c, GS_ANY, 5, 2, &e->slot[0], 0.0f, 120.0f, 0.0f, 0.0f);
+    ts_clip_features(&c, b2);
+    int same = 1, finite = 1;
+    for (int j = 0; j < TS_TASTE_NF; j++) { same &= a[j] == b2[j]; finite &= isfinite(a[j]); }
+    CHECK(same && finite && a[3] > 0.0f && a[3] <= 1.0f && a[0] > 0.0f, "the measurements are the same for the same clip, and sensible");
+    ts_clip_features(NULL, a);
+    CHECK(a[0] == 0.0f && a[13] == 0.0f, "no clip: zeros, no crash");
+
+    /* a log that has grown past its limit is kept as .old and a new one begins */
+    FILE *g = fopen(log, "wb");
+    for (int i = 0; i < 8000; i++) fputs("K,0,1,0,0,0,120,0,1,10,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n", g);
+    fclose(g);
+    ts_engine_generate(e);
+    ts_engine_generate(e);
+    ts_engine_service(e);
+    f = fopen(old, "rb");
+    long old_size = 0, new_size = 0;
+    if (f) { fseek(f, 0, SEEK_END); old_size = ftell(f); fclose(f); }
+    f = fopen(log, "rb");
+    if (f) { fseek(f, 0, SEEK_END); new_size = ftell(f); fclose(f); }
+    CHECK(old_size > 400000 && new_size > 0 && new_size < 5000, "past 400 kB it is kept as taste_log.old.csv and a new one begins (%ld and %ld bytes)", old_size, new_size);
+
+    p.taste_log = 0;
+    ts_engine_set_params(e, &p);
+    f = fopen(log, "rb");
+    long before = 0;
+    if (f) { fseek(f, 0, SEEK_END); before = ftell(f); fclose(f); }
+    ts_engine_generate(e);
+    ts_engine_generate(e);
+    ts_engine_service(e);
+    f = fopen(log, "rb");
+    long after = 0;
+    if (f) { fseek(f, 0, SEEK_END); after = ftell(f); fclose(f); }
+    CHECK(before == after, "turned off again: nothing more is written");
+    ts_engine_destroy(e);
+    remove(log); remove(old);
+}
+
 static void test_cues(void)
 {
     printf("cue pads\n");
@@ -3812,6 +3920,7 @@ int main(int argc, char **argv)
     test_bite();
     test_cues();
     test_clip_recipe_view();
+    test_taste_log();
     test_shipped_clips();
     test_pad_runs_clip();
     test_unload_files();

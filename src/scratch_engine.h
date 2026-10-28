@@ -54,6 +54,12 @@ typedef struct {
 #define TS_EX_FIN   4                       /* the clip ends with the whole sample played through */
 #define TS_EX_KNOWN 0x80
 
+/* The taste log (off by default; the Taste Log setting): one line for each clip you keep, pass over or delete, in taste_log.csv next to the
+ * library, with a few numbers measured from the clip. It stays on the Move: nothing reads it or sends it anywhere. */
+#define TS_TASTE_NF 14                      /* the numbers measured from a clip */
+#define TS_TASTE_Q  16
+#define TS_GENERATOR_VERSION 1              /* in the log's header: bump it when the generator's output changes */
+
 typedef struct {
     int   sample;               /* slot 0..5 */
     float turntable;            /* playhead position 0..1 across the sample (manual) */
@@ -65,6 +71,7 @@ typedef struct {
     int   lock;                 /* 1: the clips follow the transport while it runs (and free-run while it is stopped) */
     int   cut_from;             /* lowest cutting note; C3 = 60 */
     int   pads;                 /* 1: the 32 pads are a fixed grid (below) instead of plain notes */
+    int   taste_log;            /* 1: keep a log of the clips you keep, pass over and delete (taste_log.csv, local to this Move) */
     int   cues;                 /* 1: with no clip playing, the bottom row of pads are cues: each drops the needle at an attack of the sample and plays it on */
     int   clip;                 /* 0 off, 1..16 a clip, 17 auto, 18 the clip just generated ("try") */
     int   gen_style;            /* what Generate makes: 0 any, or one of the styles above */
@@ -92,6 +99,15 @@ typedef struct {
 
 /* A generated clip is kept as its recipe: the same recipe makes the same clip. */
 typedef struct { int used, style, bars; uint32_t seed; int fwd; int bpm; int fin; int echo; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100; bpm: the song's tempo */
+
+/* an event for the log, queued where it happens (maybe the audio thread) and written by ts_engine_service */
+typedef struct {
+    volatile int full;
+    char  ev;                   /* K kept, P passed over (Generate pressed again without keeping it), D deleted */
+    int   style, bars, fwd, fin, echo, bpm, sample, extras, played_ds;
+    uint32_t seed;
+    float f[TS_TASTE_NF];
+} taste_ev_t;
 
 typedef struct ts_engine {
     float       sr;
@@ -140,6 +156,10 @@ typedef struct ts_engine {
     uint8_t     removed[TS_SLOTS][TS_NUM_CLIPS];   /* 1: a built-in or imported clip you took off this pad (remembered in the library) */
     int         nclips;         /* how many pads of the selected sample's bank have a clip */
     int         try_idx, try_valid;
+    double      try_t0;         /* when the clip just generated began (free_clock) */
+    int         try_kept, try_sample;
+    taste_ev_t  taste_q[TS_TASTE_Q];
+    unsigned    taste_w, taste_r;
     ts_recipe_t try_recipe, kept[TS_POOL];
     unsigned    gen_count, clips_ver;
     volatile int recipes_dirty;
@@ -166,6 +186,9 @@ typedef struct ts_engine {
 
 ts_engine_t *ts_engine_create(float sample_rate);
 void ts_engine_destroy(ts_engine_t *e);
+
+/* TS_TASTE_NF numbers measured from a clip's data (how busy, how big its strokes, how much is cut in, ...): what the taste log records */
+void ts_clip_features(const ts_clip_t *c, float *f);
 
 void ts_params_default(ts_params_t *p);
 void ts_params_sanitize(ts_params_t *p);

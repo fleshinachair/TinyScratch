@@ -81,7 +81,13 @@ clip never changes):
 | **Gain** | -24 to +12 dB |
 
 **Pad Play: how the pads play.** **Note Gate** (on: the red pads are the fader; off: you always hear the playhead), **Vel to Vol** and
-**Cue Pads** (below). Lock, Normalise, Cut From and Pad Grid keep their defaults.
+**Cue Pads** (below), and **Taste Log** (off). Lock, Normalise, Cut From and Pad Grid keep their defaults.
+
+**Taste Log** is for a future feature (a generator that learns what you like from the clips you keep and pass over). **It is switched
+off by default and nothing uses it yet.** Turned on, it appends a line to `taste_log.csv` in the module's folder each time you keep a clip,
+press Generate again without keeping one (passed over), or delete a clip you kept: its style, length and settings, the seed, how long
+it played, and 14 numbers measured from the clip (how busy, how big the strokes, how much is cut in). No audio, sample name or clip data.
+It stays on your Move; nothing reads it or sends it anywhere. Delete the file to clear it. It is kept to about 800 kB in all.
 
 **Two things are fixed, not dials, because they follow how the real thing works.** The **fader** opens and closes in 1 ms: a scratch DJ sets
 the crossfader curve very steep, so it acts as an on-off switch (Hansen). And playback is **anti-aliased**: each sample is kept with copies at

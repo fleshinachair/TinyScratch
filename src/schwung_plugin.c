@@ -32,7 +32,7 @@ static const char *const k_recipe_file = "/data/UserData/schwung/modules/sound_g
 
 enum { K_ENUM, K_FLOAT, K_INT, K_CANVAS, K_STRING, K_FILEPATH };
 enum { P_SAMPLE, P_TURNTABLE, P_DRAG, P_GAIN, P_NOTE_GATE, P_VEL_VOL, P_NORMALISE,
-       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_BITE, P_GEN_FIN, P_GEN_ECHO, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_SAMPLE_FILE,
+       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_BITE, P_GEN_FIN, P_GEN_ECHO, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_TASTE_LOG, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_SAMPLE_FILE,
        P_PAD_RAW, P_PAD_CUTS,
        P_VIEW, P_WAVE, P_FULL, P_STATUS,
        P_COUNT };
@@ -83,6 +83,7 @@ static const pdef_t k_params[P_COUNT] = {
     [P_CLIP_DEPTH]  = { "clip_depth", "Clip Depth", K_FLOAT, NULL, 0, 0.0f, 2.0f, 1.0f, 0.02f, NULL },
     [P_CLIP_OFFSET] = { "clip_offset", "Clip Offset", K_FLOAT, NULL, 0, -0.5f, 0.5f, 0.0f, 0.01f, NULL },
     [P_CUES]        = { "cues", "Cue Pads", K_ENUM, o_onoff, 2, 0, 1, 1, 0, NULL },    [P_CLIP_PAD]    = { "clip_pad", "Clip Pad", K_INT, NULL, 0, 0, 16, 0, 1, NULL },
+    [P_TASTE_LOG]   = { "taste_log", "Taste Log", K_ENUM, o_onoff, 2, 0, 1, 0, 0, NULL },
     [P_CLIP_DEL]    = { "clip_delete", "Delete Clip", K_INT, NULL, 0, 0, 16, 0, 1, NULL },
     [P_ZOOM]        = { "zoom", "Zoom", K_INT, NULL, 0, 0, 3, 0, 1, NULL },
     /* sampling: Record takes the audio input into the selected User slot (4 s at most, or until it is turned off; cropped to its sound), Clear empties it */
@@ -112,7 +113,7 @@ static const pdef_t k_params[P_COUNT] = {
 /* The pages, in the order the host shows them: the picture, then
  *   Main        the generator: the Pads screen (the first dial), Load Sample, and what Generate makes (Style, Length, Forwards, Finish, Echo)
  *   Playback    how clips play: Swing, Humanise, Clip Depth, Clip Offset, Drag, Gain
- *   Pad Play    how the pads play: Note Gate, Vel to Vol, Cue Pads
+ *   Pad Play    how the pads play: Note Gate, Vel to Vol, Cue Pads; and Taste Log (a log of the clips you keep, pass over and delete, local to the Move)
  *   Waveform    the sample full size, always the last page
  * Choosing the sample, the clip and everything else about Generate is done on the pads, so none of it is a dial. The first dial opens
  * the Pads screen (and does nothing while you are on it). What the Pads screen writes (the raw pads, the cuts, the sample, the clip)
@@ -122,7 +123,7 @@ static const pdef_t k_params[P_COUNT] = {
 static const int pg_root[] = { P_VIEW, P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO };
 static const int kn_root[] = { P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO };
 static const int pg_playback[] = { P_SWING, P_HUMANISE, P_BITE, P_CLIP_DEPTH, P_CLIP_OFFSET, P_DRAG, P_GAIN };
-static const int pg_padplay[] = { P_NOTE_GATE, P_VEL_VOL, P_CUES };
+static const int pg_padplay[] = { P_NOTE_GATE, P_VEL_VOL, P_CUES, P_TASTE_LOG };
 static const int pg_wave[] = { P_WAVE };
 
 /* a page is a level of the hierarchy; its first `nknobs` params are its dials (a page has eight at most; the waveform has none) */
@@ -158,7 +159,8 @@ static float pget(const ts_params_t *p, int i)
     case P_GEN_ECHO: return p->gen_echo;
     case P_CLIP_DEPTH: return p->clip_depth;
     case P_CLIP_OFFSET: return p->clip_offset;
-    case P_CUES: return (float)p->cues;    default: return 0.0f;
+    case P_CUES: return (float)p->cues;
+    case P_TASTE_LOG: return (float)p->taste_log;    default: return 0.0f;
     }
 }
 
@@ -187,7 +189,8 @@ static void pset(ts_params_t *p, int i, float v)
     case P_GEN_ECHO: p->gen_echo = v; break;
     case P_CLIP_DEPTH: p->clip_depth = v; break;
     case P_CLIP_OFFSET: p->clip_offset = v; break;
-    case P_CUES: p->cues = v >= 0.5f; break;    default: break;                                     /* the screen, the status string and the Save button are not values */
+    case P_CUES: p->cues = v >= 0.5f; break;
+    case P_TASTE_LOG: p->taste_log = v >= 0.5f; break;    default: break;                                     /* the screen, the status string and the Save button are not values */
     }
 }
 
