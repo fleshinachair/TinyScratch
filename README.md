@@ -176,7 +176,8 @@ phrase becomes a fill of sixteenths. No two clips are alike at any setting.
 
 **Groove leaves room for a beat.** On its own a clip with Groove up can sound thin, because the gaps it leaves are where the drums of a song would be; over a
 track it sits in them. Keep it at 0% for clips that should stand alone, and judge it over music. The seven grooves are standard patterns, not the
-song's own drums, so some fit a track better than others. (With the Taste Log on, each clip's groove is recorded.)
+song's own drums, so some fit a track better than others. A clip made with Groove shows it on the bottom line with its percentage and the groove it kept to
+(GRV60 FUNK; BOOM, FLOOR, BRKS, HALF, FUNK, DEMBO or OPEN). With the Taste Log on, each clip's groove is recorded.
 
 ## Samples
 

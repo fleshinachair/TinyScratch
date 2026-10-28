@@ -21,6 +21,7 @@
     var CLIP_PADS = 14;                                 /* clip pads 1-14; the next two places are Generate (15) and Auto (16) */
     var PAGES = 4;                                      /* pages of clip pads: < and > turn them (the Move's left and right buttons, CC 62 and 63) */
     var LEFT_CC = 62, RIGHT_CC = 63;
+    var GROOVES = ["BOOM", "FLOOR", "BRKS", "HALF", "FUNK", "DEMBO", "OPEN"];     /* the seven grooves, as the engine numbers them */
     var PAGE_CLIP = [23, 16, 26, 8];                    /* a clip pad's colour on each page (the palette: purple, azure, magenta, yellow) */
     var CLIP_AUTO = 17, CLIP_TRY = 18;               /* the clip parameter: 0 off, 1..16 a clip, 17 auto, 18 the clip just generated */
     var HOLD_MS = 1500;                                /* hold a clip you made, or a User sample, this long to delete / unload it (the Delete button never reaches a screen) */
@@ -260,12 +261,20 @@
     /* besides its style, which of Echo, Forwards and Finish are really in the clip (cx, from the generator: a bit each; -1, or none of them: nothing) */
     /* ...and the Groove it was made with, when it was not 0 (GRV60). When the two do not fit beside the label, the extras are initials: E F N. */
     function clipExtras(v, leftLen) {
-        var x = Math.round(num(v.cx, -1)), g = clamp(Math.round(num(v.cg, 0)), 0, 100);
+        var x = Math.round(num(v.cx, -1)), g = clamp(Math.round(num(v.cg, 0)), 0, 100), ct = clamp(Math.round(num(v.ct, 0)), 0, GROOVES.length);
         var words = x < 0 ? [] : [x & 1 ? "ECHO" : "", x & 2 ? "FWD" : "", x & 4 ? "FIN" : ""].filter(Boolean);
-        var grv = g > 0 ? "GRV" + g : "";
-        var full = words.concat(grv ? [grv] : []).join(" ");
-        if (leftLen !== undefined && (leftLen + 1 + full.length) * 4 > 126)
-            full = words.map(function (w) { return w[0]; }).concat(grv ? [grv] : []).join(" ");
+        var name = g > 0 && ct > 0 ? GROOVES[ct - 1] : "";                                    /* (GRV60 FUNK: which of the seven grooves it kept to) */
+        function build(initials, withName) {
+            var parts = initials ? words.map(function (w) { return w[0]; }) : words.slice();
+            if (g > 0) parts.push("GRV" + g + (withName && name ? " " + name : ""));
+            return parts.join(" ");
+        }
+        var full = build(false, true);
+        if (leftLen !== undefined) {
+            var fits = function (t) { return (leftLen + 1 + t.length) * 4 <= 126; };
+            if (!fits(full)) full = build(true, true);
+            if (!fits(full)) full = build(true, false);
+        }
         return full;
     }
 

@@ -2314,6 +2314,7 @@ static void test_groove(void)
     memcpy(&made, &e->clip_data[e->bank[2][pad - 1] - 1], sizeof made);
     play_a_little(e);
     CHECK(view_int(e, "cg") == 60, "the screen is told the Groove the clip playing was made with (%d)", view_int(e, "cg"));
+    CHECK(view_int(e, "ct") >= 1 && view_int(e, "ct") <= N_GROOVE && view_int(e, "ct") == ((made.extras >> TS_EX_TMPL_SHIFT) & 15), "...and which of the seven grooves it kept to (%d)", view_int(e, "ct"));
     ts_engine_service(e);
     read_text(lib, text, sizeof text);
     int col = 0; unsigned long sdv = 0; int smp = -1, pd = -1, sty = -1, bs = -1, fw = -1, bp = -1, fn = -1, ec = -1, gr = -1;

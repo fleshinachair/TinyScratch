@@ -594,7 +594,8 @@ fixtures.forEach((v, i) => {
         const bt = fixtures[0];
         const made = (extra) => { const cx = makeCtx(); box.__tinyscratch.drawView(cx, Object.assign({}, bt, { cm: 3, cl: 3, ln: 0, rw: 1, gs: 0, gb: 1 }, extra), false); return cx; };
         const none = made({ cy: 1, cx: 0 }), echo = made({ cy: 1, cx: 1 }), all = made({ cy: 1, cx: 7 });
-        const grv = made({ cy: 0, cx: 0, cg: 60 }), grv0 = made({ cy: 0, cx: 0, cg: 0 }), worst = made({ cy: 0, cx: 7, cg: 100, cp: 1, cl: 12, ln: 0 });
+        const grv = made({ cy: 0, cx: 0, cg: 60 }), grv0 = made({ cy: 0, cx: 0, cg: 0 }), worst = made({ cy: 0, cx: 7, cg: 100, ct: 6, cp: 1, cl: 12, ln: 0 });
+        const named = made({ cy: 0, cx: 0, cg: 60, ct: 5 }), namedOther = made({ cy: 0, cx: 0, cg: 60, ct: 2 }), noName0 = made({ cy: 0, cx: 0, cg: 0, ct: 5 });
         const plain = made({ cy: -1 }), other = made({ cy: 5, cx: 0 }), unknown = made({ cy: 1, cx: -1 });
         const right = (cx) => cx.count(64, 58, 127, 63), left = (cx) => cx.count(0, 58, 63, 63);
         check(left(none) !== left(other) || JSON.stringify([...none.px]) !== JSON.stringify([...other.px]), "the clip playing says its style (BABY, then STAB)");
@@ -602,6 +603,8 @@ fixtures.forEach((v, i) => {
         check(right(echo) > 8 && right(all) > right(echo), `each one used is named (${right(echo)} then ${right(all)} pixels)`);
         check(right(plain) > 15, "a clip with no recipe (a built-in one) keeps the Generate summary");
         check(right(grv) > 8 && right(grv0) === 0, "a clip made with Groove says so (GRV60); at 0 it says nothing");
+        check(right(named) > right(grv) && JSON.stringify([...named.px]) !== JSON.stringify([...namedOther.px]), "the groove it kept to is named after the percentage (GRV60 FUNK), and a different groove looks different");
+        check(right(noName0) === 0, "at Groove 0 there is no groove to name");
         check(worst.oob === 0 && worst.count(100, 58, 127, 63) > 8, "the longest case (a page, all three extras, Groove 100) still fits the line (" + worst.oob + " off the screen)");
     }
     // the Move lights a pressed pad (and the one an octave away) itself: whatever it writes is put back at once

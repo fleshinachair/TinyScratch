@@ -1,5 +1,11 @@
 # TinyScratch release notes
 
+## v1.0.1
+
+- A clip made with Groove now says **which groove** it kept to on the bottom line, after its percentage: **GRV60 FUNK** (BOOM, FLOOR, BRKS, HALF,
+  FUNK, DEMBO or OPEN). It is shown for clips made with Groove in 1.0.0 and later; clips from before Groove, or whose saved data an older
+  generator made, show no name.
+
 ## v1.0.0
 
 - **Groove.** A new dial that makes **Improv** keep to a drum groove, the way a scratch DJ plays over a beat. It is dial 8 on the Main page,
