@@ -553,12 +553,12 @@ fixtures.forEach((v, i) => {
     ctx.sets.length = 0;
     for (let n = 0; n < 8; n++) for (let i = 0; i < 4; i++) knob(n, 1);
     const written = new Set(ctx.sets.map(([k]) => k));
-    check(["gen_style", "gen_bars", "drag", "humanise", "swing", "gen_echo", "gen_fwd", "gen_fin"].every((k) => written.has(k)) && written.size === 8,
+    check(["gen_style", "gen_bars", "drag", "humanise", "gen_groove", "gen_echo", "gen_fwd", "gen_fin"].every((k) => written.has(k)) && written.size === 8,
         "all eight dials do something, and nothing else is written: " + [...written].join(" "));
     const step = (n, key) => { ctx.sets.length = 0; knob(n, 1); knob(n, 1); const vs = ctx.sets.filter(([k]) => k === key).map(([, v]) => Number(v)); return vs.length === 2 ? vs[1] - vs[0] : NaN; };
     check(Math.abs(step(2, "drag") - 0.02) < 1e-6, "dial 3 is Drag, 2% a detent");
     check(Math.abs(step(3, "humanise") - 0.02) < 1e-6, "dial 4 is Humanise, 2% a detent");
-    check(Math.abs(step(4, "swing") - 0.02) < 1e-6, "dial 5 is Swing, 2% a detent");
+    check(Math.abs(step(4, "gen_groove") - 0.05) < 1e-6, "dial 5 is Groove, 5% a detent");
     check(Math.abs(step(5, "gen_echo") - 0.05) < 1e-6, "dial 6 is Echo, 5% a detent");
     check(Math.abs(step(6, "gen_fwd") - 0.05) < 1e-6, "dial 7 is Forwards, 5% a detent");
     check(Math.abs(step(7, "gen_fin") - 0.05) < 1e-6, "dial 8 is Finish, 5% a detent");
@@ -953,7 +953,7 @@ fixtures.forEach((v, i) => {
 // 9. the labels and the pad grid agree with the engine's
 {
     check(T.padIndex(67) === 31 && T.padIndex(68) === 0 && T.padIndex(99) === 31 && T.padIndex(36) === 0 && T.padIndex(35) === -1 && T.padIndex(100) === -1, "pad notes: 36-67 and 68-99 are the same 32 pads");
-    check(T.KNOBS.length === 8 && ["gen_style", "gen_bars", "drag", "humanise", "swing", "gen_echo", "gen_fwd", "gen_fin"].every((k, i) => T.KNOBS[i] && T.KNOBS[i].key === k), "the dials: Style, Length, Drag, Humanise, Swing, Echo, Forwards, Finish");
+    check(T.KNOBS.length === 8 && ["gen_style", "gen_bars", "drag", "humanise", "gen_groove", "gen_echo", "gen_fwd", "gen_fin"].every((k, i) => T.KNOBS[i] && T.KNOBS[i].key === k), "the dials: Style, Length, Drag, Humanise, Groove, Echo, Forwards, Finish");
 }
 
 // 10. the waveform screen

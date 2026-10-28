@@ -43,15 +43,15 @@
      * them (checked against what the Move really lit: 120 white, 127 red, 7 yellow, 123 grey, 11 and 13 greens, 23 purple, 3 orange). */
     var COL = { off: 0, white: 120, cut: 127, cutHot: 120, clip: 23, clipNow: 13, sample: 7, sampleEmpty: 123, clipAuto: 11, clipNo: 127, gen: 3, cue: 13 };
 
-    /* The eight dials on the Pads screen, in the order that reads: what Generate makes (Style, Length), then how it plays (Drag, Humanise,
-     * Swing), then what Generate adds (Echo, Forwards, Finish). The sample, the clip and Generate are on the pads; Load Sample and the rest of
+    /* The eight dials on the Pads screen, in the order that reads: what Generate makes (Style, Length), then how it plays (Drag, Humanise),
+     * then what Generate adds (Groove, Echo, Forwards, Finish). Swing is on the Playback page. The sample, the clip and Generate are on the pads; Load Sample and the rest of
      * the settings (Bite, Clip Depth, Gain, ...) are on the module's own pages. */
     var KNOBS = [
         { key: "gen_style", v: "gs", min: 0, max: 12, steps: true, detents: 2 },
         { key: "gen_bars", v: "gb", min: 0, max: 2, steps: true, detents: 3 },
         { key: "drag", v: "dr", min: 0, max: 1, step: 0.02 },                          /* how quickly the playhead follows: digital to analogue */
         { key: "humanise", v: "hu", min: 0, max: 1, step: 0.02 },                      /* every clip, as it plays: looser timing, cuts, strokes */
-        { key: "swing", v: "sw", min: 0, max: 1, step: 0.02 },                         /* every clip, as it plays: the second sixteenth of a pair late */
+        { key: "gen_groove", v: "gg", min: 0, max: 1, step: 0.05 },                    /* how far Improv keeps to a drum groove: room for a beat, rests, a fill */
         { key: "gen_echo", v: "ec", min: 0, max: 1, step: 0.05 },                      /* how often a bar holds an echo scratch: a stab four times, each lower */
         { key: "gen_fwd", v: "gf", min: 0, max: 1, step: 0.05 },                       /* how often Improv lets the record go through the word */
         { key: "gen_fin", v: "fn", min: 0, max: 1, step: 0.05 }                        /* how often a clip ends with the whole sample played through */
@@ -512,6 +512,7 @@
         case "gen_fwd": return "FORWARDS " + Math.round(val * 100) + "%";
         case "swing": return "SWING " + Math.round(val * 100) + "%";
         case "drag": return "DRAG " + Math.round(val * 100) + "%";
+        case "gen_groove": return "GROOVE " + Math.round(val * 100) + "%";
         case "humanise": return "HUMANISE " + Math.round(val * 100) + "%";
         case "gen_fin": return "FINISH " + Math.round(val * 100) + "%";
         case "gen_echo": return "ECHO " + Math.round(val * 100) + "%";
