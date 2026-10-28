@@ -66,7 +66,7 @@ static void t_free(void *p)
  * Every engine and every set of defaults they make is cleaned at once; the tests that check the real defaults use the _raw functions. */
 static void ts_params_default_raw(ts_params_t *p) { ts_params_default(p); }
 static ts_engine_t *ts_engine_create_raw(float sr) { return ts_engine_create(sr); }
-static void test_clean(ts_params_t *p) { p->humanise = 0.0f; p->bite = 0.0f; }
+static void test_clean(ts_params_t *p) { p->humanise = 0.0f; p->bite = 0.0f; p->taste_log = 0; }
 static ts_engine_t *test_engine_create(float sr) { ts_engine_t *e = ts_engine_create_raw(sr); if (e) test_clean(&e->p); return e; }
 #define ts_params_default(p) do { ts_params_default_raw(p); test_clean(p); } while (0)
 #define ts_engine_create(sr) test_engine_create(sr)
@@ -2070,7 +2070,9 @@ static void test_taste_log(void)
     load_sample(e, 0, "ahhh.wav", SMP_SINE, 0.5f, 44100);
     ts_params_t p;
     ts_params_default(&p);
-    CHECK(p.taste_log == 0, "the log is off by default");
+    ts_params_t dd;
+    ts_params_default_raw(&dd);
+    CHECK(dd.taste_log == 1 && p.taste_log == 0, "the log starts on (it stays on the Move); these tests start with it off");
     p.pads = 0; p.clip = 0; p.gen_style = GS_ANY; p.gen_bars = 1; p.gen_echo = 0.5f; p.gen_fin = 0.5f;
     ts_engine_set_params(e, &p);
     ts_engine_generate(e);

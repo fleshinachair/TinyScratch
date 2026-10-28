@@ -1654,7 +1654,7 @@ void ts_params_default(ts_params_t *p)
     p->cut_from = TS_CUT_NOTE;
     p->pads = 1;
     p->cues = 1;
-    p->taste_log = 0;                    /* the log is opt-in */
+    p->taste_log = 1;                    /* on: it stays on this Move, and nothing reads it or sends it anywhere (it is for the taste feature, later) */
     p->clip = TS_CLIP_AUTO;              /* the clips in turn: a routine from the first press */
     p->gen_style = 0;
     p->gen_bars = 1;                     /* two bars */

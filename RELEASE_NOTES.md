@@ -1,5 +1,12 @@
 # TinyScratch release notes
 
+## v0.9.3
+
+- **Taste Log is now on by default.** It is the groundwork for a future feature (a generator that learns what you like), and it needs
+  some history to learn from, so it starts logging from the first clip you keep, pass over or delete. Nothing uses it yet. **It never
+  leaves your Move: TinyScratch does not send it or ask for it.** It holds no audio, sample name or clip data, it is kept to about 800 kB,
+  and you can switch it off (Pad Play page) or delete `taste_log.csv` at any time.
+
 ## v0.9.2
 
 - **Taste Log** (Pad Play page), groundwork for a future feature: a generator that learns what you like. **It is switched off by default
