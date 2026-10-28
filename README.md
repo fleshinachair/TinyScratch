@@ -226,6 +226,7 @@ TinyScratch's code is released under the [MIT licence](LICENSE). The two sample 
     scripts/install_move.sh           build, copy to the Move over SSH, verify, restart
     scripts/fetch_audition_samples.sh public-domain samples of your own to try as a User sample (samples_audition/, gitignored)
     tools/import_clips.py             reads clips from an Ableton Live Pack you own into local/clips.bin
+    help.json                         the on-device help (Schwung's Help viewer, and the Module Help row on this module's pages)
 
 - The DSP serves the screens one JSON string, `view`; `scratcher.js` and `waveform.js` are canvas scripts that only draw it.
 - `module.json` is generated from the plugin's parameter table (`scripts/gen_manifest.sh`) so the two cannot drift.

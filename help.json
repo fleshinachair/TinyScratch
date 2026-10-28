@@ -1,0 +1,205 @@
+{
+  "title": "TinyScratch",
+  "children": [
+    {
+      "title": "Overview",
+      "lines": [
+        "A generative auto-",
+        "scratcher. Press a",
+        "pad and it writes a",
+        "scratch for your",
+        "sample, plays it in",
+        "time with the song,",
+        "and lets you keep",
+        "the ones you like."
+      ]
+    },
+    {
+      "title": "Getting Started",
+      "lines": [
+        "1 Touch dial 1 and",
+        "  press the jog",
+        "  wheel: the Pads",
+        "  screen opens.",
+        "2 Press Generate",
+        "  (a pad). A clip",
+        "  plays at once.",
+        "3 Tap an empty clip",
+        "  pad to keep it.",
+        "4 Hold a clip pad",
+        "  1.5 s to delete.",
+        "5 Press Play on the",
+        "  Move: clips",
+        "  follow the",
+        "  transport."
+      ]
+    },
+    {
+      "title": "The Pads",
+      "lines": [
+        "Bottom row: cut",
+        "pads (the fader),",
+        "or cues with no",
+        "clip playing.",
+        "",
+        "Row 2: the 8",
+        "samples. Hold an",
+        "empty User pad to",
+        "record.",
+        "",
+        "Top 2 rows: 14",
+        "clips, then",
+        "Generate and Auto."
+      ]
+    },
+    {
+      "title": "The Dials",
+      "children": [
+        {
+          "title": "Pads Screen",
+          "lines": [
+            "1 Style",
+            "2 Length",
+            "3 Drag",
+            "4 Humanise",
+            "5 Groove",
+            "6 Echo",
+            "7 Forwards",
+            "8 Finish",
+            "",
+            "Touch a dial to see",
+            "its name and value."
+          ]
+        },
+        {
+          "title": "Main Page",
+          "lines": [
+            "1 Pads screen",
+            "2 Load Sample",
+            "3 Style",
+            "4 Length",
+            "5 Forwards",
+            "6 Finish",
+            "7 Echo",
+            "8 Groove"
+          ]
+        },
+        {
+          "title": "Playback Page",
+          "lines": [
+            "Swing, Humanise,",
+            "Bite, Clip Depth,",
+            "Clip Offset, Drag",
+            "and Gain.",
+            "",
+            "They change how a",
+            "clip plays, never",
+            "the clip itself."
+          ]
+        },
+        {
+          "title": "Pad Play Page",
+          "lines": [
+            "Note Gate, Vel to",
+            "Vol, Cue Pads and",
+            "Taste Log."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Styles",
+      "lines": [
+        "Improv: a phrase of",
+        "strokes of every",
+        "length, answered by",
+        "a changed copy (use",
+        "4 bars to hear it).",
+        "",
+        "Named styles:",
+        "Baby, Cuts,",
+        "Military, Scribble,",
+        "Stab, Chirp,",
+        "Transform, Flare,",
+        "Crab, Orbit, Drag",
+        "and Tear."
+      ]
+    },
+    {
+      "title": "Groove",
+      "lines": [
+        "Improv only. Keeps",
+        "a clip to a drum",
+        "groove: strokes land",
+        "on the snare, kicks",
+        "are left clear, there",
+        "are rests, and a fill",
+        "ends each phrase.",
+        "",
+        "It leaves room for a",
+        "beat: thin alone,",
+        "good over a song.",
+        "At 0% Improv is as",
+        "it was.",
+        "",
+        "Grooves: Boom-bap,",
+        "Four on the floor,",
+        "Breaks, Half-time,",
+        "Funk, Dembow, Open.",
+        "",
+        "GRV60 FUNK on a clip",
+        "is its amount and",
+        "groove."
+      ]
+    },
+    {
+      "title": "Clip Pages",
+      "lines": [
+        "4 pages of 14 clips",
+        "for each sample.",
+        "Press > and < (right",
+        "and left arrows) to",
+        "turn the page.",
+        "",
+        "A playing clip keeps",
+        "playing on its page;",
+        "its page mark",
+        "blinks. Auto plays",
+        "the clips of every",
+        "page."
+      ]
+    },
+    {
+      "title": "Samples",
+      "lines": [
+        "Ahhh and Fresssh",
+        "are built in.",
+        "",
+        "Record a User sample",
+        "by holding its empty",
+        "pad (4 s at most), or",
+        "use Load Sample for a",
+        ".wav file.",
+        "",
+        "Hold a User pad 1.5 s",
+        "to remove it."
+      ]
+    },
+    {
+      "title": "Taste Log",
+      "lines": [
+        "On by default. It",
+        "logs each clip you",
+        "keep, pass over or",
+        "delete, in",
+        "taste_log.csv in the",
+        "module folder.",
+        "",
+        "It never leaves your",
+        "Move. Switch it off",
+        "on Pad Play, or",
+        "delete the file."
+      ]
+    }
+  ]
+}

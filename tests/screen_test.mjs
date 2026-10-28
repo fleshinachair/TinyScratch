@@ -1068,5 +1068,19 @@ fixtures.forEach((v, i) => {
     check(hi.count(20, 34, 60, 36) > 20 && hi.count(20, 41, 60, 42) < 3 && lo.count(20, 41, 60, 42) > 20 && lo.count(20, 34, 60, 36) < 3, "high is up, low is down");
 }
 
+// help.json: the on-device help. Schwung drops a file whose top level has no `children`, never wraps a line, and draws only ASCII (and its own
+// width test measures the pixels: widest right edge x=126 of 127 when this was written).
+{
+    let help = null;
+    try { help = JSON.parse(fs.readFileSync(path.join(root, "help.json"), "utf8")); } catch (e) { help = null; }
+    check(help && Array.isArray(help.children) && help.children.length > 5, "help.json is valid and its top level has children");
+    const lines = [];
+    const walk = (n) => { (n.lines || []).forEach((l) => lines.push(l)); (n.children || []).forEach(walk); if (!(n.lines || n.children)) check(false, "a help topic has neither lines nor children: " + n.title); };
+    if (help) help.children.forEach(walk);
+    check(lines.length > 100 && lines.every((l) => /^[ -~]*$/.test(l)), "every help line is plain ASCII (" + lines.length + " lines)");
+    const longest = lines.reduce((a, l) => (l.length > a.length ? l : a), "");
+    check(longest.length <= 21, "no help line is longer than 21 characters (\"" + longest + "\", " + longest.length + ")");
+}
+
 console.log(`screen: ${checks} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

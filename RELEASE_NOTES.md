@@ -1,5 +1,10 @@
 # TinyScratch release notes
 
+## v1.0.2
+
+- **On-device help.** TinyScratch now ships a `help.json`, so its help is in Schwung's Help viewer (Global Settings, System, Help) and one jog from
+  its controls (the Module Help row): getting started, the pads, every dial, the styles, Groove, clip pages, samples and the Taste Log.
+
 ## v1.0.1
 
 - A clip made with Groove now says **which groove** it kept to on the bottom line, after its percentage: **GRV60 FUNK** (BOOM, FLOOR, BRKS, HALF,
