@@ -1,5 +1,12 @@
 # TinyScratch release notes
 
+## v0.9.1
+
+- **Bug fix.** Tapping a clip pad on the Pads screen could also reach the Move itself, and if the Move was sitting in its Set overview
+  or Session view it opened another Set or launched a clip. The Pads screen now keeps its pads to itself while it is up.
+- **Pads screen.** The clip playing now shows its style next to its number (CLIP 3 BABY), and, bottom right, which of Echo, Forwards
+  and Finish are really in it (nothing if none). Humanise now starts at 35% and Bite at 10%.
+
 ## v0.9.0
 
 First public release. TinyScratch is a generative auto-scratcher for the Ableton Move (a Schwung sound generator): press a pad and it
