@@ -2101,7 +2101,7 @@ static void test_taste_log(void)
     while (row && strstr(row + 1, "\nP,")) row = strstr(row + 1, "\nP,");          /* the last one: made after the log was on, and played a while */
     int commas = 0;
     if (row) for (const char *c = row + 1; *c && *c != '\n'; c++) commas += *c == ',';
-    CHECK(row && commas == 10 + TS_TASTE_NF, "a line has its recipe, what happened, and %d measurements (%d commas)", TS_TASTE_NF, commas);
+    CHECK(row && commas == 10 + TS_TASTE_NF + 1, "a line has its recipe, what happened, and %d measurements (%d commas)", TS_TASTE_NF, commas);
     unsigned long seed = 0; int style = -1, bars = -1, fwd, fin = -1, echo = -1, bpm, sm = -1, ds = -1, ex = -9;
     CHECK(row && sscanf(row + 3, "%d,%d,%d,%d,%d,%d,%d,%lu,%d,%d", &style, &bars, &fwd, &fin, &echo, &bpm, &sm, &seed, &ds, &ex) == 10 && style == GS_ANY && bars == 2 && fin == 50 && echo == 50 && sm == 0 && seed != 0 && ds >= 10 && ex >= 0,
           "...which says what it was (style %d, bars %d, Finish %d, Echo %d, sample %d, played %d tenths, extras %d)", style, bars, fin, echo, sm, ds, ex);
@@ -2235,6 +2235,106 @@ static void test_clip_pages(void)
     CHECK(e->p.clip == 5 && e->p.clip_page == 2 && e->view_page == 2, "...and coming back, the sample's page is shown again");
     ts_engine_destroy(e);
     remove(lib); remove(TDIR "/rec/kept.bin");
+}
+
+/* Groove: Improv keeps to a drum pattern's pocket, rests on the kicks, fills the end of a phrase; 0 is as it always was; a named style is untouched */
+static void test_groove(void)
+{
+    printf("groove" "\n");
+    const char *lib = TDIR "/rec/recipes.txt";
+    static char text[4096];
+    remove(lib); remove(TDIR "/rec/kept.bin"); remove(TDIR "/rec/taste_log.csv");
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_engine_set_recipes_path(e, lib);
+    load_sample(e, 2, "user1.wav", SMP_SINE, 0.5f, 44100);
+    static ts_clip_t a, b;
+    int same0 = 1, det = 1, baby_same = 1, tmpl_ok = 1;
+    for (uint32_t sd = 1; sd <= 40; sd++) {
+        ts_clip_generate_for(&a, GS_ANY, sd * 7919u, 2, &e->slot[2], 0.0f, 120.0f, 0.1f, 0.1f);
+        ts_clip_generate_ex(&b, GS_ANY, sd * 7919u, 2, &e->slot[2], 0.0f, 120.0f, 0.1f, 0.1f, 0.0f);
+        same0 &= memcmp(a.pos, b.pos, sizeof(uint16_t) * (size_t)a.n) == 0 && memcmp(a.gate, b.gate, (size_t)a.n) == 0 && a.n == b.n && !(b.extras & 0x78);
+        ts_clip_generate_ex(&a, GS_ANY, sd * 7919u, 2, &e->slot[2], 0.0f, 120.0f, 0.1f, 0.1f, 0.7f);
+        ts_clip_generate_ex(&b, GS_ANY, sd * 7919u, 2, &e->slot[2], 0.0f, 120.0f, 0.1f, 0.1f, 0.7f);
+        det &= memcmp(a.pos, b.pos, sizeof(uint16_t) * (size_t)a.n) == 0 && memcmp(a.gate, b.gate, (size_t)a.n) == 0;
+        tmpl_ok &= ((a.extras >> TS_EX_TMPL_SHIFT) & 15) >= 1 && ((a.extras >> TS_EX_TMPL_SHIFT) & 15) <= N_GROOVE;
+        ts_clip_generate_for(&a, GS_BABY, sd * 7919u, 2, &e->slot[2], 0.0f, 120.0f, 0.1f, 0.1f);
+        ts_clip_generate_ex(&b, GS_BABY, sd * 7919u, 2, &e->slot[2], 0.0f, 120.0f, 0.1f, 0.1f, 1.0f);
+        baby_same &= memcmp(a.pos, b.pos, sizeof(uint16_t) * (size_t)a.n) == 0 && memcmp(a.gate, b.gate, (size_t)a.n) == 0;
+    }
+    CHECK(same0, "Groove at 0 makes exactly the clip there was before there was a Groove");
+    CHECK(det && tmpl_ok, "the same seed and Groove make the same clip, and it says which groove it kept to");
+    CHECK(baby_same, "a named style is untouched by Groove");
+
+    /* what it does, over many clips: the kick is left clear, there is more silence, strokes sit nearer the snare */
+    const int GPS = TS_CLIP_RES / 4;
+    double kick_empty[2] = { 0, 0 }, silent[2] = { 0, 0 }, onkick[2] = { 0, 0 };
+    int nk[2] = { 0, 0 }, no[2] = { 0, 0 }, kinds[N_GROOVE] = { 0 };
+    for (int pass = 0; pass < 2; pass++)
+        for (uint32_t sd = 1; sd <= 300; sd++) {
+            ts_clip_generate_ex(&a, GS_ANY, sd * 104729u, 2, &e->slot[2], 0.0f, 120.0f, 0.1f, 0.1f, pass ? 1.0f : 0.0f);
+            const int tm = (a.extras & 0x78) ? ((a.extras >> TS_EX_TMPL_SHIFT) & 15) - 1 : (int)(mix32(sd * 104729u ^ 0x7E3A1D00u) % (unsigned)N_GROOVE);
+            kinds[tm]++;
+            const groove_t *t = &k_groove[tm];
+            int ons = 0, onk = 0, sil = 0;
+            for (int bar = 0; bar < 2; bar++)
+                for (int st = 0; st < 16; st++) {
+                    int open = 0, rise = 0;
+                    for (int i = (bar * 16 + st) * GPS; i < (bar * 16 + st + 1) * GPS; i++) { open += a.gate[i] > 0; rise |= a.gate[i] > 0 && a.gate[(i + a.n - 1) % a.n] == 0; }
+                    const int konly = (t->kick & (1u << st)) && !(t->snare & (1u << st));
+                    sil += open * 4 <= GPS;
+                    if (konly) { nk[pass]++; kick_empty[pass] += open * 4 <= GPS; }
+                    if (rise) { ons++; onk += konly; }
+                }
+            silent[pass] += sil / 32.0;
+            if (ons) { onkick[pass] += (double)onk / ons; no[pass]++; }
+        }
+    const double ke0 = kick_empty[0] / nk[0], ke1 = kick_empty[1] / nk[1], si0 = silent[0] / 300, si1 = silent[1] / 300, ok0 = onkick[0] / no[0], ok1 = onkick[1] / no[1];
+    CHECK(ke1 > ke0 + 0.25, "at 100%% the kick steps are left empty far more often (%.0f%% against %.0f%%)", 100 * ke1, 100 * ke0);
+    CHECK(si1 > si0 + 0.04, "...there is more silence (%.0f%% of steps against %.0f%%)", 100 * si1, 100 * si0);
+    CHECK(ok1 < ok0 - 0.04, "...and fewer sounds start on a kick (%.0f%% against %.0f%%)", 100 * ok1, 100 * ok0);
+    int used = 0;
+    for (int i = 0; i < N_GROOVE; i++) used += kinds[i] > 10;
+    CHECK(used == N_GROOVE, "every groove gets used (%d of %d)", used, N_GROOVE);
+
+    /* the setting, the recipe, the library and the log */
+    ts_params_t p;
+    ts_params_default(&p);
+    CHECK(p.gen_groove == 0.0f, "Groove starts at 0");
+    p.sample = 2; p.pads = 0; p.clip = 0; p.gen_style = GS_ANY; p.gen_bars = 1; p.gen_groove = 9.0f; p.taste_log = 1;
+    ts_engine_set_params(e, &p);
+    CHECK(e->p.gen_groove == 1.0f, "Groove is clamped to 0..1");
+    p.gen_groove = 0.6f;
+    ts_engine_set_params(e, &p);
+    ts_engine_generate(e);
+    play_a_little(e);
+    {   static char vj[8192]; double gg = -1; ts_engine_view(e, vj, sizeof vj); json_num(vj, "gg", &gg); CHECK(fabs(gg - 0.6) < 0.011, "the screen is told the Groove (%.2f)", gg); }
+    CHECK(e->try_recipe.groove == 60, "a clip made at 60%% says so in its recipe (%d)", e->try_recipe.groove);
+    int pad = ts_engine_keep(e, 2);
+    static ts_clip_t made;
+    memcpy(&made, &e->clip_data[e->bank[2][pad - 1] - 1], sizeof made);
+    ts_engine_service(e);
+    read_text(lib, text, sizeof text);
+    int col = 0; unsigned long sdv = 0; int smp = -1, pd = -1, sty = -1, bs = -1, fw = -1, bp = -1, fn = -1, ec = -1, gr = -1;
+    col = sscanf(text, "%d %d %d %d %lu %d %d %d %d %d", &smp, &pd, &sty, &bs, &sdv, &fw, &bp, &fn, &ec, &gr);
+    CHECK(col == 10 && gr == 60 && sty == GS_ANY, "the library line ends with the Groove it was made with (%s)", text);
+    read_text(TDIR "/rec/taste_log.csv", text, sizeof text);
+    const char *k = strstr(text, "K,");
+    int nc = 0; const char *last = NULL;
+    if (k) { for (const char *c = k; *c && *c != '\n'; c++) { if (*c == ',') { nc++; last = c; } } }
+    CHECK(k && nc == 10 + TS_TASTE_NF + 1 && last && atoi(last + 1) == 60, "the taste log records the Groove too (the last column)");
+    ts_engine_destroy(e);
+
+    /* a library with no saved data makes the clip again from its recipe, Groove and all */
+    remove(TDIR "/rec/kept.bin");
+    e = ts_engine_create(44100.0f);
+    ts_engine_set_recipes_path(e, lib);
+    load_sample(e, 2, "user1.wav", SMP_SINE, 0.5f, 44100);
+    CHECK(ts_engine_load_recipes(e) == 1, "(it loads)");
+    const int idx = e->bank[2][pad - 1] - 1;
+    CHECK(idx >= 0 && e->kept[idx].groove == 60 && e->clip_data[idx].n == made.n && memcmp(e->clip_data[idx].pos, made.pos, sizeof(uint16_t) * (size_t)made.n) == 0 &&
+          memcmp(e->clip_data[idx].gate, made.gate, (size_t)made.n) == 0, "made again from its recipe it is the same clip");
+    ts_engine_destroy(e);
+    remove(lib); remove(TDIR "/rec/kept.bin"); remove(TDIR "/rec/taste_log.csv");
 }
 
 static void test_cues(void)
@@ -3614,10 +3714,10 @@ static void test_recipes_library(void)
     if (f) { size_t n = fread(text, 1, sizeof text - 1, f); text[n] = 0; fclose(f); }
     int sa = -1, a = 0, b = 0, c = 0, sa2 = -1, a2 = 0, b2 = 0, c2 = 0;
     unsigned long s1 = 0, s2 = 0;
-    int fw1 = -1, fw2 = -1, bp1 = -1, bp2 = -1, fn1 = -1, fn2 = -1, ec1 = -1, ec2 = -1;
-    int got = sscanf(text, "%d %d %d %d %lu %d %d %d %d\n%d %d %d %d %lu %d %d %d %d", &sa, &a, &b, &c, &s1, &fw1, &bp1, &fn1, &ec1, &sa2, &a2, &b2, &c2, &s2, &fw2, &bp2, &fn2, &ec2);
-    CHECK(f && got == 18 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && fw1 == 0 && fw2 == 0 && bp1 == 120 && bp2 == 120 && fn1 == 10 && fn2 == 10 && ec1 == 10 && ec2 == 10 && !e->recipes_dirty,
-          "the service call writes it: one line per clip (sample, pad, style, bars, seed, forwards, tempo, finish, echo) (%s)", text);
+    int fw1 = -1, fw2 = -1, bp1 = -1, bp2 = -1, fn1 = -1, fn2 = -1, ec1 = -1, ec2 = -1, gr1 = -1, gr2 = -1;
+    int got = sscanf(text, "%d %d %d %d %lu %d %d %d %d %d\n%d %d %d %d %lu %d %d %d %d %d", &sa, &a, &b, &c, &s1, &fw1, &bp1, &fn1, &ec1, &gr1, &sa2, &a2, &b2, &c2, &s2, &fw2, &bp2, &fn2, &ec2, &gr2);
+    CHECK(f && got == 20 && gr1 == 0 && gr2 == 0 && sa == 0 && a == 9 && b == GS_CHIRP && c == 1 && sa2 == 0 && a2 == 12 && c2 == 4 && fw1 == 0 && fw2 == 0 && bp1 == 120 && bp2 == 120 && fn1 == 10 && fn2 == 10 && ec1 == 10 && ec2 == 10 && !e->recipes_dirty,
+          "the service call writes it: one line per clip (sample, pad, style, bars, seed, forwards, tempo, finish, echo, groove) (%s)", text);
     static ts_clip_t keep9, keep12;
     memcpy(&keep9, PADCLIP(e, 9), sizeof keep9);
     memcpy(&keep12, PADCLIP(e, 12), sizeof keep12);
@@ -3879,8 +3979,8 @@ static void test_plugin_pickers(void)
     }
     bad_dial |= !(strstr(knobs_at ? knobs_at : "", "\"pads_screen\"") < strstr(knobs_at ? knobs_at : "", "\"sample_file\"") &&
                   strstr(knobs_at ? knobs_at : "", "\"sample_file\"") < strstr(knobs_at ? knobs_at : "", "\"gen_style\""));
-    CHECK(dials == 7 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
-          "the root has seven dials (the opener, Load Sample as the second, Style, Length, Forwards, Finish and Echo), none of them the sample or clip (%d dials)", dials);
+    CHECK(dials == 8 && !bad_dial && !strstr(knobs_at ? knobs_at : "", "\"sample\"") && !strstr(hier, "\"lfo\":") && !strstr(hier, "\"sync\":"),
+          "the root has eight dials (the opener, Load Sample as the second, Style, Length, Forwards, Finish, Echo and Groove), none of them the sample or clip (%d dials)", dials);
     const char *l_pb = strstr(hier, "{\"level\":\"playback\""), *l_pp = strstr(hier, "{\"level\":\"pad_play\""), *l_wv = strstr(hier, "{\"level\":\"wave\"");
     CHECK(l_pb && l_pp && l_wv && l_pb < l_pp && l_pp < l_wv, "the pages after Main are Playback, Pad Play and, last of all, Waveform");
     const char *d_pb = strstr(hier, "\"playback\":{"), *d_pp = strstr(hier, "\"pad_play\":{"), *d_wv = strstr(hier, "\"wave\":{");
@@ -4012,6 +4112,7 @@ int main(int argc, char **argv)
     test_clip_recipe_view();
     test_taste_log();
     test_clip_pages();
+    test_groove();
     test_shipped_clips();
     test_pad_runs_clip();
     test_unload_files();

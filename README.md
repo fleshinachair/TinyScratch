@@ -63,7 +63,7 @@ Then generate and keep scratches for it, exactly as above. Every sample has its 
 Turn the jog wheel to move between the pages: the picture, then **Main** (the generator), **Playback**, **Pad Play** and, always last,
 the **Waveform**.
 
-**Main: the generator.** Dial 1 opens the Pads screen and dial 2 is **Load Sample**; dials 3 to 7 shape what Generate makes next (a kept
+**Main: the generator.** Dial 1 opens the Pads screen and dial 2 is **Load Sample**; dials 3 to 8 shape what Generate makes next (a kept
 clip never changes):
 
 | dial | what it does |
@@ -73,6 +73,7 @@ clip never changes):
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |
 | **Echo** (10%) | how often a bar holds an echo scratch: a short stab four times over two beats, each at a lower fader level |
+| **Groove** (0%) | how far **Improv** keeps to a drum groove (see below); 0% is Improv exactly as it was. It does nothing to the named styles |
 
 **Playback: how clips play.** These change how a clip sounds as it plays, never the clip itself:
 
@@ -115,6 +116,7 @@ gives the same clip. A kept clip is saved exactly (its playhead path and fader),
   record already moving fast. **On a faster song** (above 120 bpm) the strokes and the cuts keep the length in seconds they have at 120, so
   there are fewer to the bar: no more sounds a second (about 6.5) than a hand can make, however fast the song. (At 160 bpm the plain grid
   made 8.6 a second, with strokes up to five times the sample's own speed.)
+
 - **It looks at the sample.** It finds the attacks (the start of the sound and any strong rise out of a real dip) and starts each bar's strokes
   just inside one, because a DJ puts the record where the sound bites.
 - **Mostly sound, not silence.** Each clip is measured as it is made; a seed that comes out too quiet for its style is thrown again.
@@ -151,6 +153,26 @@ techniques. Not yet built: the hydroplane. A style's number is saved in a clip's
 The clips are stored in `recipes.txt` and `kept.bin` in the module's folder, so every new instance of the module starts with the same clips
 on the same pads. Clips can also be imported from an Ableton Live Pack you own (`python tools/import_clips.py "your pack.alp"` writes
 `local/clips.bin`, which stays out of the repository because it is someone else's work); imported clips can be deleted like any other.
+
+
+**Groove.** A scratch DJ playing over a beat does not scratch at random: strokes land on the snare or just ahead of a hit, the kick is
+left clear now and then, there are rests, a phrase ends in a fill, and the bars do not all say the same. Each Improv clip is given one
+drum groove (picked from its seed) on the sixteenth grid, where the kick and the snare fall in a bar:
+
+| groove | kick | snare |
+|---|---|---|
+| Boom-bap | 1, the "and" of 3 | 2, 4 |
+| Four on the floor | every beat | 2, 4 |
+| Breaks | 1, the "and" of 2, the "and" of 3 | 2, 4 |
+| Half-time | 1, the "and" of 3 | 3 |
+| Funk | 1, the "a" of 1, the "and" of 3 | 2, 4 |
+| Dembow | every beat | the "a" of 1, the "and" of 2, the "a" of 3, the "and" of 4 |
+| Open | 1 | 3 |
+
+The **Groove** dial says how far the clip keeps to it. At 0% nothing changes. As it goes up the strokes tend to end where the groove
+wants one (the snare, a step ahead of a hit), the fader is shut on the kicks more often (more at 100%: in tests about seven kick steps in ten
+are left empty, against one in six), a quiet bar can follow a busy one (the bars breathe, build or drop), and the last beat of each
+phrase becomes a fill of sixteenths. No two clips are alike at any setting.
 
 ## Samples
 

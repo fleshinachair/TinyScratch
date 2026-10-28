@@ -32,7 +32,7 @@ static const char *const k_recipe_file = "/data/UserData/schwung/modules/sound_g
 
 enum { K_ENUM, K_FLOAT, K_INT, K_CANVAS, K_STRING, K_FILEPATH };
 enum { P_SAMPLE, P_TURNTABLE, P_DRAG, P_GAIN, P_NOTE_GATE, P_VEL_VOL, P_NORMALISE,
-       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_BITE, P_GEN_FIN, P_GEN_ECHO, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_TASTE_LOG, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_PAGE, P_CLIP_PAGE, P_SAMPLE_FILE,
+       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_BITE, P_GEN_FIN, P_GEN_ECHO, P_GEN_GROOVE, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_TASTE_LOG, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_PAGE, P_CLIP_PAGE, P_SAMPLE_FILE,
        P_PAD_RAW, P_PAD_CUTS,
        P_VIEW, P_WAVE, P_FULL, P_STATUS,
        P_COUNT };
@@ -80,6 +80,7 @@ static const pdef_t k_params[P_COUNT] = {
     [P_BITE]        = { "bite", "Bite", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.10f, 0.02f, NULL },
     [P_GEN_FIN]     = { "gen_fin", "Finish", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.10f, 0.05f, NULL },
     [P_GEN_ECHO]    = { "gen_echo", "Echo", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.10f, 0.05f, NULL },
+    [P_GEN_GROOVE]  = { "gen_groove", "Groove", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.05f, NULL },
     [P_CLIP_DEPTH]  = { "clip_depth", "Clip Depth", K_FLOAT, NULL, 0, 0.0f, 2.0f, 1.0f, 0.02f, NULL },
     [P_CLIP_OFFSET] = { "clip_offset", "Clip Offset", K_FLOAT, NULL, 0, -0.5f, 0.5f, 0.0f, 0.01f, NULL },
     [P_CUES]        = { "cues", "Cue Pads", K_ENUM, o_onoff, 2, 0, 1, 1, 0, NULL },    [P_CLIP_PAD]    = { "clip_pad", "Clip Pad", K_INT, NULL, 0, 0, 16, 0, 1, NULL },
@@ -114,7 +115,7 @@ static const pdef_t k_params[P_COUNT] = {
 };
 
 /* The pages, in the order the host shows them: the picture, then
- *   Main        the generator: the Pads screen (the first dial), Load Sample, and what Generate makes (Style, Length, Forwards, Finish, Echo)
+ *   Main        the generator: the Pads screen (the first dial), Load Sample, and what Generate makes (Style, Length, Forwards, Finish, Echo, Groove)
  *   Playback    how clips play: Swing, Humanise, Clip Depth, Clip Offset, Drag, Gain
  *   Pad Play    how the pads play: Note Gate, Vel to Vol, Cue Pads; and Taste Log (a log of the clips you keep, pass over and delete, local to the Move)
  *   Waveform    the sample full size, always the last page
@@ -123,8 +124,8 @@ static const pdef_t k_params[P_COUNT] = {
  * is set from the screen itself, which can set any parameter: it is not listed. (The Turntable has no dial: the clips move the playhead.
  * Recording and unloading a sample are on the pads. Lock, Normalise, Cut From and Pad Grid keep their defaults: they are saved with the
  * project and not on a dial.) */
-static const int pg_root[] = { P_VIEW, P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO };
-static const int kn_root[] = { P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO };
+static const int pg_root[] = { P_VIEW, P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO, P_GEN_GROOVE };
+static const int kn_root[] = { P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO, P_GEN_GROOVE };
 static const int pg_playback[] = { P_SWING, P_HUMANISE, P_BITE, P_CLIP_DEPTH, P_CLIP_OFFSET, P_DRAG, P_GAIN };
 static const int pg_padplay[] = { P_NOTE_GATE, P_VEL_VOL, P_CUES, P_TASTE_LOG };
 static const int pg_wave[] = { P_WAVE };
@@ -161,6 +162,7 @@ static float pget(const ts_params_t *p, int i)
     case P_BITE: return p->bite;
     case P_GEN_FIN: return p->gen_fin;
     case P_GEN_ECHO: return p->gen_echo;
+    case P_GEN_GROOVE: return p->gen_groove;
     case P_CLIP_DEPTH: return p->clip_depth;
     case P_CLIP_OFFSET: return p->clip_offset;
     case P_CUES: return (float)p->cues;
@@ -192,6 +194,7 @@ static void pset(ts_params_t *p, int i, float v)
     case P_BITE: p->bite = v; break;
     case P_GEN_FIN: p->gen_fin = v; break;
     case P_GEN_ECHO: p->gen_echo = v; break;
+    case P_GEN_GROOVE: p->gen_groove = v; break;
     case P_CLIP_DEPTH: p->clip_depth = v; break;
     case P_CLIP_OFFSET: p->clip_offset = v; break;
     case P_CUES: p->cues = v >= 0.5f; break;

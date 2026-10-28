@@ -55,6 +55,7 @@ typedef struct {
 #define TS_EX_FWD   2                       /* a forward is (or the run-out to the end of the sample) */
 #define TS_EX_FIN   4                       /* the clip ends with the whole sample played through */
 #define TS_EX_KNOWN 0x80
+#define TS_EX_TMPL_SHIFT 3                  /* bits 3..6: the groove template a clip was made with, plus one (0: no groove) */
 
 /* The taste log (off by default; the Taste Log setting): one line for each clip you keep, pass over or delete, in taste_log.csv next to the
  * library, with a few numbers measured from the clip. It stays on the Move: nothing reads it or sends it anywhere. */
@@ -85,6 +86,7 @@ typedef struct {
     float bite;                 /* 0..1: soft saturation of the sound as it plays, harder on a fast stroke and for a moment as the fader opens; 0 = none (clean) */
     float gen_fin;              /* 0..1: how often a clip ends with the whole sample playing through at its own speed, then a pull back; 0 = never */
     float gen_echo;             /* 0..1: how often a bar of Any holds an echo scratch (a stab repeated four times, each at a lower level); 0 = never */
+    float gen_groove;           /* 0..1: how far Improv keeps to a groove: its strokes land where a drum pattern leaves room for a scratch, there are rests, a fill ends each phrase and the bars breathe; 0 = as it always was */
     float clip_depth;           /* 0..2: how far a clip moves the playhead (1 = as written; the movement is scaled, then offset) */
     float clip_offset;          /* -0.5..0.5: shifts the whole clip along the sample */
 } ts_params_t;
@@ -101,13 +103,13 @@ typedef struct {
 } ts_slot_t;
 
 /* A generated clip is kept as its recipe: the same recipe makes the same clip. */
-typedef struct { int used, style, bars; uint32_t seed; int fwd; int bpm; int fin; int echo; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100; bpm: the song's tempo */
+typedef struct { int used, style, bars; uint32_t seed; int fwd; int bpm; int fin; int echo; int groove; } ts_recipe_t;     /* fwd: the Forwards setting it was made with, 0..100; bpm: the song's tempo */
 
 /* an event for the log, queued where it happens (maybe the audio thread) and written by ts_engine_service */
 typedef struct {
     volatile int full;
     char  ev;                   /* K kept, P passed over (Generate pressed again without keeping it), D deleted */
-    int   style, bars, fwd, fin, echo, bpm, sample, extras, played_ds;
+    int   style, bars, fwd, fin, echo, bpm, sample, extras, played_ds, groove;
     uint32_t seed;
     float f[TS_TASTE_NF];
 } taste_ev_t;
@@ -242,6 +244,7 @@ int   ts_engine_load_clips(ts_engine_t *e, const char *path);  /* clips.bin: the
 void ts_clip_generate(ts_clip_t *out, int style, uint32_t seed, int bars);
 /* The same, for a sample: each bar's strokes start where the sample has an attack (the start of its sound, the start of a word), the way a
  * DJ places the record, and the positions are the sample's own (the clip is "native": tag 3). With no sample it is the plain one above. */
+void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm, float fin, float echo, float groove);     /* groove: 0..1, how far Improv keeps to a groove */
 void ts_clip_generate_for(ts_clip_t *out, int style, uint32_t seed, int bars, const ts_slot_t *slot, float fwd, float bpm, float fin, float echo);     /* fwd: 0..1, forwards in Any */
 /* (bpm is the song's tempo. Finish uses it to play the sound through at its own speed. Any is on sixteenths at every tempo, but above
  * 120 bpm its strokes and cuts are as long in seconds as at 120, so a fast song is not busier than a hand can be; up to 120 it does not matter.) */
