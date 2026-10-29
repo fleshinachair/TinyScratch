@@ -3,12 +3,11 @@
   TinyScratch - the Remote UI (http://move.local:7700/remote-ui, with TinyScratch in a track's synth slot).
 
     the deck      a turntable seen from above. The record turns with the playhead: at the sample's own speed it turns at
-                  33 1/3, backwards when the scratch goes back. The platter under it spins while the Move's transport runs,
-                  and the crossfader opens and shuts with the cuts
-    the scopes    the Move's graphs at full size: the waveform (and where the clip is sending the playhead, the cues), the
-                  clip view (the playhead's path and the cuts, what Humanise is playing this pass), and the zoom
-    the pads      the samples, the clip pads of the page the Pads screen shows, Generate and Auto
-    the dials     grouped as the module's pages are: PRE-GEN (Main), PLAYBACK, PAD PLAY
+                  33 1/3, backwards when the scratch goes back. The platter under it spins while the Move's transport runs
+    the dials     under the deck, grouped as the module's pages are: PRE-GEN (Main), PLAYBACK
+    the scopes    beside them, the Move's graphs at full size: the waveform (and where the clip is sending the playhead, the
+                  cues), the clip view (the playhead's path and the cuts, what Humanise is playing this pass), and the zoom
+    the pads      under both: the samples, the clip pads of the page the Pads screen shows, Generate and Auto; and PAD PLAY
 
   The DSP serves two values for this page (scratch_engine.h, ts_engine_rview / ts_engine_rclip): rview, small and live, and
   rclip, the clip playing at 64 points to the beat. The host sends them twice a second, so between reads the page runs the
@@ -23,181 +22,158 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TinyScratch</title>
 <style>
+/* Quiet and warm: charcoal, an off-white, a few muted accents. The soft lemon and the smiley are the old-skool nod; nothing glows. */
 :root {
-  --bg: #07020f;
-  --panel: #120621;
-  --panel2: #1b0a30;
-  --ink: #f3ecff;
-  --dim: #9c88c4;
-  --acid: #e8ff00;
-  --pink: #ff2ec4;
-  --cyan: #00e5ff;
-  --lime: #5cff3a;
-  --orange: #ff9100;
-  --violet: #8a2cff;
-  --red: #ff2d4a;
-  --page0: #b04cff;
-  --page1: #2fa8ff;
-  --page2: #ff3ad0;
-  --page3: #ffe600;
+  color-scheme: dark;
+  --bg: #151517;
+  --panel: #1c1c1f;
+  --line: #2b2b30;
+  --well: #111113;
+  --ink: #e8e5de;
+  --dim: #8e8b84;
+  --faint: #55534f;
+  --acid: #d8d27a;      /* the accent: soft lemon */
+  --pink: #df8466;      /* the sound cut in: coral */
+  --cyan: #8cbcc2;      /* the playhead's path: sea-glass */
+  --lime: #9cc28a;      /* on: sage */
+  --orange: #d6a466;    /* Generate: amber */
+  --violet: #8f8ab2;
+  --red: #d2665c;
+  --page0: #a89bd0;
+  --page1: #8fb2cf;
+  --page2: #cf9fbe;
+  --page3: #cfc684;
+  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(ellipse at 50% -10%, rgba(138, 44, 255, .35), transparent 60%),
-    radial-gradient(ellipse at 100% 100%, rgba(255, 46, 196, .18), transparent 55%),
-    conic-gradient(from 0deg at 50% 50%, #0d0418 0 25%, #07020f 0 50%, #0d0418 0 75%, #07020f 0);
-  background-size: auto, auto, 48px 48px;
-  color: var(--ink);
-  font-family: "Arial Black", "Arial Bold", Gadget, Impact, sans-serif;
-  padding: 14px;
-  -webkit-user-select: none; user-select: none;
-}
-.rig { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); padding: 16px; -webkit-user-select: none; user-select: none; }
+.rig { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 
-/* ---- the top: the smiley, the name, what is playing ---- */
-.top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.smiley { width: 64px; height: 64px; flex: none; filter: drop-shadow(0 0 10px rgba(232, 255, 0, .55)); }
-.smiley.spin { animation: spin 3.2s linear infinite; }
+/* ---- the top: the name, the lights, what is playing, the link ---- */
+.top { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.smiley { width: 34px; height: 34px; flex: none; }
+.smiley.spin { animation: spin 7.2s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.wordmark {
-  margin: 0; font: italic 900 clamp(30px, 5.4vw, 58px)/1 Impact, "Arial Black", sans-serif; letter-spacing: .02em;
-  transform: skew(-8deg);
-  background: linear-gradient(180deg, #fff 0%, #dff 38%, #5a6a8a 52%, #fff 60%, #9ab 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(3px 3px 0 var(--pink)) drop-shadow(-2px -2px 0 var(--cyan));
-}
-.wordmark small { font-size: .38em; letter-spacing: .3em; display: block; color: var(--acid); -webkit-text-fill-color: var(--acid); filter: none; transform: skew(0); margin-top: 4px; }
-.leds { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
-.led { font: 900 11px/1 "Arial Black", sans-serif; letter-spacing: .12em; padding: 7px 10px; border-radius: 4px; border: 2px solid #3a2457; color: #5d4a7d; background: #0c0416; }
-.led.on { color: #07020f; border-color: currentColor; }
-.led.play.on { background: var(--lime); color: #07020f; box-shadow: 0 0 14px var(--lime); }
-.led.cut.on { background: var(--pink); box-shadow: 0 0 14px var(--pink); }
-.led.rec.on { background: var(--red); box-shadow: 0 0 14px var(--red); }
-.led.bpm { color: var(--acid); border-color: var(--acid); font-family: "Courier New", monospace; font-size: 13px; }
-.info { flex-basis: 100%; display: grid; grid-template-columns: 3fr 5fr 4fr 2fr; border-top: 3px solid var(--acid); border-bottom: 3px solid var(--acid); background: #000; }
-.info > div { padding: 6px 10px; min-width: 0; border-left: 1px solid #2d1748; }
-.info > div:first-child { border-left: 0; }
-.info .k { display: block; font: 700 10px/1.2 "Courier New", monospace; letter-spacing: .12em; color: var(--dim); }
-.info .v { display: block; font: 900 15px/1.3 "Arial Black", sans-serif; letter-spacing: .06em; color: var(--acid); overflow-wrap: anywhere; }
-.info .v.pink { color: var(--pink); }
-.info .v.cyan { color: var(--cyan); }
-.info .v small { font-size: 11px; color: var(--pink); letter-spacing: .08em; }
-@media (max-width: 640px) { .wordmark { transform: none; } .wordmark small { letter-spacing: .08em; font-size: 10px; } .info { grid-template-columns: 1fr 1fr; } .info > div:nth-child(3) { border-left: 0; } }
+.wordmark { margin: 0; font: italic 800 26px/1 var(--sans); letter-spacing: -.01em; color: var(--ink); }
+.wordmark span { color: var(--acid); }
+.tag { font: 500 11px/1 var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+.leds { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.led { font: 600 10px/1 var(--sans); letter-spacing: .14em; padding: 7px 10px; border-radius: 3px; border: 1px solid var(--line); color: var(--faint); background: var(--well); }
+.led.play.on { color: var(--lime); border-color: color-mix(in srgb, var(--lime) 50%, var(--line)); }
+.led.rec.on { color: var(--red); border-color: color-mix(in srgb, var(--red) 50%, var(--line)); }
+.led.bpm { color: var(--ink); font-family: var(--mono); font-size: 12px; letter-spacing: .04em; }
+.info { flex-basis: 100%; display: grid; grid-template-columns: 3fr 5fr 4fr 2fr; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.info > div { padding: 8px 12px 9px; min-width: 0; border-left: 1px solid var(--line); }
+.info > div:first-child { border-left: 0; padding-left: 0; }
+.info .k { display: block; font: 600 10px/1.2 var(--sans); letter-spacing: .16em; color: var(--dim); margin-bottom: 3px; }
+.info .v { display: block; font: 600 15px/1.3 var(--sans); letter-spacing: .02em; color: var(--ink); overflow-wrap: anywhere; }
+.info .v small { font-size: 12px; font-weight: 500; color: var(--dim); }
+.status { flex-basis: 100%; font: 500 11px/1.4 var(--mono); color: var(--faint); margin-top: -6px; }
+.status.bad { color: var(--red); }
+@media (max-width: 640px) { .info { grid-template-columns: 1fr 1fr; } .info > div:nth-child(3) { border-left: 0; padding-left: 0; } .tag { display: none; } }
 @media (prefers-reduced-motion: reduce) { .smiley.spin { animation: none; } }
 
 /* ---- panels ---- */
-.panel { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 2px solid #2d1748; border-radius: 10px; padding: 12px; position: relative; box-shadow: 0 0 0 1px #000, 0 10px 30px rgba(0, 0, 0, .5); }
-.panel > h2 {
-  margin: -24px 0 8px -4px; display: inline-block; font: 900 15px/1 "Arial Black", sans-serif; letter-spacing: .14em;
-  background: var(--acid); color: #07020f; padding: 6px 12px 5px; transform: rotate(-1.5deg); box-shadow: 3px 3px 0 var(--pink);
-}
-.panel.pink > h2 { background: var(--pink); color: #fff; box-shadow: 3px 3px 0 var(--cyan); }
-.panel.cyan > h2 { background: var(--cyan); box-shadow: 3px 3px 0 var(--violet); }
-.panel.lime > h2 { background: var(--lime); box-shadow: 3px 3px 0 var(--pink); }
-.panel.orange > h2 { background: var(--orange); box-shadow: 3px 3px 0 var(--cyan); }
-.panel > h2 .sub { font-size: 10px; letter-spacing: .1em; opacity: .7; margin-left: 6px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px 14px; position: relative; }
+.panel > h2 { margin: 0 0 10px; font: 600 11px/1 var(--sans); letter-spacing: .18em; color: var(--dim); text-transform: uppercase; }
+.panel > h2 .sub { font-weight: 500; letter-spacing: .08em; color: var(--faint); margin-left: 8px; text-transform: none; }
 
-.stage { display: grid; grid-template-columns: minmax(300px, 5fr) 7fr; gap: 26px 14px; margin-top: 14px; align-items: start; }
-.scopes { display: flex; flex-direction: column; gap: 26px; }
+/* the deck and the dials on the left; the three graphs on the right, as tall as they are */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.left, .scopes { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.scope { flex: 1; display: flex; flex-direction: column; min-height: 180px; }
+.cv { flex: 1; position: relative; min-height: 120px; }
+.cv canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 @media (max-width: 900px) { .stage { grid-template-columns: 1fr; } }
 canvas { display: block; width: 100%; }
-#deck { aspect-ratio: 1 / 1.08; }
-#xf { height: 64px; margin-top: 8px; }
-#wave { height: 170px; }
-#lane { height: 190px; }
-#zoom { height: 150px; }
-.scope { padding-top: 16px; }
+#deck { aspect-ratio: 1.3 / 1; max-width: 100%; border-radius: 6px; }
+.deckread { display: flex; justify-content: space-between; font: 500 11px/1 var(--mono); color: var(--dim); margin: 10px 2px 0; }
 .zbtns { position: absolute; right: 12px; top: 8px; display: flex; gap: 4px; }
-.zbtns button, .chip { font: 900 11px/1 "Arial Black", sans-serif; letter-spacing: .08em; padding: 6px 8px; border-radius: 4px; border: 2px solid #3a2457; background: #0c0416; color: var(--dim); cursor: pointer; }
-.zbtns button.on { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 10px rgba(0, 229, 255, .5); }
+.zbtns button, .chip { font: 600 10px/1 var(--sans); letter-spacing: .1em; padding: 5px 8px; border-radius: 3px; border: 1px solid var(--line); background: var(--well); color: var(--dim); cursor: pointer; }
+.zbtns button.on { color: var(--ink); border-color: var(--faint); }
 
-/* ---- the pads ---- */
-.pads { display: grid; grid-template-columns: 1fr; gap: 10px; }
-.pads > h2 { justify-self: start; }
-.prow { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+/* ---- the pads, and Pad Play beside them ---- */
+.lower { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .lower { grid-template-columns: 1fr; } }
+.pads { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.prow { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
 .prow.pages { grid-template-columns: auto repeat(4, minmax(48px, 80px)) 1fr; align-items: center; }
-.prow.pages .lbl { font-size: 11px; letter-spacing: .14em; color: var(--dim); padding-right: 6px; }
+.prow.pages .lbl { font: 600 10px/1 var(--sans); letter-spacing: .16em; color: var(--dim); padding-right: 6px; }
 .pad {
-  position: relative; min-height: 52px; border-radius: 7px; border: 2px solid #000; background: #1b1129; color: #6d5c8c;
-  font: 900 12px/1.05 "Arial Black", sans-serif; letter-spacing: .05em; cursor: pointer; overflow: hidden; padding: 4px;
-  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .35), inset 0 2px 0 rgba(255, 255, 255, .06); touch-action: none;
+  position: relative; min-height: 46px; border-radius: 5px; border: 1px solid var(--line); background: var(--well); color: var(--faint);
+  font: 600 11px/1.1 var(--sans); letter-spacing: .06em; cursor: pointer; overflow: hidden; padding: 4px; touch-action: none;
 }
 .pad:active { transform: translateY(1px); }
-.pad.has { color: #07020f; background: var(--pc); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .3), 0 0 12px color-mix(in srgb, var(--pc) 55%, transparent); }
-.pad.now { background: #fff; color: #07020f; box-shadow: 0 0 20px #fff, 0 0 40px var(--pc); }
-.pad.autonow { animation: pulse .5s ease-in-out infinite alternate; }
-@keyframes pulse { from { box-shadow: 0 0 6px var(--lime); } to { box-shadow: 0 0 26px var(--lime), inset 0 0 0 3px var(--lime); } }
+.pad.has { color: #19191b; background: color-mix(in srgb, var(--pc) 78%, var(--panel)); border-color: transparent; }
+.pad.now { background: var(--ink); color: #19191b; border-color: transparent; }
+.pad.autonow { box-shadow: inset 0 0 0 2px var(--lime); }
 .pad.sample { --pc: var(--acid); }
-.pad.empty { color: #5d4a7d; background: #120a1d; border-style: dashed; border-color: #3a2457; }
-.pad.gen { --pc: var(--orange); color: #07020f; background: var(--orange); }
-.pad.auto { --pc: var(--lime); color: #07020f; background: var(--lime); }
-.pad.gen.now, .pad.auto.now { background: #fff; }
-.pad .kept { position: absolute; right: 5px; top: 4px; font-size: 11px; }
-.pad .hold { position: absolute; left: 0; bottom: 0; height: 100%; width: 0; background: rgba(255, 45, 74, .85); pointer-events: none; }
+.pad.empty { color: var(--faint); background: transparent; border-style: dashed; }
+.pad.gen { --pc: var(--orange); color: #19191b; background: color-mix(in srgb, var(--orange) 78%, var(--panel)); border-color: transparent; }
+.pad.auto { --pc: var(--lime); color: #19191b; background: color-mix(in srgb, var(--lime) 78%, var(--panel)); border-color: transparent; }
+.pad.gen.now, .pad.auto.now { background: var(--ink); }
+.pad .kept { position: absolute; right: 5px; top: 4px; font-size: 10px; opacity: .7; }
+.pad .hold { position: absolute; left: 0; bottom: 0; height: 100%; width: 0; background: color-mix(in srgb, var(--red) 80%, transparent); pointer-events: none; }
 .pad .t { position: relative; }
-.chip.on { border-color: var(--acid); color: #07020f; background: var(--acid); }
-.chip.has:not(.on) { border-color: var(--acid); color: var(--acid); }
-.chip.playing:not(.on) { animation: blink .6s steps(1) infinite; }
-@keyframes blink { 50% { border-color: #3a2457; color: var(--dim); } }
-.hint { font: 700 11px/1.3 "Courier New", monospace; color: var(--dim); text-align: right; }
+.chip.on { color: #19191b; background: var(--acid); border-color: transparent; }
+.chip.has:not(.on) { color: var(--ink); }
+.chip.playing:not(.on) { animation: blink 1.2s steps(1) infinite; }
+@keyframes blink { 50% { color: var(--faint); } }
+.hint { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: right; margin-top: 2px; }
 @media (max-width: 640px) { .prow:not(.pages) { grid-template-columns: repeat(4, 1fr); } .prow.pages { grid-template-columns: auto repeat(4, 1fr); } }
 
 /* ---- the dials ---- */
-.dials { display: grid; grid-template-columns: 6fr 7fr; gap: 26px 14px; margin-top: 14px; }
-.dials .padplay { grid-column: 1 / -1; }
-@media (max-width: 1100px) { .dials { grid-template-columns: 1fr; } }
-.knobs { display: flex; flex-wrap: wrap; gap: 6px 2px; justify-content: space-around; }
-.knob { width: 84px; display: flex; flex-direction: column; align-items: center; gap: 2px; touch-action: none; cursor: ns-resize; outline: none; }
-.knob .nm { font: 900 10px/1 "Arial Black", sans-serif; letter-spacing: .06em; color: var(--ink); height: 13px; white-space: nowrap; }
-.knob svg { width: 70px; height: 70px; overflow: visible; }
-.knob .val { font: 700 12px/1 "Courier New", monospace; color: var(--c); background: #000; border: 1px solid #2d1748; border-radius: 3px; padding: 4px 4px; min-width: 64px; text-align: center; text-shadow: 0 0 6px var(--c); white-space: nowrap; }
-.knob:focus-visible svg { filter: drop-shadow(0 0 6px var(--c)); }
-.toggles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-@media (max-width: 640px) { .toggles { grid-template-columns: 1fr 1fr; } }
-.tog { font: 900 12px/1.1 "Arial Black", sans-serif; letter-spacing: .1em; min-height: 62px; border-radius: 8px; border: 2px solid #3a2457; background: #0c0416; color: var(--dim); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
-.tog .st { font: 700 12px/1 "Courier New", monospace; padding: 3px 8px; border-radius: 3px; background: #000; color: #5d4a7d; }
-.tog.on { border-color: var(--lime); color: var(--ink); box-shadow: 0 0 14px rgba(92, 255, 58, .35); }
-.tog.on .st { color: var(--lime); text-shadow: 0 0 6px var(--lime); }
+.knobs { display: grid; grid-template-columns: repeat(var(--n, 6), minmax(0, 1fr)); gap: 8px 0; }     /* one row: a column a dial */
+@media (max-width: 520px) { .knobs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.knob { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; touch-action: none; cursor: ns-resize; outline: none; }
+.knob .nm { font: 600 9px/11px var(--sans); letter-spacing: .12em; color: var(--dim); height: 22px; padding: 0 5px; display: flex; align-items: flex-end; justify-content: center; text-align: center; }
+.knob svg { width: min(58px, 100%); height: auto; aspect-ratio: 1; overflow: visible; color: var(--c); }
+.knob .val { font: 500 11px/1 var(--mono); color: var(--ink); padding: 2px 0; text-align: center; white-space: nowrap; }
+.knob:focus-visible svg { outline: 1px solid var(--faint); outline-offset: 2px; border-radius: 50%; }
+.toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tog { font: 600 10px/1.1 var(--sans); letter-spacing: .14em; min-height: 52px; border-radius: 5px; border: 1px solid var(--line); background: var(--well); color: var(--dim); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.tog .st { font: 500 11px/1 var(--mono); color: var(--faint); }
+.tog.on { color: var(--ink); }
+.tog.on .st { color: var(--lime); }
 
-footer { font: 700 11px/1.4 "Courier New", monospace; color: var(--dim); text-align: center; padding: 6px 0 2px; }
-footer b { color: var(--pink); }
-.status { flex-basis: 100%; font: 700 11px/1.4 "Courier New", monospace; color: var(--dim); text-align: left; margin-top: -6px; }
-.status.bad { color: var(--red); }
+footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center; padding: 4px 0 2px; letter-spacing: .04em; }
 
 /* ---- the demo's start button (only when opened with a recorded demo) ---- */
-.demo { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(7, 2, 15, .78); z-index: 5; flex-direction: column; gap: 14px; }
+.demo { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(15, 15, 17, .82); z-index: 5; flex-direction: column; gap: 14px; }
 .demo.show { display: flex; }
-.demo button { font: italic 900 28px/1 Impact, "Arial Black", sans-serif; letter-spacing: .08em; padding: 20px 34px; border-radius: 12px; border: 4px solid #000; background: var(--acid); color: #07020f; cursor: pointer; box-shadow: 6px 6px 0 var(--pink), 0 0 40px rgba(232, 255, 0, .6); transform: rotate(-2deg); }
-.demo p { font: 700 13px/1.5 "Courier New", monospace; color: var(--ink); max-width: 520px; text-align: center; margin: 0 16px; }
-.demobar { display: none; align-items: center; gap: 10px; font: 700 12px/1 "Courier New", monospace; color: var(--acid); }
+.demo button { font: 600 15px/1 var(--sans); letter-spacing: .16em; padding: 16px 26px; border-radius: 6px; border: 1px solid var(--acid); background: transparent; color: var(--acid); cursor: pointer; }
+.demo button:hover { background: color-mix(in srgb, var(--acid) 12%, transparent); }
+.demo p { font: 400 13px/1.6 var(--sans); color: var(--dim); max-width: 520px; text-align: center; margin: 0 16px; }
+.demobar { display: none; align-items: center; gap: 10px; font: 500 11px/1 var(--mono); color: var(--dim); }
 .demobar.show { display: flex; }
-.demobar button { font: 900 11px/1 "Arial Black", sans-serif; padding: 6px 10px; border-radius: 4px; border: 2px solid var(--acid); background: #000; color: var(--acid); cursor: pointer; }
-.demobar .prog { flex: 1; height: 6px; background: #2d1748; border-radius: 3px; overflow: hidden; min-width: 80px; }
-.demobar .prog i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--pink), var(--acid)); }
+.demobar button { font: 600 10px/1 var(--sans); letter-spacing: .12em; padding: 6px 10px; border-radius: 3px; border: 1px solid var(--line); background: var(--well); color: var(--ink); cursor: pointer; }
+.demobar .prog { flex: 1; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; min-width: 80px; }
+.demobar .prog i { display: block; height: 100%; width: 0; background: var(--acid); }
 </style>
 </head>
 <body>
 <div class="rig">
   <header class="top">
-    <svg class="smiley" id="smiley" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="46" fill="#e8ff00" stroke="#07020f" stroke-width="5"/>
-      <ellipse cx="35" cy="38" rx="6" ry="11" fill="#07020f"/><ellipse cx="65" cy="38" rx="6" ry="11" fill="#07020f"/>
-      <path d="M22 58 Q50 92 78 58" fill="none" stroke="#07020f" stroke-width="6" stroke-linecap="round"/>
-      <path d="M18 55 l8 5 M82 55 l-8 5" stroke="#07020f" stroke-width="5" stroke-linecap="round"/>
-    </svg>
-    <h1 class="wordmark">TinyScratch<small>GENERATIVE AUTO-SCRATCHER &middot; 33&#8531; RPM</small></h1>
+    <div class="brand">
+      <svg class="smiley" id="smiley" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="45" fill="none" stroke="#d8d27a" stroke-width="5"/>
+        <ellipse cx="36" cy="39" rx="5" ry="9" fill="#d8d27a"/><ellipse cx="64" cy="39" rx="5" ry="9" fill="#d8d27a"/>
+        <path d="M26 59 Q50 86 74 59" fill="none" stroke="#d8d27a" stroke-width="5" stroke-linecap="round"/>
+      </svg>
+      <h1 class="wordmark">Tiny<span>Scratch</span></h1>
+      <span class="tag">auto-scratcher &middot; 33&#8531;</span>
+    </div>
     <div class="leds">
       <span class="led play" id="ledPlay">PLAY</span>
-      <span class="led cut" id="ledCut">CUT</span>
       <span class="led rec" id="ledRec">REC</span>
-      <span class="led bpm on" id="ledBpm">--- BPM</span>
+      <span class="led bpm" id="ledBpm">--- BPM</span>
     </div>
     <div class="info">
-      <div><span class="k">SAMPLE</span><span class="v pink" id="infoSample">&ndash;</span></div>
-      <div><span class="k">PLAYING</span><span class="v cyan" id="infoClip">WAITING FOR THE MOVE</span></div>
+      <div><span class="k">SAMPLE</span><span class="v" id="infoSample">&ndash;</span></div>
+      <div><span class="k">PLAYING</span><span class="v" id="infoClip">Waiting for the Move</span></div>
       <div><span class="k">NEXT GENERATE</span><span class="v" id="infoNext">&ndash;</span></div>
       <div><span class="k">CLIPS</span><span class="v" id="infoClips">&ndash;</span></div>
     </div>
@@ -207,37 +183,38 @@ footer b { color: var(--pink); }
   <div class="demobar" id="demobar"><button id="demoStop">STOP DEMO</button><span id="demoTime">0:00</span><div class="prog"><i id="demoProg"></i></div><span>DEMO: RECORDED FROM THE REAL ENGINE</span></div>
 
   <section class="stage">
-    <div class="panel pink"><h2>THE DECK<span class="sub" id="deckSub"></span></h2>
-      <canvas id="deck"></canvas>
-      <canvas id="xf"></canvas>
+    <div class="left">
+      <div class="panel"><h2>Deck<span class="sub" id="deckSub"></span></h2>
+        <canvas id="deck"></canvas>
+        <div class="deckread"><span id="deckSpeed">0.0&times;</span><span id="deckNeedle">needle 0%</span></div>
+      </div>
+      <div class="panel"><h2>Pre-gen<span class="sub">what Generate makes</span></h2><div class="knobs" id="kPregen" style="--n:6"></div></div>
+      <div class="panel"><h2>Playback<span class="sub">how clips play</span></h2><div class="knobs" id="kPlayback" style="--n:7"></div></div>
     </div>
     <div class="scopes">
-      <div class="panel scope cyan"><h2>WAVEFORM</h2><canvas id="wave"></canvas></div>
-      <div class="panel scope lime"><h2>CLIP VIEW</h2><canvas id="lane"></canvas></div>
-      <div class="panel scope orange"><h2>ZOOM</h2>
+      <div class="panel scope"><h2>Waveform</h2><div class="cv"><canvas id="wave"></canvas></div></div>
+      <div class="panel scope"><h2>Clip view</h2><div class="cv"><canvas id="lane"></canvas></div></div>
+      <div class="panel scope"><h2>Zoom</h2>
         <div class="zbtns" id="zbtns"><button data-w="4">4 BEATS</button><button data-w="2" class="on">2</button><button data-w="1">1</button></div>
-        <canvas id="zoom"></canvas></div>
+        <div class="cv"><canvas id="zoom"></canvas></div></div>
     </div>
   </section>
 
-  <section class="panel pads" style="margin-top:14px"><h2>THE PADS</h2>
-    <div class="prow" id="samples"></div>
-    <div class="prow pages" id="pages"><span class="lbl">PAGE</span></div>
-    <div class="prow" id="clips1"></div>
-    <div class="prow" id="clips2"></div>
-    <div class="hint">TAP A PAD TO PLAY IT &middot; TAP AN EMPTY PAD WHILE A GENERATED CLIP PLAYS TO KEEP IT &middot; HOLD A CLIP 1.5 S TO DELETE IT</div>
+  <section class="lower">
+    <div class="panel pads"><h2>Pads</h2>
+      <div class="prow" id="samples"></div>
+      <div class="prow pages" id="pages"><span class="lbl">PAGE</span></div>
+      <div class="prow" id="clips1"></div>
+      <div class="prow" id="clips2"></div>
+      <div class="hint">tap a pad to play it &middot; tap an empty pad while a generated clip plays to keep it &middot; hold a clip 1.5 s to delete it</div>
+    </div>
+    <div class="panel"><h2>Pad play</h2><div class="toggles" id="kPadplay"></div></div>
   </section>
 
-  <section class="dials">
-    <div class="panel group pregen"><h2>PRE-GEN<span class="sub">WHAT GENERATE MAKES</span></h2><div class="knobs" id="kPregen"></div></div>
-    <div class="panel group playback pink"><h2>PLAYBACK<span class="sub">HOW CLIPS PLAY</span></h2><div class="knobs" id="kPlayback"></div></div>
-    <div class="panel group padplay cyan"><h2>PAD PLAY</h2><div class="toggles" id="kPadplay"></div></div>
-  </section>
-
-  <footer>TINYSCRATCH REMOTE &middot; DRAG A DIAL UP OR DOWN (SHIFT: FINE) &middot; DOUBLE-CLICK RESETS &middot; <b>&#9786; KEEP IT RAW</b></footer>
+  <footer>drag a dial up or down (shift: fine) &middot; scroll &middot; double-click resets &middot; &#9786;</footer>
 </div>
 
-<div class="demo" id="demo"><button id="demoGo">&#9654; DROP THE NEEDLE</button>
+<div class="demo" id="demo"><button id="demoGo">&#9654;&nbsp; DROP THE NEEDLE</button>
   <p>A recording of TinyScratch's own engine: sixteen bars at 92 bpm, played back to this page exactly as the Move sends it. Auto, then Generate in Improv, Baby and Flare, then Fresssh with Humanise, Swing and Bite turned up. Sound on.</p></div>
 
 <script src="/static/schwung-remote-api.js"></script>
@@ -281,19 +258,19 @@ footer b { color: var(--pink); }
   var PREGEN = [
     { key: "gen_style", name: "STYLE", min: 0, max: 12, def: 0, step: 1, opts: STYLES, c: "--acid" },
     { key: "gen_bars", name: "LENGTH", min: 0, max: 2, def: 1, step: 1, opts: BARS, c: "--acid" },
-    { key: "gen_fwd", name: "FORWARDS", min: 0, max: 1, def: 0, step: 0.05, fmt: pct, c: "--cyan" },
-    { key: "gen_fin", name: "FINISH", min: 0, max: 1, def: 0.1, step: 0.05, fmt: pct, c: "--cyan" },
-    { key: "gen_echo", name: "ECHO", min: 0, max: 1, def: 0.1, step: 0.05, fmt: pct, c: "--pink" },
-    { key: "gen_groove", name: "GROOVE", min: 0, max: 1, def: 0, step: 0.05, fmt: pct, c: "--pink" }
+    { key: "gen_fwd", name: "FORWARDS", min: 0, max: 1, def: 0, step: 0.05, fmt: pct, c: "--acid" },
+    { key: "gen_fin", name: "FINISH", min: 0, max: 1, def: 0.1, step: 0.05, fmt: pct, c: "--acid" },
+    { key: "gen_echo", name: "ECHO", min: 0, max: 1, def: 0.1, step: 0.05, fmt: pct, c: "--acid" },
+    { key: "gen_groove", name: "GROOVE", min: 0, max: 1, def: 0, step: 0.05, fmt: pct, c: "--acid" }
   ];
   var PLAYBACK = [
-    { key: "swing", name: "SWING", min: 0, max: 1, def: 0.3, step: 0.02, fmt: pct, c: "--lime" },
-    { key: "humanise", name: "HUMANISE", min: 0, max: 1, def: 0.35, step: 0.02, fmt: pct, c: "--lime" },
-    { key: "bite", name: "BITE", min: 0, max: 1, def: 0.1, step: 0.02, fmt: pct, c: "--orange" },
+    { key: "swing", name: "SWING", min: 0, max: 1, def: 0.3, step: 0.02, fmt: pct, c: "--cyan" },
+    { key: "humanise", name: "HUMANISE", min: 0, max: 1, def: 0.35, step: 0.02, fmt: pct, c: "--cyan" },
+    { key: "bite", name: "BITE", min: 0, max: 1, def: 0.1, step: 0.02, fmt: pct, c: "--cyan" },
     { key: "clip_depth", name: "CLIP DEPTH", min: 0, max: 2, def: 1, step: 0.02, fmt: pct, c: "--cyan" },
     { key: "clip_offset", name: "CLIP OFFSET", min: -0.5, max: 0.5, def: 0, step: 0.01, fmt: function (v) { return (v > 0.004 ? "+" : "") + Math.round(v * 100) + "%"; }, c: "--cyan" },
-    { key: "drag", name: "DRAG", min: 0, max: 1, def: 0.5, step: 0.01, fmt: function (v) { return v < 0.34 ? "DIGI " + pct(v) : (v > 0.66 ? "ANLG " + pct(v) : pct(v)); }, c: "--acid" },
-    { key: "gain", name: "GAIN", min: -24, max: 12, def: 0, step: 0.5, fmt: function (v) { return (v > 0 ? "+" : "") + v.toFixed(1) + " DB"; }, c: "--pink" }
+    { key: "drag", name: "DRAG", min: 0, max: 1, def: 0.5, step: 0.01, fmt: function (v) { return v < 0.34 ? "DIGI " + pct(v) : (v > 0.66 ? "ANLG " + pct(v) : pct(v)); }, c: "--cyan" },
+    { key: "gain", name: "GAIN", min: -24, max: 12, def: 0, step: 0.5, fmt: function (v) { return (v > 0 ? "+" : "") + v.toFixed(1) + " DB"; }, c: "--cyan" }
   ];
   var PADPLAY = [
     { key: "note_gate", name: "NOTE GATE", def: 1 },
@@ -329,7 +306,7 @@ footer b { color: var(--pink); }
     var v;
     try { v = JSON.parse(raw); } catch (e) { return; }
     if (!v || v.v !== 1) return;
-    if (v.dt < lastDt - 1) { offs = []; clockOff = null; }   /* the engine restarted (or the demo looped): forget the clock */
+    if (v.dt < lastDt - 1) { offs = []; clockOff = null; fetchSetName(); }   /* the engine restarted (another set, or the demo looped): forget the clock */
     lastDt = v.dt;
     offs.push(now - v.dt);
     if (offs.length > 24) offs.shift();
@@ -476,181 +453,296 @@ footer b { color: var(--pink); }
   var C = {};
   function loadColors() { ["--acid", "--pink", "--cyan", "--lime", "--orange", "--violet", "--red", "--ink", "--dim", "--page0", "--page1", "--page2", "--page3"].forEach(function (n) { C[n.slice(2)] = css(n); }); }
   loadColors();
-  function glowLine(g, color, w, blur) { g.strokeStyle = color; g.lineWidth = w; g.shadowColor = color; g.shadowBlur = blur; }
+  var FONT_SANS = css("--sans"), FONT_MONO = css("--mono");
+  function glowLine(g, color, w) { g.strokeStyle = color; g.lineWidth = w; g.shadowBlur = 0; }          /* (a line: the page draws no glows) */
   function noGlow(g) { g.shadowBlur = 0; }
   function label(g, text, x, y, color, size, align) {
-    g.font = "900 " + size + "px 'Arial Black', Impact, sans-serif"; g.fillStyle = color; g.textAlign = align || "left"; g.textBaseline = "top"; g.fillText(text, x, y);
+    g.font = "600 " + size + "px " + FONT_SANS; g.fillStyle = color; g.textAlign = align || "left"; g.textBaseline = "top"; g.fillText(text, x, y);
   }
   function mono(g, text, x, y, color, size, align) {
-    g.font = "700 " + size + "px 'Courier New', monospace"; g.fillStyle = color; g.textAlign = align || "left"; g.textBaseline = "top"; g.fillText(text, x, y);
+    g.font = "500 " + size + "px " + FONT_MONO; g.fillStyle = color; g.textAlign = align || "left"; g.textBaseline = "top"; g.fillText(text, x, y);
   }
 
   /* ================================================================
      The deck.
      ================================================================ */
-  var deck = document.getElementById("deck"), dg = deck.getContext("2d"), plinth = document.createElement("canvas");
+  var deck = document.getElementById("deck"), dg = deck.getContext("2d");
+  /* A direct-drive deck from above, in layers. What never moves is drawn once for each size (the plinth with its controls, the
+   * tonearm, the light on the record); each frame turns two pictures, the platter and the record, under them. Lengths are in
+   * units of the deck's height, as a 1200-style deck is laid out: the platter on the left, the arm on the right. */
+  var L = { cx: 0.53, cy: 0.5, rim: 0.445, mat: 0.425, rec: 0.405, label: 0.135 };
+  var layers = { key: "", plinth: null, platter: null, arm: null, sheen: null, record: null, recordKey: "" };
+  var readAt = 0;
 
-  function drawDeck() {
+  /* The set the Move has open, for the label. Schwung keeps it in active_set.txt (line 1 the set's id, line 2 its name), and the
+   * manager this page comes from serves /data/UserData/ as files, so the page reads it there: nothing on the Move's audio thread.
+   * It changes only when another set is opened, which reloads the module (its clock starts again: onRview sees that), so it is
+   * read when the page opens, then when the module restarts, and when the tab is looked at again: never on a timer. */
+  var setName = "";
+  function fetchSetName() {
+    if (demoMode) { setName = (DEMO && DEMO.set) || "Demo Set"; return; }
+    if (!window.fetch || location.protocol === "file:") return;
+    fetch("/files/download?path=" + encodeURIComponent("/data/UserData/schwung/active_set.txt"), { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.text() : ""; })
+      .then(function (t) { var line = String(t || "").split(/\r?\n/)[1]; setName = line ? line.trim().slice(0, 60) : ""; })
+      .catch(function () { /* (no set, or no manager: the label shows the sample) */ });
+  }
+
+  function layer(w, h) { var c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; }
+  function rng(seed) { return function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+
+  function buildPlinth(W, H, d) {
+    var c = layer(W, H), g = c.getContext("2d"), u = H, r = rng(7);
+    /* matte black top, a little lighter at the back, and a fine grain */
+    var bg = g.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#27272b"); bg.addColorStop(1, "#1a1a1d");
+    g.fillStyle = bg; roundRect(g, 0, 0, W, H, 0.025 * u); g.fill();
+    var img = g.getImageData(0, 0, W, H), px = img.data;
+    for (var i = 0; i < px.length; i += 4) { if (px[i + 3]) { var n = (r() - 0.5) * 7; px[i] += n; px[i + 1] += n; px[i + 2] += n; } }
+    g.putImageData(img, 0, 0);
+    g.strokeStyle = "rgba(255,255,255,.07)"; g.lineWidth = 1.5 * d; roundRect(g, 1, 1, W - 2, H - 2, 0.025 * u); g.stroke();
+    /* the well the platter sits in, and its shadow */
+    var cx = L.cx * u, cy = L.cy * u;
+    g.save(); g.shadowColor = "rgba(0,0,0,.65)"; g.shadowBlur = 0.03 * u; g.shadowOffsetY = 0.008 * u;
+    g.fillStyle = "#101012"; g.beginPath(); g.arc(cx, cy, L.rim * u + 0.004 * u, 0, Math.PI * 2); g.fill(); g.restore();
+    /* the name, engraved at the back left */
+    g.font = "italic 700 " + Math.round(0.035 * u) + "px " + css("--sans"); g.textBaseline = "top"; g.textAlign = "left";
+    g.fillStyle = "rgba(255,255,255,.28)"; g.fillText("TinyScratch", 0.035 * u, 0.035 * u);
+    g.font = "500 " + Math.round(0.018 * u) + "px " + css("--sans"); g.fillStyle = "rgba(255,255,255,.18)";
+    g.fillText("QUARTZ DIRECT DRIVE", 0.035 * u, 0.078 * u);
+    /* power dial with its strobe lamp, front left */
+    var kx = 0.075 * u, ky = 0.915 * u;
+    metalDisc(g, kx, ky, 0.042 * u, d);
+    g.fillStyle = "#3a1d18"; g.beginPath(); g.arc(kx + 0.03 * u, ky - 0.03 * u, 0.012 * u, 0, Math.PI * 2); g.fill();
+    /* START/STOP, along the front */
+    var bx = 0.14 * u, by = 0.875 * u, bw = 0.15 * u, bh = 0.085 * u;
+    g.save(); g.shadowColor = "rgba(0,0,0,.6)"; g.shadowBlur = 0.01 * u; g.shadowOffsetY = 0.004 * u;
+    var bgr = g.createLinearGradient(0, by, 0, by + bh); bgr.addColorStop(0, "#c9c9cc"); bgr.addColorStop(1, "#8f8f94");
+    g.fillStyle = bgr; roundRect(g, bx, by, bw, bh, 0.008 * u); g.fill(); g.restore();
+    g.fillStyle = "rgba(20,20,22,.75)"; g.font = "600 " + Math.round(0.017 * u) + "px " + css("--sans"); g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText("START · STOP", bx + bw / 2, by + bh / 2);
+    /* the tonearm's base: the turret, the height ring, the anti-skate dial, the arm rest */
+    var p = armPivot(u);
+    metalDisc(g, p.x, p.y, 0.1 * u, d, true);
+    g.strokeStyle = "rgba(0,0,0,.45)"; g.lineWidth = 1.2 * d;
+    for (var k = 0; k < 48; k++) { var a = k / 48 * Math.PI * 2, r1 = 0.088 * u, r2 = 0.098 * u; g.beginPath(); g.moveTo(p.x + Math.cos(a) * r1, p.y + Math.sin(a) * r1); g.lineTo(p.x + Math.cos(a) * r2, p.y + Math.sin(a) * r2); g.stroke(); }
+    metalDisc(g, p.x - 0.135 * u, p.y - 0.11 * u, 0.026 * u, d);                         /* (the counterweight is the other side) */
+    g.fillStyle = "rgba(255,255,255,.3)"; g.font = "500 " + Math.round(0.013 * u) + "px " + css("--sans");
+    g.fillText("ANTI-SKATE", p.x - 0.135 * u, p.y - 0.155 * u);
+    var rx = p.x + 0.075 * u, ry = 0.66 * u;
+    g.fillStyle = "#0e0e10"; g.beginPath(); g.arc(rx, ry, 0.03 * u, 0, Math.PI * 2); g.fill();
+    metalDisc(g, rx, ry, 0.016 * u, d);
+    return c;
+  }
+
+  /* brushed metal, lit from the top left */
+  function metalDisc(g, x, y, r, d, big) {
+    g.save();
+    g.shadowColor = "rgba(0,0,0,.55)"; g.shadowBlur = r * 0.35; g.shadowOffsetY = r * 0.12;
+    var mg = g.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+    mg.addColorStop(0, "#e6e6ea"); mg.addColorStop(0.55, "#a5a5ab"); mg.addColorStop(1, "#5d5d63");
+    g.fillStyle = mg; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    g.restore();
+    g.strokeStyle = "rgba(0,0,0,.35)"; g.lineWidth = 1 * d; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+    if (big) { g.strokeStyle = "rgba(255,255,255,.18)"; g.beginPath(); g.arc(x, y, r * 0.6, 0, Math.PI * 2); g.stroke(); }
+  }
+
+  function armPivot(u) { return { x: 1.13 * u, y: 0.235 * u }; }
+  function needlePoint(u) { var a = 0.32; return { x: (L.cx + Math.cos(a) * 0.335) * u, y: (L.cy + Math.sin(a) * 0.335) * u }; }
+
+  /* the platter's rim with its four rows of strobe dots, and the felt mat inside it */
+  function buildPlatter(u, d) {
+    var R = L.rim * u, c = layer(2 * R, 2 * R), g = c.getContext("2d");
+    g.translate(R, R);
+    var rg = g.createRadialGradient(0, 0, L.mat * u, 0, 0, R);
+    rg.addColorStop(0, "#4a4a50"); rg.addColorStop(0.5, "#8a8a90"); rg.addColorStop(1, "#4e4e54");
+    g.fillStyle = rg; g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.fill();
+    var rows = [180, 182, 177, 179];
+    for (var row = 0; row < 4; row++) {
+      var rr = (L.mat + 0.003 + row * 0.0043) * u, n = rows[row], s = 0.0023 * u;
+      g.fillStyle = row % 2 ? "rgba(225,225,230,.85)" : "rgba(200,200,206,.75)";
+      for (var i = 0; i < n; i++) { var a = i / n * Math.PI * 2; g.beginPath(); g.arc(Math.cos(a) * rr, Math.sin(a) * rr, s, 0, Math.PI * 2); g.fill(); }
+    }
+    g.fillStyle = "#18181a"; g.beginPath(); g.arc(0, 0, L.mat * u, 0, Math.PI * 2); g.fill();
+    /* felt: a little texture, so the mat reads as cloth when the record moves over it */
+    var r2 = rng(3);
+    g.fillStyle = "rgba(255,255,255,.035)";
+    for (var k = 0; k < 900; k++) { var aa = r2() * Math.PI * 2, rad = Math.sqrt(r2()) * L.mat * u; g.fillRect(Math.cos(aa) * rad, Math.sin(aa) * rad, d, d); }
+    return c;
+  }
+
+  /* the record: grooves with their gaps between tracks, a smooth run-out, the label with the sample's name, and a DJ's sticker
+   * where the sample starts (the Move's white line) */
+  function buildRecord(u, d, title, sample) {
+    var R = L.rec * u, c = layer(2 * R, 2 * R), g = c.getContext("2d"), r = rng(11);
+    g.translate(R, R);
+    var vg = g.createRadialGradient(0, 0, 0, 0, 0, R);
+    vg.addColorStop(0, "#121214"); vg.addColorStop(0.97, "#0b0b0c"); vg.addColorStop(1, "#1c1c1f");
+    g.fillStyle = vg; g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.fill();
+    var gaps = [0.52, 0.64, 0.77, 0.88];
+    for (var f = 0.4; f < 0.965; f += 0.0035) {
+      var gap = false;
+      for (var j = 0; j < gaps.length; j++) if (Math.abs(f - gaps[j]) < 0.006) gap = true;
+      g.strokeStyle = gap ? "rgba(0,0,0,.7)" : "rgba(255,255,255," + (0.012 + r() * 0.03).toFixed(3) + ")";
+      g.lineWidth = gap ? 2 * d : 0.8 * d;
+      g.beginPath(); g.arc(0, 0, f * R, 0, Math.PI * 2); g.stroke();
+    }
+    /* the label: a white one, the set's name written on it in marker, the sample under it in pencil */
+    var LR = L.label * u;
+    g.fillStyle = "#f2f0ea"; g.beginPath(); g.arc(0, 0, LR, 0, Math.PI * 2); g.fill();
+    for (var t = 0; t < 260; t++) { var ta = r() * Math.PI * 2, tr = Math.sqrt(r()) * LR; g.fillStyle = "rgba(0,0,0," + (r() * 0.035).toFixed(3) + ")"; g.fillRect(Math.cos(ta) * tr, Math.sin(ta) * tr, d, d); }
+    g.strokeStyle = "rgba(0,0,0,.08)"; g.lineWidth = 1 * d; g.beginPath(); g.arc(0, 0, LR - 0.5 * d, 0, Math.PI * 2); g.stroke();
+    handwrite(g, title || "", 0, -LR * 0.42, LR * 1.6, LR * 0.3, "#1f2a52", -0.08, 2);          /* above the spindle */
+    handwrite(g, String(sample || "").toLowerCase(), LR * 0.04, LR * 0.5, LR * 1.2, LR * 0.17, "rgba(70,70,74,.75)", -0.05, 1);
+    /* the spindle hole */
+    g.fillStyle = "#8f8f94"; g.beginPath(); g.arc(0, 0, 0.012 * u, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#d9d9dd"; g.beginPath(); g.arc(-0.003 * u, -0.003 * u, 0.006 * u, 0, Math.PI * 2); g.fill();
+    /* the sticker, at 12 o'clock on the label's edge */
+    g.save(); g.rotate(-0.04);
+    g.fillStyle = "#f4f2ec"; g.fillRect(-0.007 * u, -LR * 1.02, 0.014 * u, LR * 0.32);
+    g.restore();
+    return c;
+  }
+
+  /* Writing, by hand: a marker on a white label. The device has no fonts of its own to offer, so this is whichever hand the
+   * viewer's system has. The size comes down until the words fit across the label, on up to `lines` lines. */
+  var HAND = "'Marker Felt', 'Segoe Print', 'Bradley Hand', 'Chalkboard SE', 'Comic Sans MS', cursive";
+  function handwrite(g, text, x, y, maxW, size, color, tilt, lines) {
+    text = String(text).trim();
+    if (!text) return;
+    var words = text.split(/\s+/), rows = [text], px = size;
+    for (; px > size * 0.4; px *= 0.92) {
+      g.font = px + "px " + HAND;
+      rows = [];
+      var row = "";
+      for (var i = 0; i < words.length; i++) {
+        var tryRow = row ? row + " " + words[i] : words[i];
+        if (g.measureText(tryRow).width <= maxW || !row) row = tryRow; else { rows.push(row); row = words[i]; }
+      }
+      rows.push(row);
+      if (rows.length <= lines && rows.every(function (rw) { return g.measureText(rw).width <= maxW; })) break;
+    }
+    if (rows.length > lines) { rows = rows.slice(0, lines); rows[lines - 1] += "\u2026"; }
+    g.save(); g.translate(x, y); g.rotate(tilt);
+    g.fillStyle = color; g.textAlign = "center"; g.textBaseline = "middle";
+    var lh = px * 1.05;
+    for (var k = 0; k < rows.length; k++) g.fillText(rows[k], 0, (k - (rows.length - 1) / 2) * lh);
+    g.restore();
+  }
+
+  /* the light on the record: fixed while the record turns under it, which is what makes the turn read as a turn */
+  function buildSheen(u) {
+    var R = L.rec * u, c = layer(2 * R, 2 * R), g = c.getContext("2d");
+    g.translate(R, R);
+    g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.arc(0, 0, L.label * u, 0, Math.PI * 2, true); g.clip();
+    if (g.createConicGradient) {
+      var cg = g.createConicGradient(-Math.PI * 0.75, 0, 0);
+      [[0, 0], [0.06, 0.09], [0.12, 0], [0.5, 0], [0.56, 0.06], [0.62, 0], [1, 0]].forEach(function (s) { cg.addColorStop(s[0], "rgba(255,255,255," + s[1] + ")"); });
+      g.fillStyle = cg;
+    } else {
+      var lg = g.createLinearGradient(-R, -R, R, R);
+      lg.addColorStop(0.3, "rgba(255,255,255,0)"); lg.addColorStop(0.45, "rgba(255,255,255,.05)"); lg.addColorStop(0.6, "rgba(255,255,255,0)");
+      g.fillStyle = lg;
+    }
+    g.fillRect(-R, -R, 2 * R, 2 * R);
+    return c;
+  }
+
+  /* the tonearm: counterweight, the S-shaped tube, the headshell with its finger lift and the cartridge, needle in the groove */
+  function buildArm(W, H, d) {
+    var c = layer(W, H), g = c.getContext("2d"), u = H, p = armPivot(u), n = needlePoint(u);
+    var dx = n.x - p.x, dy = n.y - p.y, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+    g.save(); g.shadowColor = "rgba(0,0,0,.55)"; g.shadowBlur = 0.018 * u; g.shadowOffsetX = 0.008 * u; g.shadowOffsetY = 0.014 * u;
+    /* the counterweight, behind the pivot */
+    g.save(); g.translate(p.x - ux * 0.075 * u, p.y - uy * 0.075 * u); g.rotate(Math.atan2(uy, ux));
+    var wg = g.createLinearGradient(0, -0.035 * u, 0, 0.035 * u);
+    wg.addColorStop(0, "#9b9ba1"); wg.addColorStop(0.45, "#e2e2e6"); wg.addColorStop(1, "#6a6a70");
+    g.fillStyle = wg; roundRect(g, -0.05 * u, -0.034 * u, 0.075 * u, 0.068 * u, 0.008 * u); g.fill();
+    g.restore();
+    /* the tube: an S, from the pivot to the headshell */
+    var e = { x: n.x - ux * 0.06 * u, y: n.y - uy * 0.06 * u };
+    var c1 = { x: p.x + ux * len * 0.35 + nx * 0.05 * u, y: p.y + uy * len * 0.35 + ny * 0.05 * u };
+    var c2 = { x: p.x + ux * len * 0.7 - nx * 0.06 * u, y: p.y + uy * len * 0.7 - ny * 0.06 * u };
+    g.lineCap = "round";
+    g.strokeStyle = "#8c8c92"; g.lineWidth = 0.022 * u;
+    g.beginPath(); g.moveTo(p.x, p.y); g.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, e.x, e.y); g.stroke();
+    g.restore();
+    g.lineCap = "round";
+    g.strokeStyle = "#dcdce0"; g.lineWidth = 0.008 * u;
+    g.beginPath(); g.moveTo(p.x - nx * 0.003 * u, p.y - ny * 0.003 * u); g.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, e.x, e.y); g.stroke();
+    /* the pivot's bearing */
+    metalDisc(g, p.x, p.y, 0.03 * u, d);
+    /* the headshell, angled off the tube as a real one is, with its finger lift */
+    g.save(); g.translate(n.x, n.y); g.rotate(Math.atan2(uy, ux) - 0.38);
+    g.shadowColor = "rgba(0,0,0,.55)"; g.shadowBlur = 0.014 * u; g.shadowOffsetX = 0.006 * u; g.shadowOffsetY = 0.012 * u;
+    var hg = g.createLinearGradient(0, -0.03 * u, 0, 0.03 * u); hg.addColorStop(0, "#c4c4c9"); hg.addColorStop(1, "#7c7c82");
+    g.fillStyle = hg; roundRect(g, -0.075 * u, -0.026 * u, 0.1 * u, 0.052 * u, 0.008 * u); g.fill();
+    g.shadowColor = "transparent";
+    g.strokeStyle = "#a9a9ae"; g.lineWidth = 0.008 * u; g.beginPath(); g.moveTo(-0.03 * u, -0.026 * u); g.quadraticCurveTo(-0.035 * u, -0.06 * u, -0.06 * u, -0.07 * u); g.stroke();
+    g.fillStyle = "#222226"; roundRect(g, -0.035 * u, -0.018 * u, 0.05 * u, 0.036 * u, 0.004 * u); g.fill();
+    g.fillStyle = css("--acid"); g.fillRect(-0.03 * u, -0.004 * u, 0.04 * u, 0.008 * u);
+    g.restore();
+    return c;
+  }
+
+  function drawDeck(now) {
     fitCanvas(deck);
-    var W = deck.width, H = deck.height, g = dg, d = dpr();
+    var W = deck.width, H = deck.height, g = dg, d = dpr(), u = H;
+    var key = W + "x" + H;
+    if (layers.key !== key) {
+      layers.key = key;
+      layers.plinth = buildPlinth(W, H, d); layers.platter = buildPlatter(u, d); layers.arm = buildArm(W, H, d); layers.sheen = buildSheen(u);
+      layers.recordKey = "";
+    }
+    var sample = rv ? rv.n : "", title = setName || (rv ? "" : "TinyScratch");
+    if (layers.recordKey !== key + "|" + title + "|" + sample) { layers.recordKey = key + "|" + title + "|" + sample; layers.record = buildRecord(u, d, title, sample); }
+    var cx = L.cx * u, cy = L.cy * u;
     g.clearRect(0, 0, W, H);
-    /* the plinth: drawn once for each size, it never moves */
-    if (plinth.width !== W || plinth.height !== H) {
-      plinth.width = W; plinth.height = H;
-      var pg = plinth.getContext("2d"), pr = 18 * d;
-      var grd = pg.createLinearGradient(0, 0, W, H);
-      grd.addColorStop(0, "#2a2533"); grd.addColorStop(0.5, "#17131f"); grd.addColorStop(1, "#0d0a12");
-      pg.fillStyle = grd;
-      roundRect(pg, 2 * d, 2 * d, W - 4 * d, H - 4 * d, pr); pg.fill();
-      glowLine(pg, C.pink, 2 * d, 14 * d); roundRect(pg, 2 * d, 2 * d, W - 4 * d, H - 4 * d, pr); pg.stroke(); noGlow(pg);
-      pg.globalAlpha = 0.05; pg.strokeStyle = "#fff"; pg.lineWidth = 1;                 /* brushed */
-      pg.beginPath();
-      for (var y = 6 * d; y < H; y += 3 * d) { pg.moveTo(8 * d, y); pg.lineTo(W - 8 * d, y); }
-      pg.stroke();
-      pg.globalAlpha = 1;
-    }
-    g.drawImage(plinth, 0, 0);
-
-    var R0 = Math.min(W * 0.4, H * 0.37), cx = W * 0.44, cy = H * 0.45;
-    /* the platter, its strobe dots turning with it */
+    g.drawImage(layers.plinth, 0, 0);
+    g.save(); g.translate(cx, cy); g.rotate(sim.platter); g.drawImage(layers.platter, -layers.platter.width / 2, -layers.platter.height / 2); g.restore();
+    /* the record sits on the mat with a thin shadow */
     g.save(); g.translate(cx, cy);
-    g.fillStyle = "#38343f"; g.beginPath(); g.arc(0, 0, R0 * 1.06, 0, Math.PI * 2); g.fill();
-    g.rotate(sim.platter);
-    for (var row = 0; row < 3; row++) {
-      var rr = R0 * (1.015 + row * 0.016), nd = 180 - row * 12;
-      g.fillStyle = row === 1 ? "#cfc8d8" : "#8d8698";
-      for (var i = 0; i < nd; i++) { var a = i / nd * Math.PI * 2; g.fillRect(Math.cos(a) * rr - d * 0.6, Math.sin(a) * rr - d * 0.6, 1.3 * d, 1.3 * d); }
+    g.fillStyle = "rgba(0,0,0,.5)"; g.beginPath(); g.arc(0.002 * u, 0.004 * u, L.rec * u, 0, Math.PI * 2); g.fill();
+    g.rotate(sim.angle); g.drawImage(layers.record, -layers.record.width / 2, -layers.record.height / 2);
+    g.restore();
+    g.drawImage(layers.sheen, cx - layers.sheen.width / 2, cy - layers.sheen.height / 2);
+    /* the strobe lamp, lit while the transport runs, and its light on the dots */
+    if (sim.pspeed > 0.01) {
+      var on = Math.min(1, sim.pspeed / RPS), lx = 0.075 * u + 0.03 * u, ly = 0.915 * u - 0.03 * u;
+      var lg = g.createRadialGradient(lx, ly, 0, lx, ly, 0.12 * u);
+      lg.addColorStop(0, "rgba(255,120,80," + (0.55 * on) + ")"); lg.addColorStop(1, "rgba(255,120,80,0)");
+      g.fillStyle = lg; g.beginPath(); g.arc(lx, ly, 0.12 * u, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "rgba(255,140,100," + (0.9 * on) + ")"; g.beginPath(); g.arc(lx, ly, 0.009 * u, 0, Math.PI * 2); g.fill();
     }
-    /* the slipmat's edge */
-    g.fillStyle = "#0b0b0e"; g.beginPath(); g.arc(0, 0, R0 * 1.005, 0, Math.PI * 2); g.fill();
-    g.restore();
-
-    /* the record: grooves, then the label, the sticker and the sample's name, all turning with the playhead */
-    g.save(); g.translate(cx, cy); g.rotate(sim.angle);
-    var vg = g.createRadialGradient(0, 0, R0 * 0.2, 0, 0, R0);
-    vg.addColorStop(0, "#111"); vg.addColorStop(0.97, "#050505"); vg.addColorStop(1, "#202020");
-    g.fillStyle = vg; g.beginPath(); g.arc(0, 0, R0, 0, Math.PI * 2); g.fill();
-    for (var gr = 0.36; gr < 0.97; gr += 0.012) {
-      g.strokeStyle = gr > 0.6 && gr < 0.63 ? "rgba(0,0,0,.9)" : "rgba(255,255,255," + (0.025 + 0.02 * Math.sin(gr * 90)) + ")";
-      g.lineWidth = gr > 0.6 && gr < 0.63 ? 2 * d : 1;
-      g.beginPath(); g.arc(0, 0, R0 * gr, 0, Math.PI * 2); g.stroke();
-    }
-    /* a groove that is not round, so the turn reads even with the label off screen */
-    g.strokeStyle = "rgba(255,46,196,.25)"; g.lineWidth = 1.5 * d;
-    g.beginPath(); g.arc(0, 0, R0 * 0.8, -0.5, 0.9); g.stroke();
-    /* the label */
-    var LR = R0 * 0.33;
-    var lg = g.createRadialGradient(0, 0, 0, 0, 0, LR);
-    lg.addColorStop(0, "#fff36a"); lg.addColorStop(1, C.acid);
-    g.fillStyle = lg; g.beginPath(); g.arc(0, 0, LR, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = C.pink; g.lineWidth = 3 * d; g.beginPath(); g.arc(0, 0, LR * 0.93, 0, Math.PI * 2); g.stroke();
-    g.fillStyle = "#07020f"; g.textAlign = "center"; g.textBaseline = "middle";
-    var nm = rv ? String(rv.n || "").slice(0, 10) : "TINYSCRATCH";
-    g.font = "italic 900 " + Math.round(LR * 0.3) + "px Impact, 'Arial Black', sans-serif"; g.fillText(nm, 0, -LR * 0.42);
-    g.font = "900 " + Math.round(LR * 0.15) + "px 'Arial Black', sans-serif"; g.fillText("TINYSCRATCH", 0, LR * 0.42);
-    g.fillText("33⅓ RPM", 0, LR * 0.62);
-    /* a smiley on the label */
-    g.strokeStyle = "#07020f"; g.lineWidth = 2.2 * d;
-    g.beginPath(); g.arc(0, LR * 0.02, LR * 0.2, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
-    g.fillRect(-LR * 0.1, -LR * 0.14, LR * 0.05, LR * 0.1); g.fillRect(LR * 0.05, -LR * 0.14, LR * 0.05, LR * 0.1);
-    /* the spindle */
-    g.fillStyle = "#ddd"; g.beginPath(); g.arc(0, 0, R0 * 0.025, 0, Math.PI * 2); g.fill();
-    /* the sticker: a DJ's mark at the start of the sample (the Move's white line) */
-    g.fillStyle = "#fff"; g.shadowColor = "#fff"; g.shadowBlur = 8 * d;
-    g.fillRect(-1.6 * d, -R0 * 0.985, 3.2 * d, R0 * 0.62);
-    noGlow(g);
-    g.restore();
-
-    /* the light on the record: it stays put while the record turns, which is what makes the turn readable */
-    g.save(); g.translate(cx, cy);
-    g.globalCompositeOperation = "lighter";
-    var sh = g.createLinearGradient(-R0, -R0, R0, R0);
-    sh.addColorStop(0.0, "rgba(255,255,255,0)"); sh.addColorStop(0.42, "rgba(255,255,255,.07)"); sh.addColorStop(0.5, "rgba(0,229,255,.12)");
-    sh.addColorStop(0.58, "rgba(255,255,255,.07)"); sh.addColorStop(1, "rgba(255,255,255,0)");
-    g.fillStyle = sh;
-    g.beginPath(); g.arc(0, 0, R0, 0, Math.PI * 2); g.arc(0, 0, R0 * 0.34, 0, Math.PI * 2, true); g.fill();
-    g.restore();
-
-    /* the tonearm: from its pivot, top right, to the needle in the groove */
-    var px = cx + R0 * 1.18, py = cy - R0 * 0.92;
-    var wob = clamp(sim.velS, -6, 6) * 0.004;
-    var nx = cx + R0 * 0.62, ny = cy + R0 * 0.38 + wob * R0;
-    g.fillStyle = "#2c2832"; g.beginPath(); g.arc(px, py, R0 * 0.13, 0, Math.PI * 2); g.fill();
-    glowLine(g, C.cyan, 1.5 * d, 6 * d); g.beginPath(); g.arc(px, py, R0 * 0.13, 0, Math.PI * 2); g.stroke(); noGlow(g);
-    g.fillStyle = "#888"; g.beginPath(); g.arc(px, py, R0 * 0.06, 0, Math.PI * 2); g.fill();
-    /* the counterweight */
-    var bx = px + (px - nx) * 0.18, by = py + (py - ny) * 0.18;
-    g.strokeStyle = "#5a5562"; g.lineWidth = 6 * d; g.lineCap = "round";
-    g.beginPath(); g.moveTo(px, py); g.lineTo(bx, by); g.stroke();
-    g.fillStyle = "#6f6a78"; g.beginPath(); g.arc(bx, by, R0 * 0.07, 0, Math.PI * 2); g.fill();
-    /* the arm, with its bend near the headshell */
-    var mx = px + (nx - px) * 0.72, my = py + (ny - py) * 0.72 - R0 * 0.03;
-    var hx = nx - R0 * 0.06, hy = ny - R0 * 0.07;
-    var ag = g.createLinearGradient(px, py, nx, ny); ag.addColorStop(0, "#e8e8f0"); ag.addColorStop(1, "#9a98a8");
-    g.strokeStyle = ag; g.lineWidth = 4.2 * d;
-    g.beginPath(); g.moveTo(px, py); g.lineTo(mx, my); g.lineTo(hx, hy); g.stroke();
-    /* the headshell and the cartridge, lit */
-    g.save(); g.translate(nx, ny); g.rotate(Math.atan2(ny - my, nx - mx) + 0.35);
-    g.fillStyle = "#1b1b20"; roundRect(g, -R0 * 0.1, -R0 * 0.045, R0 * 0.16, R0 * 0.09, 3 * d); g.fill();
-    g.fillStyle = C.pink; g.shadowColor = C.pink; g.shadowBlur = 10 * d;
-    roundRect(g, -R0 * 0.03, -R0 * 0.03, R0 * 0.07, R0 * 0.06, 2 * d); g.fill(); noGlow(g);
-    g.restore();
-    g.lineCap = "butt";
-
-    /* start/stop and the strobe light */
-    var on = rv && rv.tp;
-    var bx0 = W * 0.06, by0 = H * 0.86, bw = W * 0.16, bh = H * 0.075;
-    g.fillStyle = on ? C.lime : "#2b2733"; if (on) { g.shadowColor = C.lime; g.shadowBlur = 16 * d; }
-    roundRect(g, bx0, by0, bw, bh, 5 * d); g.fill(); noGlow(g);
-    label(g, on ? "PLAYING" : "STOPPED", bx0 + bw / 2, by0 + bh * 0.3, on ? "#07020f" : C.dim, Math.round(bh * 0.32), "center");
-    /* the strobe light, bottom left of the platter */
-    g.fillStyle = on ? "#ff3b3b" : "#3a1a1a"; if (on) { g.shadowColor = "#ff3b3b"; g.shadowBlur = 18 * d; }
-    g.beginPath(); g.arc(cx - R0 * 1.0, cy + R0 * 1.0, R0 * 0.06, 0, Math.PI * 2); g.fill(); noGlow(g);
-
-    /* readouts, top left: the speed under the needle and where it is */
-    var spd = sim.velS, mag = Math.abs(spd);
-    label(g, (spd < -0.05 ? "◀ " : (spd > 0.05 ? "▶ " : "  ")) + (mag > 99 ? "99" : mag.toFixed(1)) + "X", 16 * d, 14 * d, mag > 0.05 ? C.cyan : C.dim, Math.round(16 * d));
-    mono(g, "NEEDLE " + Math.round(clamp(sim.pos, 0, 1) * 100) + "%", 16 * d, 36 * d, C.dim, Math.round(11 * d));
+    g.drawImage(layers.arm, 0, 0);
 
     /* nothing to say yet, or nothing plays */
-    if (!rv) banner(g, W, H, d, "WAITING FOR TINYSCRATCH");
-    else if (rv.cm > 0 && !rv.ru && !rv.nh) banner(g, W, H, d, "PRESS PLAY ON THE MOVE");
-    else if (rv.rc) banner(g, W, H, d, "REC " + (rv.rt / 10).toFixed(1) + " S");
+    if (!rv) banner(g, W, H, d, "Waiting for TinyScratch");
+    else if (rv.cm > 0 && !rv.ru && !rv.nh) banner(g, W, H, d, "Press play on the Move");
+    else if (rv.rc) banner(g, W, H, d, "Recording " + (rv.rt / 10).toFixed(1) + " s");
+
+    /* the readouts under it, ten times a second */
+    if (now - readAt > 100) {
+      readAt = now;
+      var spd = sim.velS, mag = Math.abs(spd);
+      document.getElementById("deckSpeed").textContent = (spd < -0.05 ? "◀ " : (spd > 0.05 ? "▶ " : "")) + (mag > 99 ? "99" : mag.toFixed(1)) + "× speed";
+      document.getElementById("deckNeedle").textContent = "needle " + Math.round(clamp(sim.pos, 0, 1) * 100) + "%";
+    }
   }
 
   function banner(g, W, H, d, text) {
-    g.save(); g.translate(W / 2, H * 0.08); g.rotate(-0.03);
-    g.font = "italic 900 " + Math.round(20 * d) + "px Impact, 'Arial Black', sans-serif";
-    var w = g.measureText(text).width + 30 * d;
-    g.fillStyle = C.acid; g.fillRect(-w / 2, -16 * d, w, 32 * d);
-    g.fillStyle = "#07020f"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(text, 0, 1 * d);
+    g.save();
+    g.font = "600 " + Math.round(13 * d) + "px " + css("--sans");
+    var w = g.measureText(text).width + 28 * d, x = L.cx * H, y = H * 0.07;
+    g.fillStyle = "rgba(17,17,19,.86)"; roundRect(g, x - w / 2, y - 14 * d, w, 28 * d, 14 * d); g.fill();
+    g.strokeStyle = "rgba(255,255,255,.12)"; g.lineWidth = 1; roundRect(g, x - w / 2, y - 14 * d, w, 28 * d, 14 * d); g.stroke();
+    g.fillStyle = css("--ink"); g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(text, x, y + 0.5 * d);
     g.restore();
   }
 
   function roundRect(g, x, y, w, h, r) {
     g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
     g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
-  }
-
-
-  /* the crossfader: open while the sound is cut in */
-  var xf = document.getElementById("xf"), xg = xf.getContext("2d");
-  function drawFader() {
-    fitCanvas(xf);
-    var W = xf.width, H = xf.height, g = xg, d = dpr();
-    g.clearRect(0, 0, W, H);
-    g.fillStyle = "#0c0416"; roundRect(g, 0, 0, W, H, 8 * d); g.fill();
-    var x0 = W * 0.18, x1 = W * 0.82, y = H * 0.55;
-    label(g, "SHUT", W * 0.09, y - 7 * d, sim.gate < 0.5 ? C.ink : C.dim, Math.round(11 * d), "center");
-    label(g, "CUT IN", W * 0.91, y - 7 * d, sim.gate >= 0.5 ? C.pink : C.dim, Math.round(11 * d), "center");
-    g.fillStyle = "#000"; roundRect(g, x0, y - 4 * d, x1 - x0, 8 * d, 4 * d); g.fill();
-    for (var i = 0; i <= 10; i++) { g.fillStyle = "#3a2457"; g.fillRect(x0 + (x1 - x0) * i / 10, y - 14 * d, 1.5 * d, 5 * d); }
-    var open = clamp(sim.gate, 0, 1), kx = x0 + (x1 - x0) * open;
-    if (open > 0.02) { glowLine(g, C.pink, 6 * d, 16 * d); g.beginPath(); g.moveTo(x0, y); g.lineTo(kx, y); g.stroke(); noGlow(g); }
-    var cg = g.createLinearGradient(0, y - 16 * d, 0, y + 16 * d); cg.addColorStop(0, "#f2f0f7"); cg.addColorStop(1, "#8c889a");
-    g.fillStyle = cg; roundRect(g, kx - 16 * d, y - 16 * d, 32 * d, 32 * d, 4 * d); g.fill();
-    g.fillStyle = open > 0.5 ? C.pink : "#07020f"; g.fillRect(kx - 1.5 * d, y - 13 * d, 3 * d, 26 * d);
-    label(g, "XFADER", W / 2, 4 * d, C.dim, Math.round(9 * d), "center");
   }
 
   /* ================================================================
@@ -663,28 +755,28 @@ footer b { color: var(--pink); }
     waveCache.width = W; waveCache.height = H;
     var g = waveCache.getContext("2d");
     var top = 26 * d, bot = H - 22 * d, mid = (top + bot) / 2, half = (bot - top) / 2 - 2 * d;
-    g.strokeStyle = "rgba(138,44,255,.18)"; g.lineWidth = 1;
+    g.strokeStyle = "rgba(255,255,255,.04)"; g.lineWidth = 1;
     for (var i = 0; i <= 20; i++) { var x = i * W / 20; g.beginPath(); g.moveTo(x, top); g.lineTo(x, bot); g.stroke(); }
     for (var j = 0; j <= 4; j++) { var y = top + (bot - top) * j / 4; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
     if (!rc || !rc.w.length) return;
     var n = rc.w.length;
     /* the body */
     var body = g.createLinearGradient(0, top, 0, bot);
-    body.addColorStop(0, C.pink); body.addColorStop(0.5, C.violet); body.addColorStop(1, C.cyan);
+    body.addColorStop(0, "rgba(140,188,194,.38)"); body.addColorStop(0.5, "rgba(140,188,194,.55)"); body.addColorStop(1, "rgba(140,188,194,.38)");
     g.fillStyle = body;
     g.beginPath(); g.moveTo(0, mid);
     for (var c = 0; c < n; c++) g.lineTo(c * W / (n - 1), mid - Math.min(rc.wr[c], rc.w[c]) * half);
     for (var c2 = n - 1; c2 >= 0; c2--) g.lineTo(c2 * W / (n - 1), mid + Math.min(rc.wr[c2], rc.w[c2]) * half);
     g.closePath(); g.fill();
     /* the peaks, one outline */
-    glowLine(g, C.acid, 1.4 * d, 6 * d);
+    glowLine(g, "rgba(232,229,222,.5)", 1.1 * d);
     g.beginPath();
     for (var k = 0; k < n; k++) { var xx = k * W / (n - 1), yy = mid - rc.w[k] * half; if (k) g.lineTo(xx, yy); else g.moveTo(xx, yy); }
     g.stroke();
     g.beginPath();
     for (var k2 = 0; k2 < n; k2++) { var x2 = k2 * W / (n - 1), y2 = mid + rc.w[k2] * half; if (k2) g.lineTo(x2, y2); else g.moveTo(x2, y2); }
     g.stroke(); noGlow(g);
-    g.setLineDash([2 * d, 4 * d]); g.strokeStyle = "rgba(255,255,255,.35)"; g.beginPath(); g.moveTo(0, mid); g.lineTo(W, mid); g.stroke(); g.setLineDash([]);
+    g.setLineDash([2 * d, 4 * d]); g.strokeStyle = "rgba(255,255,255,.15)"; g.beginPath(); g.moveTo(0, mid); g.lineTo(W, mid); g.stroke(); g.setLineDash([]);
   }
 
   function drawWave(now) {
@@ -697,21 +789,19 @@ footer b { color: var(--pink); }
     if (!rv) return;
     /* where the clips scratch: the sound, not the silence round it */
     if (rv.cm > 0 && !rv.nat) {
-      g.fillStyle = "rgba(7,2,15,.55)";
+      g.fillStyle = "rgba(21,21,23,.6)";
       g.fillRect(0, top, rv.lo * W, bot - top); g.fillRect(rv.hi * W, top, W - rv.hi * W, bot - top);
     }
     /* the header: name, speed, where */
-    label(g, String(rv.n || "").slice(0, 18), 4 * d, 4 * d, C.ink, Math.round(14 * d));
+    label(g, String(rv.n || "").slice(0, 18), 4 * d, 4 * d, C.ink, Math.round(12 * d));
     var spd = sim.velS, mag = Math.abs(spd);
-    label(g, (spd < -0.05 ? "-" : "") + (mag > 99 ? "99" : mag.toFixed(1)) + "X", W / 2, 4 * d, C.cyan, Math.round(14 * d), "center");
-    label(g, Math.round(clamp(sim.pos, 0, 1) * 100) + "%", W - 4 * d, 4 * d, C.acid, Math.round(14 * d), "right");
-    /* a bar while the sound is cut in */
-    if (sim.gate > 0.5) { g.fillStyle = C.pink; g.shadowColor = C.pink; g.shadowBlur = 10 * d; g.fillRect(0, top - 5 * d, W, 3 * d); noGlow(g); }
+    label(g, (spd < -0.05 ? "-" : "") + (mag > 99 ? "99" : mag.toFixed(1)) + "\u00D7", W / 2, 4 * d, C.dim, Math.round(12 * d), "center");
+    label(g, Math.round(clamp(sim.pos, 0, 1) * 100) + "%", W - 4 * d, 4 * d, C.dim, Math.round(12 * d), "right");
     /* the trail: where the playhead has just been, fading, each pass a line down the band */
     for (var i = 1; i < sim.trail.length; i++) {
       var a = sim.trail[i - 1], b = sim.trail[i], age = (now - b.t) / 900;
-      g.strokeStyle = b.g ? "rgba(255,46,196," + (0.55 * (1 - age)) + ")" : "rgba(0,229,255," + (0.35 * (1 - age)) + ")";
-      g.lineWidth = (b.g ? 5 : 2) * d;
+      g.strokeStyle = "rgba(140,188,194," + (0.4 * (1 - age)) + ")";
+      g.lineWidth = 2 * d;
       g.beginPath(); g.moveTo(a.p * W, top + (bot - top) * (now - a.t) / 900); g.lineTo(b.p * W, top + (bot - top) * (now - b.t) / 900); g.stroke();
     }
     /* where the clip is sending it, or the cues */
@@ -721,16 +811,16 @@ footer b { color: var(--pink); }
     } else if (rv.cm === 0 && rv.cs === 1 && rv.cu) {
       for (var k = 0; k < 8; k++) {
         var cx = clamp(rv.cu[k], 0, 1) * W, nowc = rv.cq === k;
-        g.fillStyle = nowc ? C.lime : "rgba(92,255,58,.7)";
+        g.fillStyle = nowc ? C.ink : C.dim;
         g.fillRect(cx - (nowc ? 3 : 1) * d, bot + 2 * d, (nowc ? 6 : 2) * d, 8 * d);
-        mono(g, String(k + 1), cx + 3 * d, bot + 2 * d, C.lime, Math.round(9 * d));
+        mono(g, String(k + 1), cx + 3 * d, bot + 2 * d, C.dim, Math.round(9 * d));
       }
     }
     /* the playhead */
     var x = clamp(sim.pos, 0, 1) * W;
-    g.fillStyle = "rgba(7,2,15,.6)"; g.fillRect(x - 4 * d, top, 8 * d, bot - top);
-    glowLine(g, "#fff", 2 * d, 14 * d); g.beginPath(); g.moveTo(x, top - 2 * d); g.lineTo(x, bot + 2 * d); g.stroke(); noGlow(g);
-    g.fillStyle = "#fff"; g.fillRect(x - 6 * d, top - 2 * d, 12 * d, 2 * d); g.fillRect(x - 6 * d, bot, 12 * d, 2 * d);
+    g.fillStyle = "rgba(21,21,23,.55)"; g.fillRect(x - 3 * d, top, 6 * d, bot - top);
+    glowLine(g, C.ink, 1.5 * d); g.beginPath(); g.moveTo(x, top - 2 * d); g.lineTo(x, bot + 2 * d); g.stroke(); noGlow(g);
+    g.fillStyle = C.ink; g.fillRect(x - 5 * d, top - 2 * d, 10 * d, 1.5 * d); g.fillRect(x - 5 * d, bot, 10 * d, 1.5 * d);
     /* the ruler: tenths of the sample, and its length */
     for (var r = 0; r <= 10; r++) {
       var rx = Math.round(r * (W - 1) / 10), tall = r % 5 === 0;
@@ -755,11 +845,11 @@ footer b { color: var(--pink); }
     /* beats, bars */
     for (var b = 0; b <= lb; b++) {
       var x = b * W / lb, bar = b % 4 === 0;
-      g.strokeStyle = bar ? "rgba(232,255,0,.45)" : "rgba(138,44,255,.35)"; g.lineWidth = bar ? 1.5 * d : 1;
+      g.strokeStyle = bar ? "rgba(216,210,122,.3)" : "rgba(255,255,255,.07)"; g.lineWidth = 1 * d;
       g.beginPath(); g.moveTo(x, L.top); g.lineTo(x, H - 14 * d); g.stroke();
-      if (bar && b < lb) mono(g, String(b / 4 + 1), x + 3 * d, H - 13 * d, C.acid, Math.round(10 * d));
+      if (bar && b < lb) mono(g, String(b / 4 + 1), x + 3 * d, H - 13 * d, C.dim, Math.round(10 * d));
     }
-    g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(0, L.cutT, W, L.cutH);
+    g.fillStyle = "rgba(0,0,0,.2)"; g.fillRect(0, L.cutT, W, L.cutH);
     if (clip) {
       var n = rc.lp.length, played = rc.hp && rc.hp.length && num("humanise", 0) > 0;
       /* the cuts as blocks, as tall as the fader opens (an echo steps down) */
@@ -768,7 +858,7 @@ footer b { color: var(--pink); }
         var lvl = played ? (gates[i] ? (LEVELS[rc.lg[Math.min(rc.lg.length - 1, Math.floor(i * rc.lg.length / gn))] & 7] || 1) : 0) : (LEVELS[gates[i] & 7] || 0);
         if (!lvl) continue;
         var x0 = i * W / gn, x1 = (i + 1) * W / gn, h = L.cutH * lvl;
-        g.fillStyle = C.lime; g.globalAlpha = 0.35 + 0.65 * lvl;
+        g.fillStyle = C.pink; g.globalAlpha = 0.3 + 0.55 * lvl;
         g.fillRect(x0, L.cutT + L.cutH - h, Math.max(1, x1 - x0 + 0.5), h);
       }
       g.globalAlpha = 1;
@@ -779,13 +869,13 @@ footer b { color: var(--pink); }
       /* the path as written: a ghost when Humanise plays something else */
       var y = function (v) { return L.pathB - v * (L.pathB - L.pathT); };
       if (played) {
-        g.setLineDash([3 * d, 4 * d]); g.strokeStyle = "rgba(255,46,196,.7)"; g.lineWidth = 1.5 * d;
-      } else glowLine(g, C.cyan, 2.2 * d, 8 * d);
+        g.setLineDash([3 * d, 4 * d]); g.strokeStyle = "rgba(232,229,222,.3)"; g.lineWidth = 1.2 * d;
+      } else glowLine(g, C.cyan, 1.8 * d);
       g.beginPath();
       for (var k = 0; k < n; k++) { var xx = (k + 0.5) * W / n, yy = y(rc.lp[k]); if (k) g.lineTo(xx, yy); else g.moveTo(xx, yy); }
       g.stroke(); g.setLineDash([]); noGlow(g);
       if (played) {
-        glowLine(g, C.cyan, 2.2 * d, 8 * d);
+        glowLine(g, C.cyan, 1.8 * d);
         g.beginPath();
         for (var h2 = 0; h2 < rc.hp.length; h2++) { var hx = (h2 + 0.5) * W / rc.hp.length, hy = y(rc.hp[h2]); if (h2) g.lineTo(hx, hy); else g.moveTo(hx, hy); }
         g.stroke(); noGlow(g);
@@ -793,8 +883,8 @@ footer b { color: var(--pink); }
     } else if (rc.hl) {
       /* no clip: what the playhead did over the last bar */
       var m = rc.hl.length;
-      for (var c = 0; c < m; c++) if (rc.hlg[c]) { g.fillStyle = C.lime; g.fillRect(c * W / m, L.cutT, Math.max(1, W / m + 0.5), L.cutH); }
-      glowLine(g, C.cyan, 2 * d, 8 * d);
+      for (var c = 0; c < m; c++) if (rc.hlg[c]) { g.fillStyle = "rgba(223,132,102,.6)"; g.fillRect(c * W / m, L.cutT, Math.max(1, W / m + 0.5), L.cutH); }
+      glowLine(g, C.cyan, 1.8 * d);
       g.beginPath();
       for (var q = 0; q < m; q++) { var qx = (q + 0.5) * W / m, qy = L.pathB - rc.hl[q] * (L.pathB - L.pathT); if (q) g.lineTo(qx, qy); else g.moveTo(qx, qy); }
       g.stroke(); noGlow(g);
@@ -823,20 +913,20 @@ footer b { color: var(--pink); }
     g.drawImage(laneCache, 0, 0);
     if (!rv) return;
     var L = laneGeom(W, H, d);
-    label(g, clipLabel(), 4 * d, 6 * d, C.ink, Math.round(13 * d));
+    label(g, clipLabel(), 4 * d, 6 * d, C.ink, Math.round(12 * d));
     var ex = clipExtras();
-    label(g, ex || (rc ? rc.lb + " BEATS" : ""), W - 4 * d, 6 * d, ex ? C.pink : C.dim, Math.round(12 * d), "right");
+    label(g, ex || (rc ? rc.lb + " BEATS" : ""), W - 4 * d, 6 * d, C.dim, Math.round(11 * d), "right");
     if (!rc) return;
     /* now: the cursor, with the playhead's own height on it */
     var lb = rc.lb, t = sim.clip ? sim.t : sim.beat;
     var x = (((t % lb) + lb) % lb) / lb * W;
-    g.fillStyle = "rgba(255,255,255,.08)"; g.fillRect(x - 10 * d, L.top, 10 * d, H - L.top - 14 * d);
-    glowLine(g, "#fff", 1.5 * d, 10 * d); g.beginPath(); g.moveTo(x, L.top); g.lineTo(x, H - 14 * d); g.stroke(); noGlow(g);
+    g.fillStyle = "rgba(255,255,255,.04)"; g.fillRect(x - 10 * d, L.top, 10 * d, H - L.top - 14 * d);
+    glowLine(g, C.ink, 1.2 * d); g.beginPath(); g.moveTo(x, L.top); g.lineTo(x, H - 14 * d); g.stroke(); noGlow(g);
     if (sim.clip) {
       var played = rc.hp && rc.hk === Math.floor((sim.beat - rv.t0) / lb) && num("humanise", 0) > 0;
       var raw = played ? planAt(rc.hp, lb, t) : planAt(rc.lp, lb, t);
       var yy = L.pathB - raw * (L.pathB - L.pathT);
-      g.fillStyle = sim.gate > 0.5 ? C.pink : "#fff"; g.shadowColor = g.fillStyle; g.shadowBlur = 14 * d;
+      g.fillStyle = C.ink;
       g.beginPath(); g.arc(x, yy, 5 * d, 0, Math.PI * 2); g.fill(); noGlow(g);
     }
   }
@@ -860,14 +950,14 @@ footer b { color: var(--pink); }
     /* a line for every beat, a solid one on each bar */
     for (var b = Math.ceil(start); b < start + w; b++) {
       var x = (b - start) / w * W, bar = ((b % 4) + 4) % 4 === 0;
-      g.strokeStyle = bar ? "rgba(232,255,0,.6)" : "rgba(138,44,255,.45)"; g.lineWidth = bar ? 2 * d : 1;
+      g.strokeStyle = bar ? "rgba(216,210,122,.35)" : "rgba(255,255,255,.08)"; g.lineWidth = 1 * d;
       if (!bar) g.setLineDash([3 * d, 5 * d]);
       g.beginPath(); g.moveTo(x, top); g.lineTo(x, cutB); g.stroke(); g.setLineDash([]);
     }
     if (rv && sim.clip) {
       var sw = num("swing", 0.3), lb = rc.lb, prevY = null;
       var useH = rc.hp && num("humanise", 0) > 0;
-      glowLine(g, C.orange, 2.5 * d, 10 * d);
+      glowLine(g, C.cyan, 1.8 * d);
       g.beginPath();
       for (var px = 0; px <= W; px += Math.max(1, Math.round(d))) {
         var beat = start + px / W * w, t = swingTime(beat, sw) - rv.t0;
@@ -880,16 +970,16 @@ footer b { color: var(--pink); }
       g.stroke(); noGlow(g);
       for (var q = 0; q < W; q += Math.max(1, Math.round(d))) {
         var bt = start + q / W * w, tt = swingTime(bt, sw) - rv.t0, li = stepAt(rc.lg, lb, tt), lv = LEVELS[li & 7] || 0;
-        if (lv) { g.fillStyle = C.lime; g.globalAlpha = 0.4 + 0.6 * lv; g.fillRect(q, cutB - (cutB - cutT) * lv, Math.max(1, Math.round(d)), (cutB - cutT) * lv); }
+        if (lv) { g.fillStyle = C.pink; g.globalAlpha = 0.3 + 0.55 * lv; g.fillRect(q, cutB - (cutB - cutT) * lv, Math.max(1, Math.round(d)), (cutB - cutT) * lv); }
       }
       g.globalAlpha = 1;
     } else {
       label(g, rv ? (rv.cm ? "WAITING FOR THE CLIP" : "NO CLIP: THE HAND IS ON THE RECORD") : "", W / 2, H / 2 - 8 * d, C.dim, Math.round(12 * d), "center");
     }
-    g.fillStyle = "#000"; g.fillRect(0, cutB + 1, W, 1);
-    glowLine(g, "#fff", 2 * d, 12 * d); g.beginPath(); g.moveTo(cur, top - 4 * d); g.lineTo(cur, cutB + 2 * d); g.stroke(); noGlow(g);
+    g.fillStyle = "rgba(255,255,255,.06)"; g.fillRect(0, cutB + 1, W, 1);
+    glowLine(g, C.ink, 1.2 * d); g.beginPath(); g.moveTo(cur, top - 4 * d); g.lineTo(cur, cutB + 2 * d); g.stroke(); noGlow(g);
     var bar = Math.floor(now / 4) + 1, beatN = Math.floor(((now % 4) + 4) % 4) + 1;
-    label(g, rv ? "BAR " + bar + "  BEAT " + beatN : "", 4 * d, 2 * d, C.acid, Math.round(12 * d));
+    label(g, rv ? "BAR " + bar + "  BEAT " + beatN : "", 4 * d, 2 * d, C.dim, Math.round(11 * d));
     label(g, zoomW + (zoomW === 1 ? " BEAT" : " BEATS"), W - 4 * d, H - 14 * d, C.dim, Math.round(10 * d), "right");
   }
 
@@ -985,12 +1075,12 @@ footer b { color: var(--pink); }
     el.style.setProperty("--c", "var(" + m.c + ")");
     var nm = document.createElement("div"); nm.className = "nm"; nm.textContent = m.name;
     var s = svg("svg", { viewBox: "0 0 78 78" });
-    for (var i = 0; i <= 10; i++) { var a = -135 + 27 * i, p0 = pol(37, a), p1 = pol(33, a); svg("line", { x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], stroke: "#3a2457", "stroke-width": 2 }, s); }
-    svg("path", { d: arcPath(29, -135, 135), fill: "none", stroke: "#1f1030", "stroke-width": 6, "stroke-linecap": "round" }, s);
-    var arc = svg("path", { d: "", fill: "none", stroke: "currentColor", "stroke-width": 6, "stroke-linecap": "round", style: "filter: drop-shadow(0 0 4px currentColor)" }, s);
-    svg("circle", { cx: 39, cy: 39, r: 22, fill: "#160a26", stroke: "#000", "stroke-width": 2 }, s);
+    for (var i = 0; i <= 10; i++) { var a = -135 + 27 * i, p0 = pol(37, a), p1 = pol(33, a); svg("line", { x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], stroke: "#3a3a40", "stroke-width": 1.5 }, s); }
+    svg("path", { d: arcPath(29, -135, 135), fill: "none", stroke: "#2a2a2f", "stroke-width": 3.5, "stroke-linecap": "round" }, s);
+    var arc = svg("path", { d: "", fill: "none", stroke: "currentColor", "stroke-width": 3.5, "stroke-linecap": "round" }, s);
+    svg("circle", { cx: 39, cy: 39, r: 22, fill: "#121214", stroke: "#000", "stroke-width": 1.5 }, s);
     svg("circle", { cx: 39, cy: 39, r: 18, fill: "url(#kg)" }, s);
-    var ptr = svg("line", { x1: 39, y1: 39, x2: 39, y2: 22, stroke: "currentColor", "stroke-width": 3.5, "stroke-linecap": "round" }, s);
+    var ptr = svg("line", { x1: 39, y1: 39, x2: 39, y2: 22, stroke: "#e8e5de", "stroke-width": 2.5, "stroke-linecap": "round" }, s);
     s.style.color = "var(" + m.c + ")";
     var val = document.createElement("div"); val.className = "val";
     el.appendChild(nm); el.appendChild(s); el.appendChild(val);
@@ -1043,7 +1133,7 @@ footer b { color: var(--pink); }
   (function () {
     var defs = svg("svg", { width: 0, height: 0, style: "position:absolute" }, document.body);
     var d = svg("defs", {}, defs), rg = svg("radialGradient", { id: "kg", cx: "35%", cy: "30%", r: "80%" }, d);
-    svg("stop", { offset: "0", "stop-color": "#7a6a92" }, rg); svg("stop", { offset: ".5", "stop-color": "#2a1a40" }, rg); svg("stop", { offset: "1", "stop-color": "#0c0416" }, rg);
+    svg("stop", { offset: "0", "stop-color": "#55555c" }, rg); svg("stop", { offset: ".55", "stop-color": "#2a2a2f" }, rg); svg("stop", { offset: "1", "stop-color": "#18181b" }, rg);
   })();
   PREGEN.forEach(function (m) { makeKnob(document.getElementById("kPregen"), m); });
   PLAYBACK.forEach(function (m) { makeKnob(document.getElementById("kPlayback"), m); });
@@ -1058,7 +1148,7 @@ footer b { color: var(--pink); }
     document.getElementById("ledRec").classList.toggle("on", !!rv.rc);
     document.getElementById("ledBpm").textContent = rv.bpm.toFixed(1) + " BPM";
     document.getElementById("smiley").classList.toggle("spin", !!rv.tp);
-    document.getElementById("deckSub").textContent = rv.tp ? "ON AIR" : "";
+    document.getElementById("deckSub").textContent = rv.tp ? "playing" : "";
     renderInfo();
   }
   function renderInfo() {
@@ -1084,8 +1174,7 @@ footer b { color: var(--pink); }
     requestAnimationFrame(frame);
     if (demoMode) safely(demoTick, now);
     safely(step, now);
-    document.getElementById("ledCut").classList.toggle("on", sim.gate > 0.5);
-    safely(drawDeck, now); safely(drawFader, now); safely(drawWave, now); safely(drawLane, now); safely(drawZoom, now);
+    safely(drawDeck, now); safely(drawWave, now); safely(drawLane, now); safely(drawZoom, now);
     safely(linkCheck, now);
   }
 
@@ -1168,6 +1257,8 @@ footer b { color: var(--pink); }
     });
   }
   setTimeout(seedFromHost, 400); setTimeout(seedFromHost, 1500);
+  fetchSetName();
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) fetchSetName(); });
   requestAnimationFrame(frame);
 })();
 </script>
