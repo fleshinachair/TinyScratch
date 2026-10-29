@@ -236,6 +236,12 @@ page of its own (Schwung's Remote UI shows it in place of the plain list of cont
 - **Load a sound**: drop any audio file on the deck (or press LOAD SOUND). The page makes it a mono WAV of up to 10 s, cut to its
   first sound, puts it in the Move's sample library (Samples/TinyScratch) and loads it onto the selected User slot (the first empty one
   when Ahhh or Fresssh is selected).
+- **Pick from a song**: a file longer than 10 s (a whole song, an MP3 is fine) opens the picker instead. It shows all of the song and a
+  closer view of part of it (scroll to zoom, drag the whole-song view to move along). Mark up to six spots: drag across a word, or choose
+  a LENGTH (1, 2, 3, 5 or 10 s) and click where a spot should start. SNAP TO HITS starts each on the nearest word or hit. Drag a spot to
+  move it, or its edges to trim it, or type its length. Play each one to hear exactly what will be sent, and give each a User slot and a
+  name. Nothing reaches the Move until **SEND**: then each spot becomes a WAV in the sample library and is loaded into its slot. The
+  song itself stays in the browser. The spots are ordinary samples once loaded, so they work on the Move without the Remote UI too.
 - **Scratch the record**: grab the vinyl and turn it. The playhead goes where your hand takes it (a turn at 33 1/3 is the sample at its own
   speed) and the fader is open while your hand is on; let go and the clip takes over again. You hear it after the network's delay.
 - **The dials**, along the top and grouped as the pages are: **Pre-Gen** (Style, Length, Forwards, Finish, Echo, Groove), **Playback** (Swing, Humanise,
