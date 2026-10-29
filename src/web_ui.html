@@ -283,7 +283,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
      State: the params, and the two live values.
      ================================================================ */
   var params = {}, widgets = {}, dragging = {};
-  var link = { rv: 0, rc: 0, err: "", errAt: 0, fps: 0, n: 0, t: 0 };     /* what has arrived, for the status line */
+  var link = { rv: 0, rc: 0, err: "", errAt: 0, fps: 0, n: 0, t: 0, pulled: -1e9, pulls: 0 };     /* what has arrived, for the status line */
   var rv = null, rvAt = 0;                          /* rview, and when it arrived (performance.now) */
   var rc = null;                                    /* rclip, decoded */
   var offs = [], clockOff = null, lastDt = -1;       /* device time to page time: the smallest (arrival - dt) of the last few */
@@ -1184,7 +1184,15 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
    * frame for every chain_params it gets, so the page reloads, finds it has no rclip, asks again, and reloads every few seconds. */
   var loads = 1;                                     /* how often this page has been loaded in this tab: the host rebuilding it shows here */
   try { loads = (parseInt(sessionStorage.getItem("tinyscratch-loads"), 10) || 0) + 1; sessionStorage.setItem("tinyscratch-loads", String(loads)); } catch (e) { /* (no storage: one) */ }
+  /* When the host's own pushes stop (on some Moves they stop after a few seconds), ask for the values: writing any key of
+   * this component makes the host send all its values a quarter of a second later, the extras with them, and without
+   * rebuilding this frame (a resubscribe would). TinyScratch ignores a key it does not know, so rui_pull changes nothing. */
+  function pullIfQuiet(now) {
+    if (demoMode || !rv || !window.schwungRemote) return;
+    if (now - rvAt > 900 && now - link.pulled > 700) { link.pulled = now; link.pulls++; R.setParam(PRE + "rui_pull", String(link.pulls)); }
+  }
   function linkCheck(now) {
+    pullIfQuiet(now);
     link.n++;
     if (now - link.t >= 1000) { link.fps = Math.round(link.n * 1000 / (now - link.t)); link.n = 0; link.t = now; }
     else return;
@@ -1192,7 +1200,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     var quiet = !demoMode && (!rv ? now > 4000 : age > 3);
     var clipStale = !!rv && !demoMode && (!rc || rc.s !== rv.s || (rv.cm > 0 && rv.rk !== 0 && rc.rk !== rv.rk));
     var txt = "LINK: " + (rv ? (age < 3 ? "LIVE" : "NO UPDATE FOR " + Math.round(age) + " S") : (link.rv ? "BAD DATA" : "WAITING FOR THE MOVE")) +
-      " \u00B7 VIEW " + link.rv + " \u00B7 CLIP " + link.rc + (clipStale ? " (WAITING)" : "") + " \u00B7 " + link.fps + " FPS \u00B7 LOADS " + loads +
+      " \u00B7 VIEW " + link.rv + " \u00B7 CLIP " + link.rc + (clipStale ? " (WAITING)" : "") + (link.pulls ? " \u00B7 PULLS " + link.pulls : "") + " \u00B7 " + link.fps + " FPS \u00B7 LOADS " + loads +
       (link.err && now - link.errAt < 10000 ? " \u00B7 ERROR: " + link.err.slice(0, 80) : "");
     el.textContent = txt;
     el.classList.toggle("bad", quiet || (!!link.err && now - link.errAt < 10000));

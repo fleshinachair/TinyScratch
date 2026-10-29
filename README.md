@@ -224,7 +224,8 @@ page of its own (Schwung's Remote UI shows it in place of the plain list of cont
 
 The host sends the page what it shows twice a second, so between those it plays the clip itself, on the beat clock the DSP sends, through
 the same Swing, Depth, Offset and Drag: the record moves with the sound, not half a second behind it. The line under the title says
-whether the page is hearing from the Move (**LINK: LIVE**), how many updates have arrived, the frame rate, and any error.
+whether the page is hearing from the Move (**LINK: LIVE**), how many updates have arrived, the frame rate, and any error. When the
+Move stops sending on its own, the page asks for them (**PULLS** counts how often).
 
 ## Credits
 
