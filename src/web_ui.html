@@ -164,7 +164,7 @@ canvas { display: block; width: 100%; }
 
 footer { font: 700 11px/1.4 "Courier New", monospace; color: var(--dim); text-align: center; padding: 6px 0 2px; }
 footer b { color: var(--pink); }
-.status { font: 700 11px/1.4 "Courier New", monospace; color: var(--dim); text-align: center; }
+.status { flex-basis: 100%; font: 700 11px/1.4 "Courier New", monospace; color: var(--dim); text-align: left; margin-top: -6px; }
 .status.bad { color: var(--red); }
 
 /* ---- the demo's start button (only when opened with a recorded demo) ---- */
@@ -201,6 +201,7 @@ footer b { color: var(--pink); }
       <div><span class="k">NEXT GENERATE</span><span class="v" id="infoNext">&ndash;</span></div>
       <div><span class="k">CLIPS</span><span class="v" id="infoClips">&ndash;</span></div>
     </div>
+    <div class="status" id="status">LINK: WAITING FOR THE MOVE</div>
   </header>
 
   <div class="demobar" id="demobar"><button id="demoStop">STOP DEMO</button><span id="demoTime">0:00</span><div class="prog"><i id="demoProg"></i></div><span>DEMO: RECORDED FROM THE REAL ENGINE</span></div>
@@ -233,7 +234,6 @@ footer b { color: var(--pink); }
     <div class="panel group padplay cyan"><h2>PAD PLAY</h2><div class="toggles" id="kPadplay"></div></div>
   </section>
 
-  <div class="status" id="status">LINK: WAITING FOR THE MOVE</div>
   <footer>TINYSCRATCH REMOTE &middot; DRAG A DIAL UP OR DOWN (SHIFT: FINE) &middot; DOUBLE-CLICK RESETS &middot; <b>&#9786; KEEP IT RAW</b></footer>
 </div>
 
@@ -306,7 +306,7 @@ footer b { color: var(--pink); }
      State: the params, and the two live values.
      ================================================================ */
   var params = {}, widgets = {}, dragging = {};
-  var link = { rv: 0, rc: 0, err: "", errAt: 0, asked: -1e9, fps: 0, n: 0, t: 0, stale: 0 };     /* what has arrived, for the status line */
+  var link = { rv: 0, rc: 0, err: "", errAt: 0, fps: 0, n: 0, t: 0 };     /* what has arrived, for the status line */
   var rv = null, rvAt = 0;                          /* rview, and when it arrived (performance.now) */
   var rc = null;                                    /* rclip, decoded */
   var offs = [], clockOff = null, lastDt = -1;       /* device time to page time: the smallest (arrival - dt) of the last few */
@@ -1089,24 +1089,21 @@ footer b { color: var(--pink); }
     safely(linkCheck, now);
   }
 
-  /* The status line, and a nudge when the reads stop: the host sends rview twice a second, so a few seconds of nothing means
-   * something is wrong between here and the Move. Asking for a fresh read (resubscribe) gets a full one, extras included. */
+  /* The status line. The host sends rview twice a second, so a few seconds of nothing means something is wrong between here and the
+   * Move; rclip turns over every two seconds (scratch_engine.c), so one that is missing or names another clip is replaced by the next.
+   * Never ask the host for a fresh read (resubscribe) to hurry it: that re-sends chain_params, and the Remote UI rebuilds this
+   * frame for every chain_params it gets, so the page reloads, finds it has no rclip, asks again, and reloads every few seconds. */
+  var loads = 1;                                     /* how often this page has been loaded in this tab: the host rebuilding it shows here */
+  try { loads = (parseInt(sessionStorage.getItem("tinyscratch-loads"), 10) || 0) + 1; sessionStorage.setItem("tinyscratch-loads", String(loads)); } catch (e) { /* (no storage: one) */ }
   function linkCheck(now) {
     link.n++;
     if (now - link.t >= 1000) { link.fps = Math.round(link.n * 1000 / (now - link.t)); link.n = 0; link.t = now; }
     else return;
     var age = rv ? (now - rvAt) / 1000 : -1, el = document.getElementById("status");
     var quiet = !demoMode && (!rv ? now > 4000 : age > 3);
-    if (quiet && R.resubscribe && now - link.asked > 5000) { link.asked = now; R.resubscribe(); }
-    /* The host sends a value only when it has changed since it last sent it, and rclip changes rarely: a copy that never reached
-     * this page (it opened while the first one was on its way, or a push was lost) would not come again until the clip changes.
-     * So when the rclip here is not the one rview names (the sample, the clip), ask for a fresh read, which sends it whatever. */
     var clipStale = !!rv && !demoMode && (!rc || rc.s !== rv.s || (rv.cm > 0 && rv.rk !== 0 && rc.rk !== rv.rk));
-    if (!clipStale) link.stale = 0;
-    else if (!link.stale) link.stale = now;
-    else if (now - link.stale > 1500 && R.resubscribe && now - link.asked > 3000) { link.asked = now; R.resubscribe(); }
     var txt = "LINK: " + (rv ? (age < 3 ? "LIVE" : "NO UPDATE FOR " + Math.round(age) + " S") : (link.rv ? "BAD DATA" : "WAITING FOR THE MOVE")) +
-      " \u00B7 VIEW " + link.rv + " \u00B7 CLIP " + link.rc + (clipStale ? " (ASKING)" : "") + " \u00B7 " + link.fps + " FPS" +
+      " \u00B7 VIEW " + link.rv + " \u00B7 CLIP " + link.rc + (clipStale ? " (WAITING)" : "") + " \u00B7 " + link.fps + " FPS \u00B7 LOADS " + loads +
       (link.err && now - link.errAt < 10000 ? " \u00B7 ERROR: " + link.err.slice(0, 80) : "");
     el.textContent = txt;
     el.classList.toggle("bad", quiet || (!!link.err && now - link.errAt < 10000));
