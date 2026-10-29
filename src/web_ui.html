@@ -165,11 +165,10 @@ body.perform .led.perf { color: #19191b; background: var(--acid); border-color: 
 @media (min-width: 1400px) {
   body:not(.perform) .rig { max-width: none; }
   body:not(.perform) .main { display: grid; grid-template-columns: minmax(0, 31fr) minmax(0, 34fr) minmax(0, 35fr); gap: 16px;
-    grid-template-areas: "pads deck scopes" "padplay deck scopes" "pregen playback scopes"; grid-template-rows: auto 1fr auto; align-items: start; }
-  body:not(.perform) .lower, body:not(.perform) .stage, body:not(.perform) .left { display: contents; }
-  body:not(.perform) #padsPanel { grid-area: pads; } body:not(.perform) #padplayPanel { grid-area: padplay; }
-  body:not(.perform) #deckPanel { grid-area: deck; } body:not(.perform) #pregenPanel { grid-area: pregen; }
-  body:not(.perform) #playbackPanel { grid-area: playback; }
+    grid-template-areas: "lower left scopes"; align-items: start; }
+  body:not(.perform) .lower { grid-area: lower; display: flex; flex-direction: column; align-items: stretch; }
+  body:not(.perform) .stage { display: contents; }
+  body:not(.perform) .left { grid-area: left; }
   body:not(.perform) .scopes { grid-area: scopes; align-self: stretch; }
   body:not(.perform) .hint { display: none; }                                             /* (each pad shows its key) */
   body:not(.perform) .tog { min-height: 40px; }
@@ -247,6 +246,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
 
   <section class="stage">
     <div class="left">
+      <div class="panel" id="pregenPanel"><h2>Pre-gen<span class="sub">what Generate makes</span></h2><div class="knobs" id="kPregen" style="--n:6"></div></div>
       <div class="panel" id="deckPanel"><h2>Deck<span class="sub" id="deckSub"></span></h2>
         <button class="loadbtn" id="loadBtn" title="Load a sound onto a User slot (or drop one on the deck)">LOAD SOUND</button>
         <input type="file" id="loadFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.m4a,.ogg" hidden>
@@ -255,7 +255,6 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
         <div class="loadmsg" id="loadMsg"></div>
         <div class="deckread"><span id="deckSpeed">0.0&times;</span><span>drag the record to scratch</span><span id="deckNeedle">needle 0%</span></div>
       </div>
-      <div class="panel" id="pregenPanel"><h2>Pre-gen<span class="sub">what Generate makes</span></h2><div class="knobs" id="kPregen" style="--n:6"></div></div>
       <div class="panel" id="playbackPanel"><h2>Playback<span class="sub">how clips play</span></h2><div class="knobs" id="kPlayback" style="--n:7"></div></div>
     </div>
     <div class="scopes">
