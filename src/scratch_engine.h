@@ -295,7 +295,8 @@ int  ts_engine_view(const ts_engine_t *e, char *buf, int cap);
  *   rview   small and live: where the playhead is and is heading, the clock (beats, tempo, device time), the fader, and the
  *           status the screens show (sample, clip, pages, cues, recording). The browser runs the clip from it between reads.
  *   rclip   what changes rarely: the clip playing at TS_RCLIP_RES points to the beat (path and fader levels), the path this pass
- *           with Humanise on, the sample's overview at TS_RCOLS columns, and with no clip the record of what the playhead did.
+ *           with Humanise on, the sample's overview at TS_RCOLS columns, and with no clip the record of what the playhead did. It also
+ *           turns over every two seconds (sq), so the host, which sends only what changed, sends it again: a lost copy is replaced.
  * Both are flat JSON objects; neither is a parameter (a declared parameter would be read only every few seconds). */
 int  ts_engine_rview(const ts_engine_t *e, char *buf, int cap);
 int  ts_engine_rclip(const ts_engine_t *e, char *buf, int cap);

@@ -224,7 +224,8 @@ page of its own (Schwung's Remote UI shows it in place of the plain list of cont
   Bite, Clip Depth, Clip Offset, Drag, Gain) and **Pad Play**. Drag up or down (Shift for fine), scroll, or double-click to reset.
 
 The host sends the page what it shows twice a second, so between those it plays the clip itself, on the beat clock the DSP sends, through
-the same Swing, Depth, Offset and Drag: the record moves with the sound, not half a second behind it.
+the same Swing, Depth, Offset and Drag: the record moves with the sound, not half a second behind it. The line under the dials says
+whether the page is hearing from the Move (**LINK: LIVE**), how many updates have arrived, the frame rate, and any error.
 
 ## Credits
 

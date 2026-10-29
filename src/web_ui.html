@@ -57,7 +57,7 @@ body {
 }
 .rig { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
 
-/* ---- the top: the smiley, the name, the ticker ---- */
+/* ---- the top: the smiley, the name, what is playing ---- */
 .top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .smiley { width: 64px; height: 64px; flex: none; filter: drop-shadow(0 0 10px rgba(232, 255, 0, .55)); }
 .smiley.spin { animation: spin 3.2s linear infinite; }
@@ -77,12 +77,16 @@ body {
 .led.cut.on { background: var(--pink); box-shadow: 0 0 14px var(--pink); }
 .led.rec.on { background: var(--red); box-shadow: 0 0 14px var(--red); }
 .led.bpm { color: var(--acid); border-color: var(--acid); font-family: "Courier New", monospace; font-size: 13px; }
-.ticker { flex-basis: 100%; overflow: hidden; border-top: 3px solid var(--acid); border-bottom: 3px solid var(--acid); background: #000; height: 30px; position: relative; }
-.ticker .run { position: absolute; white-space: nowrap; top: 5px; font: 900 15px/1 "Arial Black", sans-serif; letter-spacing: .14em; color: var(--acid); animation: marquee 26s linear infinite; padding-left: 100%; }
-.ticker .run b { color: var(--pink); }
-.ticker .run i { color: var(--cyan); font-style: normal; }
-@keyframes marquee { to { transform: translateX(-100%); } }
-@media (prefers-reduced-motion: reduce) { .ticker .run { animation: none; padding-left: 8px; } .smiley.spin { animation: none; } }
+.info { flex-basis: 100%; display: grid; grid-template-columns: 3fr 5fr 4fr 2fr; border-top: 3px solid var(--acid); border-bottom: 3px solid var(--acid); background: #000; }
+.info > div { padding: 6px 10px; min-width: 0; border-left: 1px solid #2d1748; }
+.info > div:first-child { border-left: 0; }
+.info .k { display: block; font: 700 10px/1.2 "Courier New", monospace; letter-spacing: .12em; color: var(--dim); }
+.info .v { display: block; font: 900 15px/1.3 "Arial Black", sans-serif; letter-spacing: .06em; color: var(--acid); overflow-wrap: anywhere; }
+.info .v.pink { color: var(--pink); }
+.info .v.cyan { color: var(--cyan); }
+.info .v small { font-size: 11px; color: var(--pink); letter-spacing: .08em; }
+@media (max-width: 640px) { .wordmark { transform: none; } .wordmark small { letter-spacing: .08em; font-size: 10px; } .info { grid-template-columns: 1fr 1fr; } .info > div:nth-child(3) { border-left: 0; } }
+@media (prefers-reduced-motion: reduce) { .smiley.spin { animation: none; } }
 
 /* ---- panels ---- */
 .panel { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 2px solid #2d1748; border-radius: 10px; padding: 12px; position: relative; box-shadow: 0 0 0 1px #000, 0 10px 30px rgba(0, 0, 0, .5); }
@@ -160,6 +164,8 @@ canvas { display: block; width: 100%; }
 
 footer { font: 700 11px/1.4 "Courier New", monospace; color: var(--dim); text-align: center; padding: 6px 0 2px; }
 footer b { color: var(--pink); }
+.status { font: 700 11px/1.4 "Courier New", monospace; color: var(--dim); text-align: center; }
+.status.bad { color: var(--red); }
 
 /* ---- the demo's start button (only when opened with a recorded demo) ---- */
 .demo { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(7, 2, 15, .78); z-index: 5; flex-direction: column; gap: 14px; }
@@ -189,7 +195,12 @@ footer b { color: var(--pink); }
       <span class="led rec" id="ledRec">REC</span>
       <span class="led bpm on" id="ledBpm">--- BPM</span>
     </div>
-    <div class="ticker"><div class="run" id="ticker">&#9733; TINYSCRATCH &#9733; WAITING FOR THE MOVE &#9733;</div></div>
+    <div class="info">
+      <div><span class="k">SAMPLE</span><span class="v pink" id="infoSample">&ndash;</span></div>
+      <div><span class="k">PLAYING</span><span class="v cyan" id="infoClip">WAITING FOR THE MOVE</span></div>
+      <div><span class="k">NEXT GENERATE</span><span class="v" id="infoNext">&ndash;</span></div>
+      <div><span class="k">CLIPS</span><span class="v" id="infoClips">&ndash;</span></div>
+    </div>
   </header>
 
   <div class="demobar" id="demobar"><button id="demoStop">STOP DEMO</button><span id="demoTime">0:00</span><div class="prog"><i id="demoProg"></i></div><span>DEMO: RECORDED FROM THE REAL ENGINE</span></div>
@@ -222,6 +233,7 @@ footer b { color: var(--pink); }
     <div class="panel group padplay cyan"><h2>PAD PLAY</h2><div class="toggles" id="kPadplay"></div></div>
   </section>
 
+  <div class="status" id="status">LINK: WAITING FOR THE MOVE</div>
   <footer>TINYSCRATCH REMOTE &middot; DRAG A DIAL UP OR DOWN (SHIFT: FINE) &middot; DOUBLE-CLICK RESETS &middot; <b>&#9786; KEEP IT RAW</b></footer>
 </div>
 
@@ -294,6 +306,7 @@ footer b { color: var(--pink); }
      State: the params, and the two live values.
      ================================================================ */
   var params = {}, widgets = {}, dragging = {};
+  var link = { rv: 0, rc: 0, err: "", errAt: 0, asked: -1e9, fps: 0, n: 0, t: 0, stale: 0 };     /* what has arrived, for the status line */
   var rv = null, rvAt = 0;                          /* rview, and when it arrived (performance.now) */
   var rc = null;                                    /* rclip, decoded */
   var offs = [], clockOff = null, lastDt = -1;       /* device time to page time: the smallest (arrival - dt) of the last few */
@@ -345,12 +358,13 @@ footer b { color: var(--pink); }
     Object.keys(ps).forEach(function (full) {
       if (full.indexOf(PRE) !== 0) return;
       var k = full.slice(PRE.length), val = ps[full];
-      if (k === "rview") { onRview(val, now); return; }
-      if (k === "rclip") { onRclip(val); return; }
+      if (k === "rview") { link.rv++; onRview(val, now); return; }
+      if (k === "rclip") { link.rc++; onRclip(val); return; }
       if (dragging[k]) return;
       params[k] = val;
       (widgets[k] || []).forEach(function (f) { f(); });
       if (k === "swing" || k === "clip_depth" || k === "clip_offset" || k === "humanise") laneDirty = true;
+      if (k === "gen_style" || k === "gen_bars") renderInfo();
     });
   }
 
@@ -398,7 +412,7 @@ footer b { color: var(--pink); }
     sim.last = now;
     if (!rv) return;
     var devNow = clockOff === null ? rv.dt : now - clockOff + LEAD_MS;
-    var el = clamp((devNow - rv.dt) / 1000, 0, 2);
+    var el = clamp((devNow - rv.dt) / 1000, 0, 60);
     var live = rv.ru || rv.nh > 0;
     var beat = rv.mc + (live ? el * rv.bpm / 60 : 0);
     var clip = clipActive();
@@ -450,8 +464,10 @@ footer b { color: var(--pink); }
   /* ================================================================
      Canvas helpers.
      ================================================================ */
+  /* at most twice the CSS pixels: a phone at 3x draws more than twice as much for nothing it can show */
+  function dpr() { return Math.min(2, window.devicePixelRatio || 1); }
   function fitCanvas(c) {
-    var r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    var r = c.getBoundingClientRect(), d = dpr();
     var w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
     if (c.width !== w || c.height !== h) { c.width = w; c.height = h; return true; }
     return false;
@@ -472,23 +488,28 @@ footer b { color: var(--pink); }
   /* ================================================================
      The deck.
      ================================================================ */
-  var deck = document.getElementById("deck"), dg = deck.getContext("2d");
+  var deck = document.getElementById("deck"), dg = deck.getContext("2d"), plinth = document.createElement("canvas");
 
   function drawDeck() {
     fitCanvas(deck);
-    var W = deck.width, H = deck.height, g = dg, d = window.devicePixelRatio || 1;
+    var W = deck.width, H = deck.height, g = dg, d = dpr();
     g.clearRect(0, 0, W, H);
-    /* the plinth */
-    var pr = 18 * d;
-    var grd = g.createLinearGradient(0, 0, W, H);
-    grd.addColorStop(0, "#2a2533"); grd.addColorStop(0.5, "#17131f"); grd.addColorStop(1, "#0d0a12");
-    g.fillStyle = grd;
-    roundRect(g, 2 * d, 2 * d, W - 4 * d, H - 4 * d, pr); g.fill();
-    glowLine(g, C.pink, 2 * d, 14 * d); roundRect(g, 2 * d, 2 * d, W - 4 * d, H - 4 * d, pr); g.stroke(); noGlow(g);
-    /* brushed lines */
-    g.globalAlpha = 0.05; g.strokeStyle = "#fff"; g.lineWidth = 1;
-    for (var y = 6 * d; y < H; y += 3 * d) { g.beginPath(); g.moveTo(8 * d, y); g.lineTo(W - 8 * d, y); g.stroke(); }
-    g.globalAlpha = 1;
+    /* the plinth: drawn once for each size, it never moves */
+    if (plinth.width !== W || plinth.height !== H) {
+      plinth.width = W; plinth.height = H;
+      var pg = plinth.getContext("2d"), pr = 18 * d;
+      var grd = pg.createLinearGradient(0, 0, W, H);
+      grd.addColorStop(0, "#2a2533"); grd.addColorStop(0.5, "#17131f"); grd.addColorStop(1, "#0d0a12");
+      pg.fillStyle = grd;
+      roundRect(pg, 2 * d, 2 * d, W - 4 * d, H - 4 * d, pr); pg.fill();
+      glowLine(pg, C.pink, 2 * d, 14 * d); roundRect(pg, 2 * d, 2 * d, W - 4 * d, H - 4 * d, pr); pg.stroke(); noGlow(pg);
+      pg.globalAlpha = 0.05; pg.strokeStyle = "#fff"; pg.lineWidth = 1;                 /* brushed */
+      pg.beginPath();
+      for (var y = 6 * d; y < H; y += 3 * d) { pg.moveTo(8 * d, y); pg.lineTo(W - 8 * d, y); }
+      pg.stroke();
+      pg.globalAlpha = 1;
+    }
+    g.drawImage(plinth, 0, 0);
 
     var R0 = Math.min(W * 0.4, H * 0.37), cx = W * 0.44, cy = H * 0.45;
     /* the platter, its strobe dots turning with it */
@@ -616,7 +637,7 @@ footer b { color: var(--pink); }
   var xf = document.getElementById("xf"), xg = xf.getContext("2d");
   function drawFader() {
     fitCanvas(xf);
-    var W = xf.width, H = xf.height, g = xg, d = window.devicePixelRatio || 1;
+    var W = xf.width, H = xf.height, g = xg, d = dpr();
     g.clearRect(0, 0, W, H);
     g.fillStyle = "#0c0416"; roundRect(g, 0, 0, W, H, 8 * d); g.fill();
     var x0 = W * 0.18, x1 = W * 0.82, y = H * 0.55;
@@ -668,7 +689,7 @@ footer b { color: var(--pink); }
 
   function drawWave(now) {
     var resized = fitCanvas(wave);
-    var W = wave.width, H = wave.height, g = wg, d = window.devicePixelRatio || 1;
+    var W = wave.width, H = wave.height, g = wg, d = dpr();
     if (resized || waveDirty || waveCache.width !== W) { drawWaveBase(W, H, d); waveDirty = false; }
     g.clearRect(0, 0, W, H);
     g.drawImage(waveCache, 0, 0);
@@ -796,7 +817,7 @@ footer b { color: var(--pink); }
 
   function drawLane() {
     var resized = fitCanvas(lane);
-    var W = lane.width, H = lane.height, g = lgx, d = window.devicePixelRatio || 1;
+    var W = lane.width, H = lane.height, g = lgx, d = dpr();
     if (resized || laneDirty || laneCache.width !== W) { drawLaneBase(W, H, d); laneDirty = false; }
     g.clearRect(0, 0, W, H);
     g.drawImage(laneCache, 0, 0);
@@ -832,7 +853,7 @@ footer b { color: var(--pink); }
 
   function drawZoom() {
     fitCanvas(zoom);
-    var W = zoom.width, H = zoom.height, g = zg, d = window.devicePixelRatio || 1;
+    var W = zoom.width, H = zoom.height, g = zg, d = dpr();
     g.clearRect(0, 0, W, H);
     var top = 22 * d, cutT = H - 34 * d, cutB = H - 18 * d, pathB = cutT - 6 * d;
     var w = zoomW, now = sim.beat, start = now - 0.25 * w, cur = 0.25 * W;
@@ -1029,9 +1050,8 @@ footer b { color: var(--pink); }
   PADPLAY.forEach(function (m) { makeToggle(document.getElementById("kPadplay"), m); });
 
   /* ================================================================
-     The header: lights and the ticker.
+     The header: lights and what is playing.
      ================================================================ */
-  var tickerText = "";
   function statusChanged() {
     renderPads();
     document.getElementById("ledPlay").classList.toggle("on", !!rv.tp);
@@ -1039,24 +1059,57 @@ footer b { color: var(--pink); }
     document.getElementById("ledBpm").textContent = rv.bpm.toFixed(1) + " BPM";
     document.getElementById("smiley").classList.toggle("spin", !!rv.tp);
     document.getElementById("deckSub").textContent = rv.tp ? "ON AIR" : "";
-    var gs = clamp(Math.round(num("gen_style", 0)), 0, 12), gb = clamp(Math.round(num("gen_bars", 1)), 0, 2);
-    var t = "★ NOW SCRATCHING: <b>" + esc(rv.n) + "</b> ★ <i>" + esc(clipLabel()) + "</i>" + (clipExtras() ? " · " + esc(clipExtras()) : "") +
-      " ★ " + rv.bpm.toFixed(0) + " BPM ★ NEXT GENERATE: <b>" + STYLES[gs] + "</b> " + BARS[gb] +
-      " ★ HUMANISE " + pct(num("humanise", 0.35)) + " · SWING " + pct(num("swing", 0.3)) + " · BITE " + pct(num("bite", 0.1)) +
-      " ★ " + rv.nc + " CLIPS ON " + esc(rv.n) + " ★ HARDCORE UPROAR ★ ";
-    if (t !== tickerText) { tickerText = t; document.getElementById("ticker").innerHTML = t + t; }
+    renderInfo();
   }
-  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+  function renderInfo() {
+    if (!rv) return;
+    var gs = clamp(Math.round(num("gen_style", 0)), 0, 12), gb = clamp(Math.round(num("gen_bars", 1)), 0, 2);
+    setText("infoSample", rv.n);
+    var clip = document.getElementById("infoClip"), ex = clipExtras();
+    clip.textContent = clipLabel();
+    if (ex) { var sm = document.createElement("small"); sm.textContent = " \u00B7 " + ex; clip.appendChild(sm); }
+    setText("infoNext", STYLES[gs] + " \u00B7 " + BARS[gb]);
+    setText("infoClips", String(rv.nc));
+  }
+  function setText(id, t) { var e = document.getElementById(id); if (e.textContent !== t) e.textContent = t; }
 
   /* ================================================================
      The loop.
      ================================================================ */
+  /* each part on its own: one that throws must not stop the others, or the next frame */
+  function safely(f, now) {
+    try { f(now); } catch (e) { link.err = String(e && e.message || e); link.errAt = now; if (window.console) console.error(e); }
+  }
   function frame(now) {
-    if (demoMode) demoTick(now);
-    step(now);
-    document.getElementById("ledCut").classList.toggle("on", sim.gate > 0.5);
-    drawDeck(); drawFader(); drawWave(now); drawLane(); drawZoom();
     requestAnimationFrame(frame);
+    if (demoMode) safely(demoTick, now);
+    safely(step, now);
+    document.getElementById("ledCut").classList.toggle("on", sim.gate > 0.5);
+    safely(drawDeck, now); safely(drawFader, now); safely(drawWave, now); safely(drawLane, now); safely(drawZoom, now);
+    safely(linkCheck, now);
+  }
+
+  /* The status line, and a nudge when the reads stop: the host sends rview twice a second, so a few seconds of nothing means
+   * something is wrong between here and the Move. Asking for a fresh read (resubscribe) gets a full one, extras included. */
+  function linkCheck(now) {
+    link.n++;
+    if (now - link.t >= 1000) { link.fps = Math.round(link.n * 1000 / (now - link.t)); link.n = 0; link.t = now; }
+    else return;
+    var age = rv ? (now - rvAt) / 1000 : -1, el = document.getElementById("status");
+    var quiet = !demoMode && (!rv ? now > 4000 : age > 3);
+    if (quiet && R.resubscribe && now - link.asked > 5000) { link.asked = now; R.resubscribe(); }
+    /* The host sends a value only when it has changed since it last sent it, and rclip changes rarely: a copy that never reached
+     * this page (it opened while the first one was on its way, or a push was lost) would not come again until the clip changes.
+     * So when the rclip here is not the one rview names (the sample, the clip), ask for a fresh read, which sends it whatever. */
+    var clipStale = !!rv && !demoMode && (!rc || rc.s !== rv.s || (rv.cm > 0 && rv.rk !== 0 && rc.rk !== rv.rk));
+    if (!clipStale) link.stale = 0;
+    else if (!link.stale) link.stale = now;
+    else if (now - link.stale > 1500 && R.resubscribe && now - link.asked > 3000) { link.asked = now; R.resubscribe(); }
+    var txt = "LINK: " + (rv ? (age < 3 ? "LIVE" : "NO UPDATE FOR " + Math.round(age) + " S") : (link.rv ? "BAD DATA" : "WAITING FOR THE MOVE")) +
+      " \u00B7 VIEW " + link.rv + " \u00B7 CLIP " + link.rc + (clipStale ? " (ASKING)" : "") + " \u00B7 " + link.fps + " FPS" +
+      (link.err && now - link.errAt < 10000 ? " \u00B7 ERROR: " + link.err.slice(0, 80) : "");
+    el.textContent = txt;
+    el.classList.toggle("bad", quiet || (!!link.err && now - link.errAt < 10000));
   }
   window.addEventListener("resize", function () { waveDirty = laneDirty = true; });
 

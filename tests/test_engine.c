@@ -3971,6 +3971,16 @@ static void test_remote_ui(void)
           "it carries the musical clock (%.3f beats), the transport and the tempo", mc);
     CHECK(fabs(atof(jfield(rv, "p", f, sizeof f)) - in->eng->pos) < 1e-4, "...and where the playhead is");
 
+    {
+        char sq0[16], sq1[16];
+        api->get_param(h, "rclip", rc, sizeof rc);
+        jfield(rc, "sq", sq0, sizeof sq0);
+        for (int b = 0; b < 700; b++) api->render_block(h, o, 128);                   /* two seconds */
+        api->get_param(h, "rclip", rc, sizeof rc);
+        jfield(rc, "sq", sq1, sizeof sq1);
+        CHECK(sq0[0] && sq1[0] && atoi(sq1) == atoi(sq0) + 1, "rclip turns over every two seconds (sq %s, then %s), so the host sends it again", sq0, sq1);
+    }
+
     /* no clip: the hand's record, finer than the screen's */
     api->set_param(h, "clip", "0");
     for (int b = 0; b < 40; b++) api->render_block(h, o, 128);

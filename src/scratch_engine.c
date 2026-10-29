@@ -2919,7 +2919,10 @@ int ts_engine_rclip(const ts_engine_t *e, char *buf, int cap)
     double t0;
     const ts_clip_t *k = remote_clip(e, &t0);
 
-    jw(&j, "{\"v\":1,\"rk\":%u,\"s\":%d,\"sl\":%.4f,\"w\":\"", remote_key(e, k), p->sample, s->loaded ? (double)s->len / (double)e->sr : 0.0);
+    /* sq turns over every two seconds. The host sends a value only when it differs from what it last sent, so without it a copy that
+     * never reached the page (it was opened while the first one was on its way) would not come again until the clip changed. */
+    jw(&j, "{\"v\":1,\"sq\":%u,\"rk\":%u,\"s\":%d,\"sl\":%.4f,\"w\":\"", (unsigned)(e->frames / (uint64_t)(2.0f * e->sr)), remote_key(e, k), p->sample,
+       s->loaded ? (double)s->len / (double)e->sr : 0.0);
     for (int c = 0; c < TS_RCOLS; c++) jw_hex(&j, s->loaded ? s->pk_hi[c] : 0, 2);         /* the waveform: peak, then body */
     jw(&j, "\",\"wr\":\"");
     for (int c = 0; c < TS_RCOLS; c++) jw_hex(&j, s->loaded ? s->rms_hi[c] : 0, 2);
