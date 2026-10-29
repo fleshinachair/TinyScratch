@@ -219,8 +219,10 @@ page of its own (Schwung's Remote UI shows it in place of the plain list of cont
   backwards when the scratch goes back; the platter spins while the Move's transport runs.
 - **The graphs**, at full size: the **Waveform** (with where the clip is sending the playhead, the cues, and a trail of where it has
   been), the **Clip View** (the playhead's path and the cuts, the cuts as tall as the fader opens, so an echo steps down; with Humanise
-  up, what is played this pass over the path as written), and the **Zoom** (4, 2 or 1 beats scrolling past now). Both name the strokes
-  as the turntablists do (baby, chirp, transform, flare, stab, drag, tear, fwd, scribble), read from the path and the fader.
+  up, what is played this pass over the path as written), and the **Zoom** (4, 2 or 1 beats scrolling past now). Both can name each stroke
+  by its shape, as the turntablists do (baby, chirp, transform, flare, stab, drag, tear, fwd, scribble): what the fader does over it,
+  read from the path. They describe the clip, not how it was made: Improv is its own way of writing, not the named styles knitted
+  together, but its strokes have these shapes too. STROKES on the clip view switches them off.
 - **The pads**, at the top: the samples, the clip pads of the page the Pads screen shows (each with a small picture of its clip), Generate
   and Auto (hold a clip a second and a half to delete it). On a computer, the keys play them: 1 to 8 the samples, Q to I and A to H the
   clips, Space or J Generate, K Auto, the arrow keys the pages.

@@ -124,6 +124,9 @@ canvas { display: block; width: 100%; }
 .pad.auto { --pc: var(--lime); color: #19191b; background: color-mix(in srgb, var(--lime) 78%, var(--panel)); border-color: transparent; }
 .pad.gen.now, .pad.auto.now { background: var(--ink); }
 .pad.gen .t, .pad.auto .t { letter-spacing: 0; font-size: 10px; }
+.pad.gen { container-type: inline-size; }
+.pad.gen .short { display: none; }
+@container (max-width: 74px) { .pad.gen .long { display: none; } .pad.gen .short { display: inline; } }
 .pad .kept { position: absolute; right: 5px; top: 4px; font-size: 10px; opacity: .7; }
 .pad .thumb { position: absolute; left: 6px; right: 6px; top: 6px; bottom: 6px; width: calc(100% - 12px); height: calc(100% - 12px); pointer-events: none; opacity: .5; }
 .pad.pic .t { position: absolute; left: 6px; top: 5px; font-size: 10px; }           /* a pad with a picture: its number in the corner */
@@ -171,7 +174,7 @@ body.perform .led.perf { color: #19191b; background: var(--acid); border-color: 
   body:not(.perform) .hint { display: none; }                                             /* (each pad shows its key) */
   body:not(.perform) .tog { min-height: 40px; }
   body:not(.perform) .pad.sample .t { font-size: 9px; letter-spacing: 0; }
-  body:not(.perform) .pad.gen .t, body:not(.perform) .pad.auto .t { font-size: 8px; }
+  body:not(.perform) .pad.auto .t { font-size: 9px; }
 }
 body.perform .rig { max-width: none; }
 body.perform .info, body.perform #padplayPanel, body.perform #pregenPanel, body.perform #playbackPanel, body.perform #waveScope, body.perform #laneScope, body.perform footer, body.perform .hint { display: none; }
@@ -257,7 +260,9 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     </div>
     <div class="scopes">
       <div class="panel scope" id="waveScope"><h2>Waveform</h2><div class="cv"><canvas id="wave"></canvas></div></div>
-      <div class="panel scope" id="laneScope"><h2>Clip view</h2><div class="cv"><canvas id="lane"></canvas></div></div>
+      <div class="panel scope" id="laneScope"><h2>Clip view</h2>
+        <div class="zbtns"><button id="strokesBtn" class="on" title="Name each stroke by its shape (what the fader does over it): a reading of the clip, not how it was made">STROKES</button></div>
+        <div class="cv"><canvas id="lane"></canvas></div></div>
       <div class="panel scope" id="zoomScope"><h2>Zoom</h2>
         <div class="zbtns" id="zbtns"><button data-w="4">4 BEATS</button><button data-w="2" class="on">2</button><button data-w="1">1</button></div>
         <div class="cv"><canvas id="zoom"></canvas></div></div>
@@ -1040,8 +1045,9 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
    * The generator does not keep its strokes, so they are read back from the plan: the path is split where it turns (a run in one
    * direction is a stroke), and each is named by what the fader does over it, in the turntablists' words (TTM): a CHIRP shuts at the
    * turn, a TRANSFORM is cut in and out over it, a FLARE clicks shut once in the middle, a STAB is short, a DRAG slow, a TEAR stops
-   * partway, a FWD is open going and shut coming back, a BABY open both ways, a SCRIBBLE many tiny ones. A reading, not the recipe:
-   * strokes it cannot hear (the fader shut) are not named. Times are in beats of the clip. */
+   * partway, a FWD is open going and shut coming back, a BABY open both ways, a SCRIBBLE many tiny ones. A reading of the shape of
+   * each stroke, not the recipe: an Improv clip is not made of the styles that share these names, it just has strokes of these shapes.
+   * Strokes it cannot hear (the fader shut) are not named. Times are in beats of the clip. */
   var strokesFor = null, strokes = [];
   function readStrokes() {
     if (!rc || !rc.lp || !rv) return [];
@@ -1099,17 +1105,30 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     return out;
   }
 
+  /* the names can be switched off (STROKES, on the clip view): remembered */
+  var showStrokes = true;
+  try { showStrokes = localStorage.getItem("tinyscratch-strokes") !== "0"; } catch (e) { /* (no storage) */ }
+  (function () {
+    var b = document.getElementById("strokesBtn");
+    b.classList.toggle("on", showStrokes);
+    b.addEventListener("click", function () {
+      showStrokes = !showStrokes; b.classList.toggle("on", showStrokes); laneDirty = true;
+      try { localStorage.setItem("tinyscratch-strokes", showStrokes ? "1" : "0"); } catch (e) { /* (no storage) */ }
+    });
+  })();
+
   /* the names along a stretch of the clip: x(t) places a clip time, from and to are what is in view */
   function drawStrokeNames(g, list, xOf, y, d, W) {
     var lastEnd = -1e9;
-    g.font = "600 " + Math.round(9 * d) + "px " + FONT_SANS; g.textBaseline = "top"; g.textAlign = "left";
+    if (!showStrokes) return;
+    g.font = "italic 500 " + Math.round(9 * d) + "px " + FONT_SANS; g.textBaseline = "top"; g.textAlign = "left";
     for (var i = 0; i < list.length; i++) {
       var x = xOf(list[i].t);
       if (x < 0 || x > W - 4 * d) continue;
-      var w = g.measureText(list[i].name).width;
+      var nm = list[i].name.toLowerCase(), w = g.measureText(nm).width;
       if (x < lastEnd + 6 * d) continue;                                        /* no room: the next one */
       g.fillStyle = "rgba(255,255,255,.18)"; g.fillRect(x, y, 1, 11 * d);
-      g.fillStyle = C.dim; g.fillText(list[i].name, x + 3 * d, y + 1 * d);
+      g.fillStyle = C.dim; g.fillText(nm, x + 3 * d, y + 1 * d);
       lastEnd = x + 3 * d + w;
     }
   }
@@ -1311,7 +1330,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     b.innerHTML = '<span class="hold"></span><span class="t"></span><span class="kept"></span><span class="key"></span>';
     var t = b.querySelector(".t");
     b.querySelector(".key").textContent = PAD_KEYS[n - 1] || "";
-    if (n === CLIP_PADS + 1) { b.classList.add("gen"); t.textContent = "GENERATE"; b.addEventListener("click", function () { pulse("generate", 1); }); }
+    if (n === CLIP_PADS + 1) { b.classList.add("gen"); t.innerHTML = '<span class="long">GENERATE</span><span class="short">GEN</span>'; b.addEventListener("click", function () { pulse("generate", 1); }); }
     else if (n === CLIP_PADS + 2) {
       b.classList.add("auto"); t.textContent = "AUTO";
       b.addEventListener("click", function () { setP("clip", rv && rv.cm === CLIP_AUTO ? 0 : CLIP_AUTO); });
