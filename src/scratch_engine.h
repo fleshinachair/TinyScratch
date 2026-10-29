@@ -21,6 +21,9 @@
 #define TS_VIEW_COLS     128        /* waveform columns on the screen */
 #define TS_LANE          128        /* the clip view: one bar of playhead and cuts, a column each */
 #define TS_LANE_BEATS    4
+#define TS_RCOLS         512        /* the Remote UI's waveform: columns of the high-resolution overview */
+#define TS_RLANE         512        /* the Remote UI's clip view with no clip: what the playhead did, a column each */
+#define TS_RCLIP_RES     64         /* the Remote UI's clip plan: points to the beat (half the clip's own resolution) */
 #define TS_CUT_NOTE      60         /* C3: this note and above cut the sound in */
 #define TS_PAD_FIRST     36         /* the Move's 32 pads send notes 36..67 (drum layout) or 68..99 (pad ids) */
 #define TS_PAD_LAST      99
@@ -99,6 +102,7 @@ typedef struct {
     char   name[TS_NAME_LEN];   /* what the screen calls it */
     char   file[TS_NAME_LEN];   /* the file it came from, if it came from one: a file is loaded once, however many folders are searched */
     uint8_t pk[TS_VIEW_COLS], rms[TS_VIEW_COLS];   /* overview per column: peak and body, 0..255 */
+    uint8_t pk_hi[TS_RCOLS], rms_hi[TS_RCOLS];     /* the same, four times finer, for the Remote UI */
     float lo, hi;               /* where the sound is, 0..1: the clips scratch between these, not through the silence round it */
 } ts_slot_t;
 
@@ -154,6 +158,9 @@ typedef struct ts_engine {
     uint8_t     lane_pos[TS_LANE], lane_gate[TS_LANE];
     int         lane_col;
     int         lane_len;       /* the beats the clip view spans: the clip's length, or a bar */
+    uint8_t     hand_pos[TS_RLANE], hand_gate[TS_RLANE];   /* the same record for the Remote UI, finer: 0..255 a column */
+    int         hand_col;
+    uint64_t    frames;         /* samples rendered since the engine was made: the Remote UI's clock (device time) */
 
     ts_clip_t   clip_data[TS_POOL + 2];        /* every clip; the last two are the "try" clip, built in the one not playing, then switched to */
     int         bank[TS_SLOTS][TS_BANK];       /* each sample has its own clip pads, in pages of 16: a clip's place in clip_data, plus one; 0 is an empty pad */
@@ -284,6 +291,15 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames);
 
 /* What the screen shows, as compact JSON. Returns the length, or -1 if it does not fit (and buf is empty). */
 int  ts_engine_view(const ts_engine_t *e, char *buf, int cap);
+/* The Remote UI (web_ui.html) reads two more, through the host's extras pump (twice a second, and on every edit):
+ *   rview   small and live: where the playhead is and is heading, the clock (beats, tempo, device time), the fader, and the
+ *           status the screens show (sample, clip, pages, cues, recording). The browser runs the clip from it between reads.
+ *   rclip   what changes rarely: the clip playing at TS_RCLIP_RES points to the beat (path and fader levels), the path this pass
+ *           with Humanise on, the sample's overview at TS_RCOLS columns, and with no clip the record of what the playhead did. It also
+ *           turns over every two seconds (sq), so the host, which sends only what changed, sends it again: a lost copy is replaced.
+ * Both are flat JSON objects; neither is a parameter (a declared parameter would be read only every few seconds). */
+int  ts_engine_rview(const ts_engine_t *e, char *buf, int cap);
+int  ts_engine_rclip(const ts_engine_t *e, char *buf, int cap);
 
 enum {
     TS_WAV_OK = 0,

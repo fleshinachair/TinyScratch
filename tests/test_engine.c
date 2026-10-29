@@ -3898,6 +3898,110 @@ static void test_plugin_generate(void)
     api->destroy_instance(h);
     remove(path);
 }
+/* the value of "key" in a flat JSON object, as text (up to the next comma or quote), or "" */
+static const char *jfield(const char *json, const char *key, char *out, size_t cap)
+{
+    char pat[48];
+    snprintf(pat, sizeof pat, "\"%s\":", key);
+    const char *p = strstr(json, pat);
+    out[0] = 0;
+    if (!p) return out;
+    p += strlen(pat);
+    if (*p == '"') p++;
+    size_t n = 0;
+    while (*p && *p != '"' && *p != ',' && *p != '}' && n + 1 < cap) out[n++] = *p++;
+    out[n] = 0;
+    return out;
+}
+
+/* The Remote UI's two values (web_ui.html): rview, live, and rclip, the clip and the waveform in fine detail. */
+static void test_remote_ui(void)
+{
+    printf("remote UI: rview and rclip\n");
+    const ts_plugin_api_v2_t *api = plugin_api();
+    void *h = api->create_instance(g_root, "{}");
+    ts_inst_t *in = (ts_inst_t *)h;
+    static char rv[65536], rc[65536], cp[16384], f[64], g[64];
+    int16_t o[256];
+
+    CHECK(ts_plugin_json_chain_params(cp, sizeof cp) > 0 &&
+          strstr(cp, "\"key\":\"view\",\"name\":\"View\",\"type\":\"string\",\"access\":\"read\",\"live\":true,\"viz\":{\"extra_keys\":[\"rview\",\"rclip\"]}}") &&
+          !strstr(cp, "\"key\":\"rview\"") && !strstr(cp, "\"key\":\"rclip\""),
+          "the hidden View parameter names rview and rclip as extras (which the host's extras pump sends), and neither is a parameter of its own");
+
+    /* a clip, the transport running */
+    api->set_param(h, "sample", "0");
+    api->set_param(h, "clip", "17");
+    api->set_param(h, "humanise", "0");
+    const double spb = 120.0 / 60.0 / 44100.0;
+    for (int b = 0; b < 200; b++) { ts_engine_sync_beat(in->eng, 128.0 * spb * b); api->render_block(h, o, 128); }
+    int nv = api->get_param(h, "rview", rv, sizeof rv), nc = api->get_param(h, "rclip", rc, sizeof rc);
+    CHECK(nv > 0 && rv[0] == '{' && rv[nv - 1] == '}' && nc > 0 && rc[0] == '{' && rc[nc - 1] == '}', "both are whole objects (%d and %d bytes)", nv, nc);
+    CHECK(nv < 2048, "rview is small: it is read twice a second (%d bytes)", nv);
+    CHECK(!strcmp(jfield(rv, "rk", f, sizeof f), jfield(rc, "rk", g, sizeof g)) && strcmp(f, "0"), "they name the same clip (rk %s), so the page pairs them", f);
+    jfield(rc, "lb", f, sizeof f);
+    const int lb = atoi(f);
+    jfield(rc, "lp", g, sizeof g);
+    const char *lp = strstr(rc, "\"lp\":\""), *lg = strstr(rc, "\"lg\":\"");
+    CHECK(lp && lg && (int)(strchr(lp + 6, '"') - (lp + 6)) == lb * TS_RCLIP_RES * 3 && (int)(strchr(lg + 6, '"') - (lg + 6)) == lb * TS_RCLIP_RES,
+          "the plan is the whole clip, %d points to the beat: three hex digits of playhead and one of fader a point (%d beats)", TS_RCLIP_RES, lb);
+    const char *w = strstr(rc, "\"w\":\"");
+    CHECK(w && (int)(strchr(w + 5, '"') - (w + 5)) == TS_RCOLS * 2, "the waveform is %d columns", TS_RCOLS);
+    {
+        const ts_clip_t *k = clip_at(in->eng, in->eng->clip_now);
+        int same = k != NULL;
+        for (int i = 0; same && i < k->n / 2; i += 17) {
+            char hx[4] = { lp[6 + i * 3], lp[7 + i * 3], lp[8 + i * 3], 0 };
+            same = (unsigned)strtoul(hx, NULL, 16) == (unsigned)(k->pos[i * 2] >> 4);
+        }
+        CHECK(same, "...and it is the clip's own data, not a picture of it");
+    }
+    CHECK(!strstr(rc, "\"hp\":"), "with Humanise at 0 there is no second path");
+    api->set_param(h, "humanise", "0.5");
+    api->get_param(h, "rclip", rc, sizeof rc);
+    CHECK(strstr(rc, "\"hp\":\"") && strstr(rc, "\"hg\":\"") && strstr(rc, "\"hk\":"), "with Humanise up, the path played this pass too, and which pass it is");
+
+    /* the clock: device time from the samples rendered, the beat from the transport */
+    double dt0 = atof(jfield(rv, "dt", f, sizeof f));
+    for (int b = 200; b < 200 + 345; b++) { ts_engine_sync_beat(in->eng, 128.0 * spb * b); api->render_block(h, o, 128); }
+    api->get_param(h, "rview", rv, sizeof rv);
+    double dt1 = atof(jfield(rv, "dt", f, sizeof f)), mc = atof(jfield(rv, "mc", g, sizeof g));
+    CHECK(fabs((dt1 - dt0) - 345.0 * 128.0 * 1000.0 / 44100.0) < 1.0, "dt counts the time rendered in ms (%.1f ms for 345 blocks)", dt1 - dt0);
+    CHECK(fabs(mc - in->eng->mclock) < 1e-3 && atoi(jfield(rv, "tp", f, sizeof f)) == in->eng->transport && fabs(atof(jfield(rv, "bpm", g, sizeof g)) - in->eng->bpm) < 0.01,
+          "it carries the musical clock (%.3f beats), the transport and the tempo", mc);
+    CHECK(fabs(atof(jfield(rv, "p", f, sizeof f)) - in->eng->pos) < 1e-4, "...and where the playhead is");
+
+    {
+        char sq0[16], sq1[16];
+        api->get_param(h, "rclip", rc, sizeof rc);
+        jfield(rc, "sq", sq0, sizeof sq0);
+        for (int b = 0; b < 700; b++) api->render_block(h, o, 128);                   /* two seconds */
+        api->get_param(h, "rclip", rc, sizeof rc);
+        jfield(rc, "sq", sq1, sizeof sq1);
+        CHECK(sq0[0] && sq1[0] && atoi(sq1) == atoi(sq0) + 1, "rclip turns over every two seconds (sq %s, then %s), so the host sends it again", sq0, sq1);
+    }
+
+    /* no clip: the hand's record, finer than the screen's */
+    api->set_param(h, "clip", "0");
+    for (int b = 0; b < 40; b++) api->render_block(h, o, 128);
+    nc = api->get_param(h, "rclip", rc, sizeof rc);
+    const char *hl = strstr(rc, "\"hl\":\"");
+    CHECK(nc > 0 && hl && (int)(strchr(hl + 6, '"') - (hl + 6)) == TS_RLANE * 2 && !strstr(rc, "\"lp\":") && !strcmp(jfield(rc, "rk", f, sizeof f), "0"),
+          "with no clip, rclip holds what the playhead did (%d columns) and names no clip", TS_RLANE);
+
+    /* a name with a quote in it is still JSON */
+    snprintf(in->eng->slot[0].name, sizeof in->eng->slot[0].name, "A\"B\\C");
+    api->get_param(h, "rview", rv, sizeof rv);
+    CHECK(strstr(rv, "\"n\":\"A\\\"B\\\\C\"") != NULL, "a sample's name is escaped (a file may be called anything)");
+
+    /* too small a buffer: nothing, and nothing written past it */
+    static char small[80];
+    memset(small, 'x', sizeof small);
+    CHECK(api->get_param(h, "rclip", small, 64) < 0 && small[64] == 'x' && api->get_param(h, "rview", small, 64) < 0 && small[64] == 'x',
+          "a buffer too small gets nothing, and nothing past its end");
+    api->destroy_instance(h);
+}
+
 static void test_plugin_pickers(void)
 {
     printf("plugin: Load Sample, Zoom, the Pads Link page\n");
@@ -4132,6 +4236,7 @@ int main(int argc, char **argv)
     test_plugin_record();
     test_plugin_generate();
     test_plugin_pickers();
+    test_remote_ui();
     write_fixtures();
     test_manifest();
 

@@ -1832,6 +1832,7 @@ ts_engine_t *ts_engine_create(float sample_rate)
     e->rng = 0x2545F491u;
     e->last_vel = 127;
     e->lane_col = -1;
+    e->hand_col = -1;
     e->clip_now = 1;
     e->lane_len = TS_LANE_BEATS;
     clips_builtin(e);
@@ -2036,21 +2037,27 @@ static void build_mips(float *buf, int len)
 }
 
 /* The overview the screen draws (peak and body per column), the extent of the sound, and the gain that brings it to -1 dBFS. */
-static void analyse(ts_slot_t *s, const float *buf, int frames)
+static void overview(uint8_t *pk, uint8_t *rms, int cols, const float *buf, int frames, float peak)
 {
-    float peak = 0.0f;
-    for (int i = 0; i < frames; i++) peak = fmaxf(peak, fabsf(buf[i]));
-    for (int c = 0; c < TS_VIEW_COLS; c++) {
-        int a = (int)((long long)frames * c / TS_VIEW_COLS), b = (int)((long long)frames * (c + 1) / TS_VIEW_COLS);
+    for (int c = 0; c < cols; c++) {
+        int a = (int)((long long)frames * c / cols), b = (int)((long long)frames * (c + 1) / cols);
         if (b <= a) b = a + 1;
         float m = 0.0f;
         double sq = 0.0;
         int cnt = 0;
         for (int i = a; i < b && i < frames; i++) { m = fmaxf(m, fabsf(buf[i])); sq += (double)buf[i] * buf[i]; cnt++; }
         float inv = peak > 1e-6f ? 1.0f / peak : 0.0f;
-        s->pk[c] = (uint8_t)clampi((int)(255.0f * fminf(m * inv, 1.0f) + 0.5f), 0, 255);
-        s->rms[c] = (uint8_t)clampi((int)(255.0f * fminf((cnt ? (float)sqrt(sq / cnt) : 0.0f) * inv, 1.0f) + 0.5f), 0, 255);
+        pk[c] = (uint8_t)clampi((int)(255.0f * fminf(m * inv, 1.0f) + 0.5f), 0, 255);
+        rms[c] = (uint8_t)clampi((int)(255.0f * fminf((cnt ? (float)sqrt(sq / cnt) : 0.0f) * inv, 1.0f) + 0.5f), 0, 255);
     }
+}
+
+static void analyse(ts_slot_t *s, const float *buf, int frames)
+{
+    float peak = 0.0f;
+    for (int i = 0; i < frames; i++) peak = fmaxf(peak, fabsf(buf[i]));
+    overview(s->pk, s->rms, TS_VIEW_COLS, buf, frames, peak);
+    overview(s->pk_hi, s->rms_hi, TS_RCOLS, buf, frames, peak);           /* (the Remote UI's, finer) */
     int first = 0, last = frames - 1;                                      /* the sound's extent: clips stay inside it */
     if (peak > 1e-4f) {
         while (first < frames - 1 && fabsf(buf[first]) < 0.04f * peak) first++;
@@ -2523,6 +2530,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
 {
     if (!e || !out || frames <= 0) return;
     e->view_seq++;
+    e->frames += (uint64_t)frames;
     if (e->pend_ready) {                                              /* a slot the service call built: swapped in here, never while it is being read */
         __sync_synchronize();
         ts_slot_t *d = &e->slot[e->pend_slot];
@@ -2677,6 +2685,15 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
             e->lane_gate[col] = 0;
         }
         if (live && clip == 0 && e->gate > 0.5f) e->lane_gate[col] = 1;
+        const int hcol = clampi((int)(fmod(e->mclock - t0, (double)lane_len) * (double)TS_RLANE / (double)lane_len), 0, TS_RLANE - 1);     /* the Remote UI's, finer */
+        if (!live || clip > 0) {
+            e->hand_col = hcol;
+        } else if (hcol != e->hand_col) {
+            e->hand_col = hcol;
+            e->hand_pos[hcol] = (uint8_t)clampi((int)(e->pos * 255.0 + 0.5), 0, 255);
+            e->hand_gate[hcol] = 0;
+        }
+        if (live && clip == 0 && e->gate > 0.5f) e->hand_gate[hcol] = 1;
     }
 }
 
@@ -2791,6 +2808,159 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
         }
         gates[TS_LANE] = 0;
         jw(&j, "\",\"zg\":\"%s\"", gates);
+    }
+    jw(&j, "}");
+    if (j.len < 0) buf[0] = 0;
+    return j.len;
+}
+
+/* ------------------------------------------------------------------ */
+/* What the Remote UI shows (web_ui.html)                              */
+/* ------------------------------------------------------------------ */
+
+/* digits hex digits of v, written straight into the buffer: the arrays below are thousands of digits, and a printf apiece would be slow */
+static void jw_hex(jw_t *j, unsigned v, int digits)
+{
+    static const char hx[] = "0123456789abcdef";
+    if (j->len < 0) return;
+    if (j->len + digits >= j->cap) { j->len = -1; return; }
+    for (int d = digits - 1; d >= 0; d--) j->buf[j->len++] = hx[(v >> (4 * d)) & 15];
+    j->buf[j->len] = 0;
+}
+
+/* a name, as a JSON string: a file name may hold a quote or a backslash */
+static void jw_str(jw_t *j, const char *s)
+{
+    jw(j, "\"");
+    for (; s && *s && j->len >= 0; s++) {
+        const unsigned char c = (unsigned char)*s;
+        if (c == '"' || c == '\\') jw(j, "\\%c", c);
+        else if (c < 0x20) jw(j, " ");
+        else jw(j, "%c", c);
+    }
+    jw(j, "\"");
+}
+
+/* the clip the screens show (as the view has it), and where its turn began */
+static const ts_clip_t *remote_clip(const ts_engine_t *e, double *t0)
+{
+    *t0 = e->p.clip == TS_CLIP_AUTO ? e->auto_start : 0.0;
+    return e->p.clip ? clip_at(e, e->clip_now) : NULL;
+}
+
+/* what the plan is a plan of: the browser pairs rview with the rclip that holds the clip it names */
+static unsigned remote_key(const ts_engine_t *e, const ts_clip_t *k)
+{
+    if (!k) return 0;
+    return (((e->clips_ver * 2654435761u) ^ (e->gen_count * 40503u)) + (unsigned)e->clip_now * 977u + (unsigned)e->p.sample * 31u + (unsigned)k->len) | 1u;
+}
+
+int ts_engine_rview(const ts_engine_t *e, char *buf, int cap)
+{
+    if (!e || !buf || cap < 2) return -1;
+    jw_t j = { buf, cap, 0 };
+    const ts_params_t *p = &e->p;
+    const ts_slot_t *s = &e->slot[p->sample];
+    double t0;
+    const ts_clip_t *k = remote_clip(e, &t0);
+    const ts_recipe_t *rec = k ? recipe_at(e, e->clip_now) : NULL;
+    const int native = k && k->tag != 0 && (k->tag == sample_tag(p->sample) || k->tag == TAG_GENERATED);
+    const int known = k && (k->extras & TS_EX_KNOWN);
+    float cu[8];
+    cue_points(s, cu);
+
+    jw(&j, "{\"v\":1,\"dt\":%.1f,\"bpm\":%.2f,\"mc\":%.4f,\"t0\":%.4f,\"ae\":%.4f,\"tp\":%d,\"ru\":%d,\"nh\":%d,\"lk\":%d,",
+       (double)e->frames * 1000.0 / (double)e->sr, (double)e->bpm, e->mclock, t0, p->clip == TS_CLIP_AUTO ? e->auto_end : 0.0,
+       e->transport, e->running, e->notes_held + e->pad_held, p->lock);
+    jw(&j, "\"p\":%.5f,\"tx\":%.5f,\"vl\":%.3f,\"g\":%.3f,\"sl\":%.4f,\"lo\":%.4f,\"hi\":%.4f,\"nat\":%d,\"hh\":%d,",
+       e->pos, e->target, (double)e->vel_out, (double)e->gate, s->loaded ? (double)s->len / (double)e->sr : 0.0, (double)s->lo, (double)s->hi,
+       native, e->hand_hold > 0);
+    jw(&j, "\"rk\":%u,\"lb\":%d,\"hk\":%d,\"cm\":%d,\"cl\":%d,\"cp\":%d,\"pg\":%d,\"tv\":%d,\"tg\":%d,\"cy\":%d,\"cx\":%d,\"cg\":%d,\"ct\":%d,",
+       remote_key(e, k), k ? k->len : TS_LANE_BEATS, k ? (int)floor((e->mclock - t0) / (double)k->len) : 0,
+       p->clip, p->clip ? e->clip_now % CID_PAGE : 0, p->clip ? e->clip_now / CID_PAGE : 0, e->view_page,
+       e->try_valid, e->try_valid ? e->try_recipe.style : 0,
+       rec ? rec->style : -1, rec && known ? k->extras & 7 : -1, rec ? rec->groove : 0, rec && known ? (k->extras >> TS_EX_TMPL_SHIFT) & 15 : 0);
+    jw(&j, "\"cs\":%d,\"cq\":%d,\"cu\":[", p->cues, e->cue_on ? e->cue_pad : -1);
+    for (int i = 0; i < 8; i++) jw(&j, "%s%.4f", i ? "," : "", (double)cu[i]);
+    jw(&j, "],\"rc\":%d,\"rt\":%d,\"rl\":%d,\"ln\":%d,\"nc\":%d,\"s\":%d,\"n\":",
+       e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
+       e->last_note, e->nclips, p->sample);
+    jw_str(&j, s->loaded ? s->name : "EMPTY");
+    jw(&j, ",\"sn\":[");
+    for (int i = 0; i < TS_SLOTS; i++) {
+        char fallback[16];
+        snprintf(fallback, sizeof fallback, "USER %d", i - 1);
+        if (i) jw(&j, ",");
+        jw_str(&j, e->slot[i].loaded ? e->slot[i].name : (i == 0 ? "AHHH" : (i == 1 ? "FRESSSH" : fallback)));
+    }
+    jw(&j, "],\"ld\":\"");
+    for (int i = 0; i < TS_SLOTS; i++) jw(&j, "%c", e->slot[i].loaded ? '1' : '0');
+    jw(&j, "\",\"pf\":\"");                                                    /* which pages have a clip on them */
+    for (int pg = 0; pg < TS_PAGES; pg++) {
+        int any = 0;
+        for (int c = 1; c <= TS_NUM_CLIPS && !any; c++) any = bank_clip(e, p->sample, pg * CID_PAGE + c) != NULL;
+        jw(&j, "%c", any ? '1' : '0');
+    }
+    jw(&j, "\",\"cf\":\"");                                                    /* the clip pads of the page the Pads screen shows, and which you made */
+    for (int c = 0; c < TS_NUM_CLIPS; c++) jw(&j, "%c", bank_clip(e, p->sample, e->view_page * CID_PAGE + c + 1) ? '1' : '0');
+    jw(&j, "\",\"kp\":\"");
+    for (int c = 0; c < TS_NUM_CLIPS; c++) { const int at = e->view_page * TS_NUM_CLIPS + c; jw(&j, "%c", (e->bank[p->sample][at] > 0 && e->kept[e->bank[p->sample][at] - 1].used) ? '1' : '0'); }
+    jw(&j, "\"}");
+    if (j.len < 0) buf[0] = 0;
+    return j.len;
+}
+
+int ts_engine_rclip(const ts_engine_t *e, char *buf, int cap)
+{
+    if (!e || !buf || cap < 2) return -1;
+    jw_t j = { buf, cap, 0 };
+    const ts_params_t *p = &e->p;
+    const ts_slot_t *s = &e->slot[p->sample];
+    double t0;
+    const ts_clip_t *k = remote_clip(e, &t0);
+
+    /* sq turns over every two seconds. The host sends a value only when it differs from what it last sent, so without it a copy that
+     * never reached the page (it was opened while the first one was on its way) would not come again until the clip changed. */
+    jw(&j, "{\"v\":1,\"sq\":%u,\"rk\":%u,\"s\":%d,\"sl\":%.4f,\"w\":\"", (unsigned)(e->frames / (uint64_t)(2.0f * e->sr)), remote_key(e, k), p->sample,
+       s->loaded ? (double)s->len / (double)e->sr : 0.0);
+    for (int c = 0; c < TS_RCOLS; c++) jw_hex(&j, s->loaded ? s->pk_hi[c] : 0, 2);         /* the waveform: peak, then body */
+    jw(&j, "\",\"wr\":\"");
+    for (int c = 0; c < TS_RCOLS; c++) jw_hex(&j, s->loaded ? s->rms_hi[c] : 0, 2);
+    jw(&j, "\"");
+    if (k) {
+        /* the plan: the playhead (three hex digits, 0..4095) and the fader (one: 0 shut, 1 full, 2..7 an echo's lower steps), TS_RCLIP_RES to the beat */
+        const int step = TS_CLIP_RES / TS_RCLIP_RES, n = k->len * TS_RCLIP_RES;
+        jw(&j, ",\"lb\":%d,\"res\":%d,\"lp\":\"", k->len, TS_RCLIP_RES);
+        for (int i = 0; i < n; i++) jw_hex(&j, (unsigned)k->pos[i * step] >> 4, 3);
+        jw(&j, "\",\"lg\":\"");
+        for (int i = 0; i < n; i++) {
+            unsigned g = 0;
+            for (int d = 0; d < step && !g; d++) g = k->gate[i * step + d] & 7u;        /* a cut anywhere in the step shows */
+            jw_hex(&j, g, 1);
+        }
+        jw(&j, "\"");
+        if (p->humanise > 0.0f) {                                                     /* with Humanise on, what is played this pass: the path and the cuts */
+            jw(&j, ",\"hk\":%d,\"hp\":\"", (int)floor((e->mclock - t0) / (double)k->len));
+            char hg[TS_RLANE + 1];
+            const int hn = k->len * 32 < TS_RLANE ? k->len * 32 : TS_RLANE;           /* 32 to the beat */
+            for (int i = 0; i < hn; i++) {
+                const double t = ((double)i + 0.5) * k->len / hn;
+                double tp, tg, po;
+                float lvs;
+                humanise_at(p, (double)e->bpm, e->clip_now, k->len, e->mclock - t0, t, &tp, &tg, &po, &lvs);
+                jw_hex(&j, (unsigned)clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po), 0.0f, 1.0f) * 4095.0f + 0.5f), 0, 4095), 3);
+                hg[i] = ts_clip_cut(e, e->clip_now, tg) ? '1' : '0';
+            }
+            hg[hn] = 0;
+            jw(&j, "\",\"hg\":\"%s\"", hg);
+        }
+    } else {
+        /* no clip: what the playhead did over the last bar, and where the sound was cut in */
+        jw(&j, ",\"lb\":%d,\"hl\":\"", TS_LANE_BEATS);
+        for (int c = 0; c < TS_RLANE; c++) jw_hex(&j, e->hand_pos[c], 2);
+        jw(&j, "\",\"hlg\":\"");
+        for (int c = 0; c < TS_RLANE; c++) jw(&j, "%c", e->hand_gate[c] ? '1' : '0');
+        jw(&j, "\"");
     }
     jw(&j, "}");
     if (j.len < 0) buf[0] = 0;

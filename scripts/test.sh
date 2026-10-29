@@ -78,6 +78,14 @@ else
     echo "   SKIPPED: node not found"
 fi
 
+echo "== the Remote UI (src/web_ui.html in a browser, against a recording of the engine)"
+if command -v node >/dev/null 2>&1 && NODE_PATH="${NODE_PATH:-$(npm root -g 2>/dev/null || true)}" node -e 'require("playwright")' >/dev/null 2>&1; then
+    bash scripts/build_demo.sh
+    NODE_PATH="${NODE_PATH:-$(npm root -g)}" node tests/remote_ui_test.mjs
+else
+    echo "   SKIPPED: node or playwright not found"
+fi
+
 echo "== manifest drift check"
 bash scripts/gen_manifest.sh "$T/module.generated.json" >/dev/null
 if ! diff -u module.json "$T/module.generated.json"; then

@@ -39,9 +39,9 @@ echo "== installing to $RUSER@$HOST:$DEST"
 # the samples folder is ours: it is rewritten whole, so nothing from an older build is left to load as a User slot. The
 # exception is what you recorded on the Move (user1.wav .. user6.wav), which is kept.
 "${SSH[@]}" "mkdir -p $DEST/samples && for f in $DEST/samples/*.wav; do case \"\$f\" in */user[1-6].wav) ;; *) rm -f \"\$f\" ;; esac; done; rm -f $DEST/deck.js $DEST/clips.bin"
-"${SCP[@]}" "$SRC/dsp.so" "$SRC/module.json" "$SRC/scratcher.js" "$SRC/waveform.js" "$RUSER@$HOST:$DEST/"
+"${SCP[@]}" "$SRC/dsp.so" "$SRC/module.json" "$SRC/scratcher.js" "$SRC/waveform.js" "$SRC/web_ui.html" "$RUSER@$HOST:$DEST/"
 "${SCP[@]}" "$SRC"/samples/*.wav "$RUSER@$HOST:$DEST/samples/"
-files=(dsp.so module.json scratcher.js waveform.js)
+files=(dsp.so module.json scratcher.js waveform.js web_ui.html)
 # clips imported from a Live Pack you own (tools/import_clips.py): your own copy, kept out of the repository (local/ is gitignored).
 # (Like every clip, they can be deleted on the Move.)
 if [ -f local/clips.bin ]; then
