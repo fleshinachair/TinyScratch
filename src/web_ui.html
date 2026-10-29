@@ -587,13 +587,13 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       g.lineWidth = gap ? 2 * d : 0.8 * d;
       g.beginPath(); g.arc(0, 0, f * R, 0, Math.PI * 2); g.stroke();
     }
-    /* the label: a white one, the set's name written on it in marker, the sample under it in pencil */
+    /* the label: a white one, the sample's name written big on it in marker, the set's name smaller under the spindle */
     var LR = L.label * u;
     g.fillStyle = "#f2f0ea"; g.beginPath(); g.arc(0, 0, LR, 0, Math.PI * 2); g.fill();
     for (var t = 0; t < 260; t++) { var ta = r() * Math.PI * 2, tr = Math.sqrt(r()) * LR; g.fillStyle = "rgba(0,0,0," + (r() * 0.035).toFixed(3) + ")"; g.fillRect(Math.cos(ta) * tr, Math.sin(ta) * tr, d, d); }
     g.strokeStyle = "rgba(0,0,0,.08)"; g.lineWidth = 1 * d; g.beginPath(); g.arc(0, 0, LR - 0.5 * d, 0, Math.PI * 2); g.stroke();
-    handwrite(g, title || "", 0, -LR * 0.42, LR * 1.6, LR * 0.3, "#1f2a52", -0.08, 2);          /* above the spindle */
-    handwrite(g, String(sample || "").toLowerCase(), LR * 0.04, LR * 0.5, LR * 1.2, LR * 0.17, "rgba(70,70,74,.75)", -0.05, 1);
+    handwrite(g, sample || "", 0, -LR * 0.42, LR * 1.6, LR * 0.4, "#1f2a52", -0.08, 2);         /* above the spindle */
+    handwrite(g, title || "", LR * 0.03, LR * 0.48, LR * 1.4, LR * 0.18, "rgba(31,42,82,.8)", -0.05, 2);
     /* the spindle hole */
     g.fillStyle = "#8f8f94"; g.beginPath(); g.arc(0, 0, 0.012 * u, 0, Math.PI * 2); g.fill();
     g.fillStyle = "#d9d9dd"; g.beginPath(); g.arc(-0.003 * u, -0.003 * u, 0.006 * u, 0, Math.PI * 2); g.fill();
