@@ -1,5 +1,20 @@
 # TinyScratch release notes
 
+## v1.1.0
+
+- **Remote UI.** TinyScratch now has a page in Schwung's Remote UI (`http://move.local:7700/remote-ui`): an overhead turntable whose record
+  turns backward and forward with the scratching, its white label hand-written with the sample's name and the set's; high-resolution
+  versions of the Move's graphs (the waveform, the clip's lanes and the zoom); the pads and Pad Play; and the Pre-gen and Playback dials,
+  grouped and ordered as on the Move. The page runs the clip itself between the host's updates, so the record and graphs move in time.
+- **Scratch by hand.** Drag the record to scratch it; the fader opens while you hold it. The pads are on the keyboard too (Q to K), and each
+  pad shows a picture of its clip.
+- **Drop a sound on the deck** (or LOAD SOUND): it is converted to a WAV and saved to a User slot.
+- **Stroke names.** The clip graph can name each stroke (baby, chirp, transformer...); STROKES turns them off.
+- **Wide and PERFORM layouts.** In a pop-out window on a wide screen the page fills it: pads, deck and graphs side by side. PERFORM shows
+  just the deck, the pads and the zoom.
+- **Fix:** a tap on an empty User pad on the Pads screen recorded a tenth of a second and kept it, so deleted User slots filled up again.
+  Recording now needs a hold, and a recording of silence is not kept.
+
 ## v1.0.2
 
 - **On-device help.** TinyScratch now ships a `help.json`, so its help is in Schwung's Help viewer (Global Settings, System, Help) and one jog from
