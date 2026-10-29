@@ -89,7 +89,15 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); paddi
 .cv canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 @media (max-width: 900px) { .stage { grid-template-columns: 1fr; } }
 canvas { display: block; width: 100%; }
-#deck { aspect-ratio: 1.3 / 1; max-width: 100%; border-radius: 6px; }
+#deck { aspect-ratio: 1.3 / 1; max-width: 100%; border-radius: 6px; touch-action: none; }
+.deckwrap { position: relative; }
+.drop { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 6px; border: 2px dashed var(--acid); border-radius: 6px; background: rgba(21,21,23,.82); color: var(--ink); font: 600 13px/1.4 var(--sans); text-align: center; pointer-events: none; }
+.drop.show { display: flex; }
+.drop small { color: var(--dim); font-weight: 500; }
+.loadbtn { position: absolute; right: 14px; top: 9px; font: 600 10px/1 var(--sans); letter-spacing: .1em; padding: 5px 8px; border-radius: 3px; border: 1px solid var(--line); background: var(--well); color: var(--dim); cursor: pointer; }
+.loadbtn:hover { color: var(--ink); }
+.loadmsg { font: 500 11px/1.3 var(--mono); color: var(--acid); margin: 6px 2px 0; min-height: 14px; }
+.loadmsg.bad { color: var(--red); }
 .deckread { display: flex; justify-content: space-between; font: 500 11px/1 var(--mono); color: var(--dim); margin: 10px 2px 0; }
 .zbtns { position: absolute; right: 12px; top: 8px; display: flex; gap: 4px; }
 .zbtns button, .chip { font: 600 10px/1 var(--sans); letter-spacing: .1em; padding: 5px 8px; border-radius: 3px; border: 1px solid var(--line); background: var(--well); color: var(--dim); cursor: pointer; }
@@ -103,7 +111,7 @@ canvas { display: block; width: 100%; }
 .prow.pages { grid-template-columns: auto repeat(4, minmax(48px, 80px)) 1fr; align-items: center; }
 .prow.pages .lbl { font: 600 10px/1 var(--sans); letter-spacing: .16em; color: var(--dim); padding-right: 6px; }
 .pad {
-  position: relative; min-height: 46px; border-radius: 5px; border: 1px solid var(--line); background: var(--well); color: var(--faint);
+  position: relative; min-height: 54px; border-radius: 5px; border: 1px solid var(--line); background: var(--well); color: var(--faint);
   font: 600 11px/1.1 var(--sans); letter-spacing: .06em; cursor: pointer; overflow: hidden; padding: 4px; touch-action: none;
 }
 .pad:active { transform: translateY(1px); }
@@ -115,7 +123,14 @@ canvas { display: block; width: 100%; }
 .pad.gen { --pc: var(--orange); color: #19191b; background: color-mix(in srgb, var(--orange) 78%, var(--panel)); border-color: transparent; }
 .pad.auto { --pc: var(--lime); color: #19191b; background: color-mix(in srgb, var(--lime) 78%, var(--panel)); border-color: transparent; }
 .pad.gen.now, .pad.auto.now { background: var(--ink); }
+.pad.gen .t, .pad.auto .t { letter-spacing: 0; font-size: 10px; }
+.pad.gen { container-type: inline-size; }
+.pad.gen .short { display: none; }
+@container (max-width: 74px) { .pad.gen .long { display: none; } .pad.gen .short { display: inline; } }
 .pad .kept { position: absolute; right: 5px; top: 4px; font-size: 10px; opacity: .7; }
+.pad .thumb { position: absolute; left: 6px; right: 6px; top: 6px; bottom: 6px; width: calc(100% - 12px); height: calc(100% - 12px); pointer-events: none; opacity: .5; }
+.pad.pic .t { position: absolute; left: 6px; top: 5px; font-size: 10px; }           /* a pad with a picture: its number in the corner */
+.pad .key { position: absolute; right: 5px; bottom: 3px; font: 500 9px/1 var(--mono); opacity: .5; text-transform: uppercase; }
 .pad .hold { position: absolute; left: 0; bottom: 0; height: 100%; width: 0; background: color-mix(in srgb, var(--red) 80%, transparent); pointer-events: none; }
 .pad .t { position: relative; }
 .chip.on { color: #19191b; background: var(--acid); border-color: transparent; }
@@ -138,6 +153,40 @@ canvas { display: block; width: 100%; }
 .tog .st { font: 500 11px/1 var(--mono); color: var(--faint); }
 .tog.on { color: var(--ink); }
 .tog.on .st { color: var(--lime); }
+
+/* ---- the page's layouts ----
+   normal     the pads across the top, then the deck and the dials on the left, the graphs on the right (one column on a phone)
+   wide       (1400 px and over: a widescreen monitor, the pop-out window) three columns: pads, Pad Play and Pre-gen | the deck and Playback | the graphs
+   perform    the deck and the pads side by side, the zoom under them: nothing else */
+.main { display: flex; flex-direction: column; gap: 16px; }
+.led.perf { cursor: pointer; color: var(--dim); }
+.led.perf:hover { color: var(--ink); }
+body.perform .led.perf { color: #19191b; background: var(--acid); border-color: transparent; }
+@media (min-width: 1400px) {
+  body:not(.perform) .rig { max-width: none; }
+  body:not(.perform) .main { display: grid; grid-template-columns: minmax(0, 31fr) minmax(0, 34fr) minmax(0, 35fr); gap: 16px;
+    grid-template-areas: "pads deck scopes" "padplay deck scopes" "pregen playback scopes"; grid-template-rows: auto 1fr auto; align-items: start; }
+  body:not(.perform) .lower, body:not(.perform) .stage, body:not(.perform) .left { display: contents; }
+  body:not(.perform) #padsPanel { grid-area: pads; } body:not(.perform) #padplayPanel { grid-area: padplay; }
+  body:not(.perform) #deckPanel { grid-area: deck; } body:not(.perform) #pregenPanel { grid-area: pregen; }
+  body:not(.perform) #playbackPanel { grid-area: playback; }
+  body:not(.perform) .scopes { grid-area: scopes; align-self: stretch; }
+  body:not(.perform) .hint { display: none; }                                             /* (each pad shows its key) */
+  body:not(.perform) .tog { min-height: 40px; }
+  body:not(.perform) .pad.sample .t { font-size: 9px; letter-spacing: 0; }
+  body:not(.perform) .pad.auto .t { font-size: 9px; }
+}
+body.perform .rig { max-width: none; }
+body.perform .info, body.perform #padplayPanel, body.perform #pregenPanel, body.perform #playbackPanel, body.perform #waveScope, body.perform #laneScope, body.perform footer, body.perform .hint { display: none; }
+body.perform .main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "deck pads" "zoom zoom"; gap: 16px; align-items: start; }
+body.perform .lower, body.perform .stage, body.perform .left, body.perform .scopes { display: contents; }
+body.perform #deckPanel { grid-area: deck; } body.perform #padsPanel { grid-area: pads; }
+body.perform #deck { width: min(100%, calc((100vh - 470px) * 1.3)); margin: 0 auto; }        /* as big as the screen's height lets it be, the zoom still in view */
+body.perform #zoomScope { grid-area: zoom; min-height: 240px; }
+body.perform .pad { min-height: max(64px, calc((100vh - 520px) / 3)); font-size: 13px; }      /* the pads fill their side of the screen */
+body.perform .prow { gap: 8px; }
+@media (max-width: 900px) { body.perform .main { grid-template-columns: 1fr; grid-template-areas: "deck" "pads" "zoom"; } }
+@media (orientation: landscape) and (max-height: 820px) { body.perform .pad { min-height: max(56px, calc((100vh - 470px) / 3)); } body.perform #zoomScope { min-height: 170px; } }
 
 footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center; padding: 4px 0 2px; letter-spacing: .04em; }
 
@@ -170,6 +219,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       <span class="led play" id="ledPlay">PLAY</span>
       <span class="led rec" id="ledRec">REC</span>
       <span class="led bpm" id="ledBpm">--- BPM</span>
+      <button class="led perf" id="performBtn" title="Just the deck, the pads and the zoom, as big as they go (full screen where the browser allows)">PERFORM</button>
     </div>
     <div class="info">
       <div><span class="k">SAMPLE</span><span class="v" id="infoSample">&ndash;</span></div>
@@ -182,34 +232,43 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
 
   <div class="demobar" id="demobar"><button id="demoStop">STOP DEMO</button><span id="demoTime">0:00</span><div class="prog"><i id="demoProg"></i></div><span>DEMO: RECORDED FROM THE REAL ENGINE</span></div>
 
+  <div class="main">
   <section class="lower">
-    <div class="panel pads"><h2>Pads</h2>
+    <div class="panel pads" id="padsPanel"><h2>Pads</h2>
       <div class="prow" id="samples"></div>
       <div class="prow pages" id="pages"><span class="lbl">PAGE</span></div>
       <div class="prow" id="clips1"></div>
       <div class="prow" id="clips2"></div>
-      <div class="hint">tap a pad to play it &middot; tap an empty pad while a generated clip plays to keep it &middot; hold a clip 1.5 s to delete it</div>
+      <div class="hint">tap a pad to play it &middot; tap an empty pad while a generated clip plays to keep it &middot; hold a clip 1.5 s to delete it<br>
+        keys: 1&ndash;8 samples &middot; Q&ndash;I and A&ndash;H clips &middot; space or J generate &middot; K auto &middot; &larr; &rarr; pages</div>
     </div>
-    <div class="panel"><h2>Pad play</h2><div class="toggles" id="kPadplay"></div></div>
+    <div class="panel" id="padplayPanel"><h2>Pad play</h2><div class="toggles" id="kPadplay"></div></div>
   </section>
 
   <section class="stage">
     <div class="left">
-      <div class="panel"><h2>Deck<span class="sub" id="deckSub"></span></h2>
-        <canvas id="deck"></canvas>
-        <div class="deckread"><span id="deckSpeed">0.0&times;</span><span id="deckNeedle">needle 0%</span></div>
+      <div class="panel" id="deckPanel"><h2>Deck<span class="sub" id="deckSub"></span></h2>
+        <button class="loadbtn" id="loadBtn" title="Load a sound onto a User slot (or drop one on the deck)">LOAD SOUND</button>
+        <input type="file" id="loadFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.m4a,.ogg" hidden>
+        <div class="deckwrap"><canvas id="deck"></canvas>
+          <div class="drop" id="drop"><span id="dropWhere">Drop a sound to load it</span><small>any audio file: it is made a mono WAV, up to 10 s, here first</small></div></div>
+        <div class="loadmsg" id="loadMsg"></div>
+        <div class="deckread"><span id="deckSpeed">0.0&times;</span><span>drag the record to scratch</span><span id="deckNeedle">needle 0%</span></div>
       </div>
-      <div class="panel"><h2>Pre-gen<span class="sub">what Generate makes</span></h2><div class="knobs" id="kPregen" style="--n:6"></div></div>
-      <div class="panel"><h2>Playback<span class="sub">how clips play</span></h2><div class="knobs" id="kPlayback" style="--n:7"></div></div>
+      <div class="panel" id="pregenPanel"><h2>Pre-gen<span class="sub">what Generate makes</span></h2><div class="knobs" id="kPregen" style="--n:6"></div></div>
+      <div class="panel" id="playbackPanel"><h2>Playback<span class="sub">how clips play</span></h2><div class="knobs" id="kPlayback" style="--n:7"></div></div>
     </div>
     <div class="scopes">
-      <div class="panel scope"><h2>Waveform</h2><div class="cv"><canvas id="wave"></canvas></div></div>
-      <div class="panel scope"><h2>Clip view</h2><div class="cv"><canvas id="lane"></canvas></div></div>
-      <div class="panel scope"><h2>Zoom</h2>
+      <div class="panel scope" id="waveScope"><h2>Waveform</h2><div class="cv"><canvas id="wave"></canvas></div></div>
+      <div class="panel scope" id="laneScope"><h2>Clip view</h2>
+        <div class="zbtns"><button id="strokesBtn" class="on" title="Name each stroke by its shape (what the fader does over it): a reading of the clip, not how it was made">STROKES</button></div>
+        <div class="cv"><canvas id="lane"></canvas></div></div>
+      <div class="panel scope" id="zoomScope"><h2>Zoom</h2>
         <div class="zbtns" id="zbtns"><button data-w="4">4 BEATS</button><button data-w="2" class="on">2</button><button data-w="1">1</button></div>
         <div class="cv"><canvas id="zoom"></canvas></div></div>
     </div>
   </section>
+  </div>
 
 
   <footer>drag a dial up or down (shift: fine) &middot; scroll &middot; double-click resets &middot; &#9786;</footer>
@@ -330,6 +389,17 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     waveDirty = true; laneDirty = true;
   }
 
+  /* the pictures on the pads (rpads): a clip's shape, 32 points of playhead and cuts, for each pad of the page shown and the try */
+  var pads = null;
+  function onRpads(raw) {
+    var o;
+    try { o = JSON.parse(raw); } catch (e) { return; }
+    if (!o || o.v !== 1) return;
+    function shape(x) { return x ? { p: decodeHex(x.p, 2, 255), g: decodeDigits(x.g) } : null; }
+    pads = { pk: o.pk, list: (o.pads || []).map(shape), tryShape: shape(o.try) };
+    renderPads();
+  }
+
   R.onParamChange(handleParams);
   function handleParams(ps) {
     var now = performance.now();
@@ -338,6 +408,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       var k = full.slice(PRE.length), val = ps[full];
       if (k === "rview") { link.rv++; onRview(val, now); return; }
       if (k === "rclip") { link.rc++; onRclip(val); return; }
+      if (k === "rpads") { onRpads(val); return; }
       if (dragging[k]) return;
       params[k] = val;
       (widgets[k] || []).forEach(function (f) { f(); });
@@ -416,12 +487,13 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       target = rv.tx;
       if (rv.cq >= 0 && live && rv.sl > 0) target = Math.min(1, rv.tx + el / rv.sl);     /* a cue pad plays the sound on at its own speed */
     }
+    if (scratch.on || now - scratch.end < 650) target = scratch.pos;        /* a hand on the record: it goes where the hand takes it (as long as the engine's hand hold) */
     var drag = num("drag", 0.5), tau = 0.003 + 0.08 * drag * drag;
     var before = sim.pos;
     if (!sim.seeded) { sim.pos = rv.p; sim.seeded = true; before = sim.pos; }
     var k = 1 - Math.exp(-dt / tau);
     sim.pos += k * (target - sim.pos);
-    if (!clip) sim.pos += (rv.p - sim.pos) * Math.min(1, dt * 3) * (rv.cq >= 0 ? 0 : 1);     /* by hand: follow what the device says */
+    if (!clip && !scratch.on && now - scratch.end > 650) sim.pos += (rv.p - sim.pos) * Math.min(1, dt * 3) * (rv.cq >= 0 ? 0 : 1);     /* (no clip: follow what the device says) */
     var sl = rv.sl || 1;
     sim.vel = dt > 0 ? (sim.pos - before) * sl / dt : 0;                                        /* x the sample's own speed */
     sim.velS += (sim.vel - sim.velS) * Math.min(1, dt * 12);
@@ -475,6 +547,139 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   var layers = { key: "", plinth: null, platter: null, arm: null, sheen: null, record: null, recordKey: "" };
   var readAt = 0;
 
+  /* ---- a sound, dropped on the deck (or chosen with LOAD SOUND) ----
+   * TinyScratch reads 16-bit WAVs of up to 10 s. Whatever is dropped is decoded here, mixed to mono at 44.1 kHz, the silence before
+   * its first sound cut off, kept to 10 s and written as such a WAV; then it is put in the Move's sample library (UserLibrary/
+   * Samples/TinyScratch, through the manager's file upload) and loaded with Load Sample, which puts it on the User slot selected,
+   * or the first empty one when Ahhh or Fresssh is. */
+  var LIB = "/data/UserData/UserLibrary/Samples", LIB_DIR = "TinyScratch";
+  var dropEl = document.getElementById("drop"), loadMsg = document.getElementById("loadMsg"), loading = null;
+  function say(text, bad) { loadMsg.textContent = text || ""; loadMsg.classList.toggle("bad", !!bad); }
+  function destination() {
+    if (!rv) return "a User slot";
+    var slot = rv.s;
+    if (slot < 2) { slot = -1; for (var i = 2; i < 8 && slot < 0; i++) if (rv.ld[i] !== "1") slot = i; if (slot < 0) slot = 2; }
+    return "User " + (slot - 1) + (rv.ld[slot] === "1" ? " (replaces " + rv.sn[slot] + ")" : "");
+  }
+  function csrf() { var m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/); return m ? decodeURIComponent(m[1]) : ""; }
+  function toWav(buf) {
+    var ch = buf.getChannelData(0), n = ch.length, peak = 0;
+    for (var i = 0; i < n; i++) { var a = Math.abs(ch[i]); if (a > peak) peak = a; }
+    var from = 0;
+    while (from < n && Math.abs(ch[from]) < peak * 0.02) from++;
+    from = Math.max(0, from - Math.round(0.005 * 44100));                   /* 5 ms before the sound */
+    var len = Math.min(n - from, 10 * 44100), out = new DataView(new ArrayBuffer(44 + len * 2));
+    function str(o, t) { for (var k = 0; k < t.length; k++) out.setUint8(o + k, t.charCodeAt(k)); }
+    str(0, "RIFF"); out.setUint32(4, 36 + len * 2, true); str(8, "WAVE"); str(12, "fmt "); out.setUint32(16, 16, true);
+    out.setUint16(20, 1, true); out.setUint16(22, 1, true); out.setUint32(24, 44100, true); out.setUint32(28, 88200, true);
+    out.setUint16(32, 2, true); out.setUint16(34, 16, true); str(36, "data"); out.setUint32(40, len * 2, true);
+    for (var j = 0; j < len; j++) { var v = Math.max(-1, Math.min(1, ch[from + j])); out.setInt16(44 + j * 2, v < 0 ? v * 32768 : v * 32767, true); }
+    return { blob: new Blob([out.buffer], { type: "audio/wav" }), seconds: len / 44100 };
+  }
+  function loadSound(file) {
+    if (!file || loading) return;
+    if (demoMode || !window.schwungRemote) { say("Loading a sound works on the Move, not in the demo.", true); return; }
+    var name = file.name.replace(/\.[^.]*$/, "").replace(/[^A-Za-z0-9 _-]+/g, " ").trim().slice(0, 40) || "sound";
+    var where = destination(), path = LIB + "/" + LIB_DIR + "/" + name + ".wav";
+    loading = { name: name, at: performance.now(), sn: rv ? rv.sn.join("|") : "" };
+    say("Reading " + file.name + "\u2026");
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    file.arrayBuffer().then(function (ab) {
+      var ctx = new Ctx();
+      return new Promise(function (ok, no) { ctx.decodeAudioData(ab, ok, no); }).then(function (decoded) {
+        try { ctx.close(); } catch (e) { /* (closed) */ }
+        var frames = Math.max(1, Math.ceil(decoded.duration * 44100));
+        var off = new OfflineAudioContext(1, frames, 44100), src = off.createBufferSource();
+        src.buffer = decoded; src.connect(off.destination); src.start();
+        return off.startRendering();                                          /* (to mono, at 44.1 kHz) */
+      });
+    }).then(function (mono) {
+      var w = toWav(mono);
+      say("Sending " + name + " (" + w.seconds.toFixed(1) + " s) to the Move\u2026");
+      var tok = csrf(), mk = new FormData();
+      mk.append("path", LIB); mk.append("name", LIB_DIR);
+      return fetch("/files/mkdir", { method: "POST", headers: { "X-CSRF-Token": tok }, body: mk }).catch(function () {}).then(function () {
+        var up = new FormData();
+        up.append("path", LIB + "/" + LIB_DIR); up.append("file", w.blob, name + ".wav");
+        return fetch("/files/upload", { method: "POST", headers: { "X-CSRF-Token": tok }, body: up });
+      });
+    }).then(function (r) {
+      if (!r.ok) throw new Error("the Move would not take the file (" + r.status + ")");
+      say("Loading " + name + " into " + where + "\u2026");
+      R.setParam(PRE + "sample_file", path);
+    }).catch(function (e) {
+      say("Could not load " + file.name + ": " + (e && e.message ? e.message : "it is not a sound this browser can read"), true);
+      loading = null;
+    });
+  }
+  /* done when the Move lists a sample of that name (rview), or given up on */
+  function loadCheck(now) {
+    if (!loading || !rv || !loading.sent && loadMsg.textContent.indexOf("Loading ") !== 0) return;
+    loading.sent = true;
+    var up = loading.name.toUpperCase().replace(/[^A-Z0-9]+/g, "");
+    if (rv.sn.some(function (n) { return n.toUpperCase().replace(/[^A-Z0-9]+/g, "") === up; }) && rv.sn.join("|") !== loading.sn) {
+      say("Loaded " + loading.name + " (" + rv.n + ")."); loading = null;
+      setTimeout(function () { if (!loading) say(""); }, 4000);
+    } else if (now - loading.at > 15000) { say("Sent " + loading.name + "; the Move has not shown it yet.", true); loading = null; }
+  }
+  var deckPanel = document.getElementById("deckPanel"), dragDepth = 0;
+  function hasFiles(e) { return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0; }
+  deckPanel.addEventListener("dragenter", function (e) { if (!hasFiles(e)) return; dragDepth++; document.getElementById("dropWhere").textContent = "Drop to load it into " + destination(); dropEl.classList.add("show"); e.preventDefault(); });
+  deckPanel.addEventListener("dragover", function (e) { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } });
+  deckPanel.addEventListener("dragleave", function () { if (--dragDepth <= 0) { dragDepth = 0; dropEl.classList.remove("show"); } });
+  deckPanel.addEventListener("drop", function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); dragDepth = 0; dropEl.classList.remove("show");
+    loadSound(e.dataTransfer.files[0]);
+  });
+  document.getElementById("loadBtn").addEventListener("click", function () { document.getElementById("loadFile").click(); });
+  document.getElementById("loadFile").addEventListener("change", function () { loadSound(this.files[0]); this.value = ""; });
+
+  /* ---- scratching: a hand on the record ----
+   * Grab the vinyl and turn it: the turn is the playhead's move, at the deck's own scale (a turn at 33 1/3 is the sample at its own
+   * speed). It is written as "scratch", the engine's hand on the record: it takes over from the clip, and holds the fader open, for
+   * 0.6 s after each write; so a hand held still is written again, and the record stops under it as a real one would. Each point
+   * carries when the hand was there (this page's clock), and the engine plays them back at that pace a little late, so the uneven
+   * way they cross the network is not heard as a stutter. The picture follows the hand at once; the sound follows over the network. */
+  var scratch = { on: false, pos: 0, acc: 0, a: 0, p0: 0, sent: 0, end: -1e9, id: null };
+  function deckPoint(e) {
+    var r = deck.getBoundingClientRect(), sx = deck.width / r.width, sy = deck.height / r.height;
+    var x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * sy, u = deck.height;
+    return { x: x - L.cx * u, y: y - L.cy * u, r: L.rec * u };
+  }
+  function sendScratch(t, force) {
+    if (!force && t - scratch.sent < 8) return;
+    scratch.sent = t;
+    R.setParam(PRE + "scratch", scratch.pos.toFixed(5) + " " + t.toFixed(1));
+  }
+  function eventTime(e) { var t = e.timeStamp; return t > 0 && Math.abs(t - performance.now()) < 1000 ? t : performance.now(); }
+  deck.addEventListener("pointerdown", function (e) {
+    var q = deckPoint(e);
+    if (!rv || Math.hypot(q.x, q.y) > q.r) return;
+    scratch.on = true; scratch.id = e.pointerId; scratch.a = Math.atan2(q.y, q.x); scratch.acc = 0; scratch.p0 = clamp(sim.pos, 0, 1); scratch.pos = scratch.p0;
+    deck.setPointerCapture(e.pointerId); deck.style.cursor = "grabbing";
+    sendScratch(eventTime(e), true);
+    e.preventDefault();
+  });
+  deck.addEventListener("pointermove", function (e) {
+    var q = deckPoint(e);
+    if (!scratch.on) { deck.style.cursor = rv && Math.hypot(q.x, q.y) <= q.r ? "grab" : ""; return; }
+    if (e.pointerId !== scratch.id) return;
+    var a = Math.atan2(q.y, q.x), da = a - scratch.a;
+    if (da > Math.PI) da -= 2 * Math.PI; else if (da < -Math.PI) da += 2 * Math.PI;
+    scratch.a = a; scratch.acc += da;
+    scratch.pos = clamp(scratch.p0 + scratch.acc / (2 * Math.PI * (rv.sl || 1) * RPS), 0, 1);
+    sendScratch(eventTime(e), false);
+  });
+  function letGo(e) {
+    if (!scratch.on || (e && e.pointerId !== scratch.id)) return;
+    scratch.on = false; scratch.end = performance.now(); deck.style.cursor = "grab";
+    sendScratch(e ? eventTime(e) : scratch.end, true);
+  }
+  deck.addEventListener("pointerup", letGo); deck.addEventListener("pointercancel", letGo);
+  /* a hand held still keeps the record: the engine lets go 0.6 s after the last write */
+  setInterval(function () { if (scratch.on) sendScratch(performance.now(), true); }, 250);
+
   /* The set the Move has open, for the label. Schwung keeps it in active_set.txt (line 1 the set's id, line 2 its name), and the
    * manager this page comes from serves /data/UserData/ as files, so the page reads it there: nothing on the Move's audio thread.
    * It changes only when another set is opened, which reloads the module (its clock starts again: onRview sees that), so it is
@@ -515,13 +720,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     var kx = 0.075 * u, ky = 0.915 * u;
     metalDisc(g, kx, ky, 0.042 * u, d);
     g.fillStyle = "#3a1d18"; g.beginPath(); g.arc(kx + 0.03 * u, ky - 0.03 * u, 0.012 * u, 0, Math.PI * 2); g.fill();
-    /* START/STOP, along the front */
-    var bx = 0.14 * u, by = 0.875 * u, bw = 0.15 * u, bh = 0.085 * u;
-    g.save(); g.shadowColor = "rgba(0,0,0,.6)"; g.shadowBlur = 0.01 * u; g.shadowOffsetY = 0.004 * u;
-    var bgr = g.createLinearGradient(0, by, 0, by + bh); bgr.addColorStop(0, "#c9c9cc"); bgr.addColorStop(1, "#8f8f94");
-    g.fillStyle = bgr; roundRect(g, bx, by, bw, bh, 0.008 * u); g.fill(); g.restore();
-    g.fillStyle = "rgba(20,20,22,.75)"; g.font = "600 " + Math.round(0.017 * u) + "px " + css("--sans"); g.textAlign = "center"; g.textBaseline = "middle";
-    g.fillText("START · STOP", bx + bw / 2, by + bh / 2);
+    g.textAlign = "center"; g.textBaseline = "middle";
     /* the tonearm's base: the turret, the height ring, the anti-skate dial, the arm rest */
     var p = armPivot(u);
     metalDisc(g, p.x, p.y, 0.1 * u, d, true);
@@ -836,7 +1035,99 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   var lane = document.getElementById("lane"), lgx = lane.getContext("2d");
   var laneCache = document.createElement("canvas"), laneDirty = true;
 
-  function laneGeom(W, H, d) { return { top: 30 * d, cutT: 30 * d, cutH: 30 * d, pathT: 70 * d, pathB: H - 18 * d, W: W }; }
+  /* ---- the strokes, named ----
+   * The generator does not keep its strokes, so they are read back from the plan: the path is split where it turns (a run in one
+   * direction is a stroke), and each is named by what the fader does over it, in the turntablists' words (TTM): a CHIRP shuts at the
+   * turn, a TRANSFORM is cut in and out over it, a FLARE clicks shut once in the middle, a STAB is short, a DRAG slow, a TEAR stops
+   * partway, a FWD is open going and shut coming back, a BABY open both ways, a SCRIBBLE many tiny ones. A reading of the shape of
+   * each stroke, not the recipe: an Improv clip is not made of the styles that share these names, it just has strokes of these shapes.
+   * Strokes it cannot hear (the fader shut) are not named. Times are in beats of the clip. */
+  var strokesFor = null, strokes = [];
+  function readStrokes() {
+    if (!rc || !rc.lp || !rv) return [];
+    var key = rc.rk + "|" + Math.round(rv.bpm) + "|" + (rv.sl || 0).toFixed(2);
+    if (strokesFor === key) return strokes;
+    strokesFor = key;
+    var lp = rc.lp, lg = rc.lg, n = lp.length, res = rc.res || 64, eps = 0.0015;
+    var dirs = new Int8Array(n);
+    for (var i = 0; i < n - 1; i++) { var dd = lp[i + 1] - lp[i]; dirs[i] = dd > eps ? 1 : (dd < -eps ? -1 : 0); }
+    /* runs: one direction, a still point or two inside kept */
+    var runs = [], i0 = 0, cur = 0;
+    for (var k = 0; k < n; k++) {
+      var dk = k < n - 1 ? dirs[k] : 0;
+      if (dk === 0) continue;
+      if (cur === 0) { cur = dk; i0 = k; continue; }
+      if (dk !== cur) { runs.push({ a: i0, b: k, dir: cur }); cur = dk; i0 = k; }
+    }
+    if (cur) runs.push({ a: i0, b: n - 1, dir: cur });
+    var secPerBeat = 60 / (rv.bpm || 120), sl = rv.sl || 1;
+    runs.forEach(function (r) {
+      var len = r.b - r.a + 1, open = 0, trans = 0, still = 0, prev = lg[r.a] > 0;
+      for (var j = r.a; j <= r.b; j++) {
+        var o = lg[j] > 0;
+        if (o) open++;
+        if (j > r.a && prev && !o) trans++;
+        prev = o;
+        if (j < r.b && dirs[j] === 0) still++;
+      }
+      r.beats = len / res; r.dist = Math.abs(lp[r.b] - lp[r.a]); r.open = open / len; r.cuts = trans; r.still = still / len;
+      r.openA = lg[r.a] > 0 || lg[Math.min(r.b, r.a + 1)] > 0; r.openB = lg[r.b] > 0 || lg[Math.max(r.a, r.b - 1)] > 0;
+      r.speed = r.dist * sl / Math.max(1e-6, r.beats * secPerBeat);          /* x the sample's own speed */
+    });
+    var out = [];
+    for (var m = 0; m < runs.length; m++) {
+      var r = runs[m], name = null;
+      if (r.open < 0.15) continue;                                             /* the fader shut: not heard, not named */
+      if (r.dist < 0.03 && r.beats < 0.07) {                                     /* tiny and fast: a scribble, if others follow */
+        var e = m;
+        while (e + 1 < runs.length && runs[e + 1].dist < 0.03 && runs[e + 1].beats < 0.07) e++;
+        if (e - m >= 2) { out.push({ t: r.a / res, name: "SCRIBBLE" }); m = e; continue; }
+      }
+      if (r.cuts >= 2) name = "TRANSFORM";
+      else if (r.cuts === 1 && r.openA && r.openB) name = "FLARE";
+      else if (r.openA && !r.openB && r.open < 0.9) name = "CHIRP";
+      else if (r.beats < 0.09) name = "STAB";
+      else if (r.still > 0.18) name = "TEAR";
+      else if (r.speed < 0.5) name = "DRAG";
+      else if (r.dir > 0 && (m + 1 >= runs.length || runs[m + 1].open < 0.15)) name = "FWD";
+      else name = "BABY";
+      var last = out[out.length - 1];
+      if (last && last.name === name && r.a / res - last.t < 0.5 && (name === "BABY" || name === "CHIRP")) continue;   /* there and back: one move */
+      out.push({ t: r.a / res, name: name });
+    }
+    strokes = out;
+    return out;
+  }
+
+  /* the names can be switched off (STROKES, on the clip view): remembered */
+  var showStrokes = true;
+  try { showStrokes = localStorage.getItem("tinyscratch-strokes") !== "0"; } catch (e) { /* (no storage) */ }
+  (function () {
+    var b = document.getElementById("strokesBtn");
+    b.classList.toggle("on", showStrokes);
+    b.addEventListener("click", function () {
+      showStrokes = !showStrokes; b.classList.toggle("on", showStrokes); laneDirty = true;
+      try { localStorage.setItem("tinyscratch-strokes", showStrokes ? "1" : "0"); } catch (e) { /* (no storage) */ }
+    });
+  })();
+
+  /* the names along a stretch of the clip: x(t) places a clip time, from and to are what is in view */
+  function drawStrokeNames(g, list, xOf, y, d, W) {
+    var lastEnd = -1e9;
+    if (!showStrokes) return;
+    g.font = "italic 500 " + Math.round(9 * d) + "px " + FONT_SANS; g.textBaseline = "top"; g.textAlign = "left";
+    for (var i = 0; i < list.length; i++) {
+      var x = xOf(list[i].t);
+      if (x < 0 || x > W - 4 * d) continue;
+      var nm = list[i].name.toLowerCase(), w = g.measureText(nm).width;
+      if (x < lastEnd + 6 * d) continue;                                        /* no room: the next one */
+      g.fillStyle = "rgba(255,255,255,.18)"; g.fillRect(x, y, 1, 11 * d);
+      g.fillStyle = C.dim; g.fillText(nm, x + 3 * d, y + 1 * d);
+      lastEnd = x + 3 * d + w;
+    }
+  }
+
+  function laneGeom(W, H, d) { return { top: 30 * d, cutT: 30 * d, cutH: 30 * d, pathT: 80 * d, pathB: H - 18 * d, W: W }; }
 
   function drawLaneBase(W, H, d) {
     laneCache.width = W; laneCache.height = H;
@@ -851,6 +1142,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       if (bar && b < lb) mono(g, String(b / 4 + 1), x + 3 * d, H - 13 * d, C.dim, Math.round(10 * d));
     }
     g.fillStyle = "rgba(0,0,0,.2)"; g.fillRect(0, L.cutT, W, L.cutH);
+    if (clip) drawStrokeNames(g, readStrokes(), function (t) { return t / lb * W; }, L.cutT + L.cutH + 3 * d, d, W);
     if (clip) {
       var n = rc.lp.length, played = rc.hp && rc.hp.length && num("humanise", 0) > 0;
       /* the cuts as blocks, as tall as the fader opens (an echo steps down) */
@@ -977,10 +1269,17 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     } else {
       label(g, rv ? (rv.cm ? "WAITING FOR THE CLIP" : "NO CLIP: THE HAND IS ON THE RECORD") : "", W / 2, H / 2 - 8 * d, C.dim, Math.round(12 * d), "center");
     }
+    if (rv && sim.clip) {
+      var lbz = rc.lb, list = readStrokes(), shown = [];
+      for (var rep0 = Math.floor((start - rv.t0) / lbz) - 1; rep0 <= Math.floor((start + w - rv.t0) / lbz) + 1; rep0++)
+        for (var si2 = 0; si2 < list.length; si2++) shown.push({ t: rv.t0 + rep0 * lbz + list[si2].t, name: list[si2].name });
+      shown.sort(function (p1, p2) { return p1.t - p2.t; });
+      drawStrokeNames(g, shown, function (t) { return (t - start) / w * W; }, top + 2 * d, d, W);
+    }
     g.fillStyle = "rgba(255,255,255,.06)"; g.fillRect(0, cutB + 1, W, 1);
     glowLine(g, C.ink, 1.2 * d); g.beginPath(); g.moveTo(cur, top - 4 * d); g.lineTo(cur, cutB + 2 * d); g.stroke(); noGlow(g);
     var bar = Math.floor(now / 4) + 1, beatN = Math.floor(((now % 4) + 4) % 4) + 1;
-    label(g, rv ? "BAR " + bar + "  BEAT " + beatN : "", 4 * d, 2 * d, C.dim, Math.round(11 * d));
+    label(g, rv ? "BAR " + bar + "  BEAT " + beatN : "", 4 * d, H - 14 * d, C.dim, Math.round(10 * d));
     label(g, zoomW + (zoomW === 1 ? " BEAT" : " BEATS"), W - 4 * d, H - 14 * d, C.dim, Math.round(10 * d), "right");
   }
 
@@ -990,10 +1289,27 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   var samplesEl = document.getElementById("samples"), pagesEl = document.getElementById("pages");
   var clipsEls = [document.getElementById("clips1"), document.getElementById("clips2")];
   var samplePads = [], pageChips = [], clipPads = [];
+  var PAD_KEYS = ["q", "w", "e", "r", "t", "y", "u", "i", "a", "s", "d", "f", "g", "h", "j", "k"];      /* clips 1-14, Generate, Auto */
+  var thumbsDrawn = "";
+
+  /* a clip's shape on its pad: the playhead's path, and a tick under each stretch that is cut in */
+  function drawThumb(b, shape) {
+    var old = b.querySelector(".thumb");
+    if (old) old.parentNode.removeChild(old);
+    b.classList.toggle("pic", !!shape && !b.classList.contains("gen"));
+    if (!shape) return;
+    var n = shape.p.length, W = 100, H = 40;
+    var s = svg("svg", { "class": "thumb", viewBox: "0 0 " + W + " " + H, preserveAspectRatio: "none" });
+    var pts = [];
+    for (var i = 0; i < n; i++) pts.push((i * W / (n - 1)).toFixed(1) + "," + (H - 6 - shape.p[i] * (H - 10)).toFixed(1));
+    svg("polyline", { points: pts.join(" "), fill: "none", stroke: "currentColor", "stroke-width": 1.6, "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" }, s);
+    for (var k = 0; k < shape.g.length; k++) if (shape.g[k]) svg("rect", { x: (k * W / shape.g.length).toFixed(1), y: H - 2.5, width: (W / shape.g.length).toFixed(1), height: 2.5, fill: "currentColor" }, s);
+    b.insertBefore(s, b.firstChild.nextSibling);
+  }
 
   for (var si = 0; si < 8; si++) (function (i) {
     var b = document.createElement("button"); b.className = "pad sample";
-    b.innerHTML = '<span class="t"></span>';
+    b.innerHTML = '<span class="t"></span><span class="key">' + (i + 1) + '</span>';
     b.addEventListener("click", function () { setP("sample", i); });
     samplesEl.appendChild(b); samplePads.push(b);
   })(si);
@@ -1005,9 +1321,10 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   /* the clip rows, as on the Move: clips 1-8, then 9-14, Generate and Auto */
   for (var ci = 1; ci <= 16; ci++) (function (n) {
     var b = document.createElement("button"); b.className = "pad";
-    b.innerHTML = '<span class="hold"></span><span class="t"></span><span class="kept"></span>';
+    b.innerHTML = '<span class="hold"></span><span class="t"></span><span class="kept"></span><span class="key"></span>';
     var t = b.querySelector(".t");
-    if (n === CLIP_PADS + 1) { b.classList.add("gen"); t.textContent = "GENERATE"; b.addEventListener("click", function () { pulse("generate", 1); }); }
+    b.querySelector(".key").textContent = PAD_KEYS[n - 1] || "";
+    if (n === CLIP_PADS + 1) { b.classList.add("gen"); t.innerHTML = '<span class="long">GENERATE</span><span class="short">GEN</span>'; b.addEventListener("click", function () { pulse("generate", 1); }); }
     else if (n === CLIP_PADS + 2) {
       b.classList.add("auto"); t.textContent = "AUTO";
       b.addEventListener("click", function () { setP("clip", rv && rv.cm === CLIP_AUTO ? 0 : CLIP_AUTO); });
@@ -1041,7 +1358,8 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     if (!rv) return;
     samplePads.forEach(function (b, i) {
       var loaded = rv.ld[i] === "1";
-      b.querySelector(".t").textContent = (rv.sn[i] || "").slice(0, 10) + (loaded ? "" : " · EMPTY");
+      b.querySelector(".t").textContent = (rv.sn[i] || "").slice(0, 10);              /* (an empty slot: its dashed outline says so) */
+      b.title = loaded ? rv.sn[i] : rv.sn[i] + ": empty (hold its pad on the Move to record, or drop a sound on the deck)";
       b.classList.toggle("has", loaded); b.classList.toggle("empty", !loaded); b.classList.toggle("now", rv.s === i);
     });
     var pg = rv.pg;
@@ -1059,9 +1377,32 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       b.classList.toggle("has", has);
       b.classList.toggle("now", has && here && rv.cm === n);
       b.classList.toggle("autonow", has && here && rv.cm === CLIP_AUTO && rv.cl === n);
-      b.querySelector(".kept").textContent = rv.kp[n - 1] === "1" ? "★" : "";
+      b.querySelector(".kept").textContent = rv.kp[n - 1] === "1" ? "\u2605" : "";
     });
+    /* the pictures: redrawn only when they are of other clips */
+    if (pads && pads.pk !== thumbsDrawn) {
+      thumbsDrawn = pads.pk;
+      clipPads.forEach(function (b, idx) { if (idx < CLIP_PADS) drawThumb(b, pads.list[idx]); });      /* (not on Generate: its word is what matters there) */
+    }
   }
+
+  /* ---- the keyboard: the pads, as the Move's pad grid is laid out ---- */
+  function padFor(key) { var i = PAD_KEYS.indexOf(key); return i >= 0 ? clipPads[i] : null; }
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    var k = (e.key || "").toLowerCase();
+    if (k >= "1" && k <= "8") { setP("sample", +k - 1); e.preventDefault(); return; }
+    if (k === " " || k === "j") { pulse("generate", 1); flash(clipPads[CLIP_PADS]); e.preventDefault(); return; }
+    if (k === "k") { setP("clip", rv && rv.cm === CLIP_AUTO ? 0 : CLIP_AUTO); flash(clipPads[CLIP_PADS + 1]); e.preventDefault(); return; }
+    if (k === "arrowleft" || k === "arrowright") {
+      var pg = rv ? rv.pg : 0, to = clamp(pg + (k === "arrowright" ? 1 : -1), 0, PAGES - 1);
+      if (to !== pg) setP("page", to);
+      e.preventDefault(); return;
+    }
+    var b = padFor(k), i = PAD_KEYS.indexOf(k);
+    if (b && i < CLIP_PADS) { pulse("clip_pad", i + 1); flash(b); e.preventDefault(); }
+  });
+  function flash(b) { if (!b) return; b.style.transform = "translateY(1px)"; setTimeout(function () { b.style.transform = ""; }, 120); }
 
   /* ================================================================
      The dials.
@@ -1177,6 +1518,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     safely(step, now);
     safely(drawDeck, now); safely(drawWave, now); safely(drawLane, now); safely(drawZoom, now);
     safely(linkCheck, now);
+    safely(loadCheck, now);
   }
 
   /* The status line. The host sends rview twice a second, so a few seconds of nothing means something is wrong between here and the
@@ -1190,7 +1532,11 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
    * rebuilding this frame (a resubscribe would). TinyScratch ignores a key it does not know, so rui_pull changes nothing. */
   function pullIfQuiet(now) {
     if (demoMode || !rv || !window.schwungRemote) return;
-    if (now - rvAt > 900 && now - link.pulled > 700) { link.pulled = now; link.pulls++; R.setParam(PRE + "rui_pull", String(link.pulls)); }
+    /* ...and when the clip or the pads' pictures are not the ones rview names, for longer than the host's own turnover takes */
+    var stale = !rc || rc.s !== rv.s || (rv.cm > 0 && rv.rk !== 0 && rc.rk !== rv.rk) || (rv.pk !== undefined && (!pads || pads.pk !== rv.pk));
+    if (!stale) link.staleAt = 0; else if (!link.staleAt) link.staleAt = now;
+    var quiet = now - rvAt > 900, behind = stale && now - link.staleAt > 2500;
+    if ((quiet || behind) && now - link.pulled > (quiet ? 700 : 2500)) { link.pulled = now; link.pulls++; R.setParam(PRE + "rui_pull", String(link.pulls)); }
   }
   function linkCheck(now) {
     pullIfQuiet(now);
@@ -1266,6 +1612,19 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     });
   }
   setTimeout(seedFromHost, 400); setTimeout(seedFromHost, 1500);
+  /* PERFORM: the deck, the pads and the zoom only; full screen where the browser lets this page have it (a pop-out window does;
+   * the Remote UI's own frame does not), remembered for next time */
+  function setPerform(on, fromClick) {
+    document.body.classList.toggle("perform", on);
+    try { localStorage.setItem("tinyscratch-perform", on ? "1" : "0"); } catch (e) { /* (no storage) */ }
+    var de = document.documentElement;
+    if (fromClick && on && document.fullscreenEnabled && de.requestFullscreen && !document.fullscreenElement) de.requestFullscreen().catch(function () {});
+    if (fromClick && !on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
+    waveDirty = laneDirty = true;
+  }
+  document.getElementById("performBtn").addEventListener("click", function () { setPerform(!document.body.classList.contains("perform"), true); });
+  try { if (localStorage.getItem("tinyscratch-perform") === "1") setPerform(true, false); } catch (e) { /* (no storage) */ }
+
   fetchSetName();
   document.addEventListener("visibilitychange", function () { if (!document.hidden) fetchSetName(); });
   requestAnimationFrame(frame);

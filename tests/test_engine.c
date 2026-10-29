@@ -3190,6 +3190,18 @@ static void test_recording(void)
         CHECK(e->slot[3].len == len, "a recording of nothing but the taps is thrown away; the sample already there stays");
     }
 
+    /* a quiet room: held long enough, but nothing in it worth keeping */
+    {
+        static float blk3[128];
+        const int before = e->slot[3].len;
+        ts_engine_rec_start(e);
+        for (int b = 0; b < 200; b++) { for (int i = 0; i < 128; i++) blk3[i] = 0.001f * sinf(0.2f * (float)(b * 128 + i)); ts_engine_feed_input(e, blk3, 128); }
+        ts_engine_rec_stop(e);
+        ts_engine_service(e);
+        render_n(e, buf, 128);
+        CHECK(e->slot[3].len == before && e->rec_state == 0, "a recording with no sound in it (under -50 dBFS) is thrown away; the sample already there stays");
+    }
+
     /* clicks a little way in from either end (past what is skipped), with silence between them and the voice, are dropped; the ends fade */
     {
         ts_engine_rec_start(e);
@@ -3925,9 +3937,9 @@ static void test_remote_ui(void)
     int16_t o[256];
 
     CHECK(ts_plugin_json_chain_params(cp, sizeof cp) > 0 &&
-          strstr(cp, "\"key\":\"view\",\"name\":\"View\",\"type\":\"string\",\"access\":\"read\",\"live\":true,\"viz\":{\"extra_keys\":[\"rview\",\"rclip\"]}}") &&
-          !strstr(cp, "\"key\":\"rview\"") && !strstr(cp, "\"key\":\"rclip\""),
-          "the hidden View parameter names rview and rclip as extras (which the host's extras pump sends), and neither is a parameter of its own");
+          strstr(cp, "\"key\":\"view\",\"name\":\"View\",\"type\":\"string\",\"access\":\"read\",\"live\":true,\"viz\":{\"extra_keys\":[\"rview\",\"rclip\",\"rpads\"]}}") &&
+          !strstr(cp, "\"key\":\"rview\"") && !strstr(cp, "\"key\":\"rclip\"") && !strstr(cp, "\"key\":\"rpads\""),
+          "the hidden View parameter names rview, rclip and rpads as extras (which the host's extras pump sends), and none is a parameter of its own");
 
     /* a clip, the transport running */
     api->set_param(h, "sample", "0");
@@ -3988,6 +4000,115 @@ static void test_remote_ui(void)
     const char *hl = strstr(rc, "\"hl\":\"");
     CHECK(nc > 0 && hl && (int)(strchr(hl + 6, '"') - (hl + 6)) == TS_RLANE * 2 && !strstr(rc, "\"lp\":") && !strcmp(jfield(rc, "rk", f, sizeof f), "0"),
           "with no clip, rclip holds what the playhead did (%d columns) and names no clip", TS_RLANE);
+
+    /* the pads' pictures: every pad of the page shown, a shape for each that has a clip */
+    {
+        static char rp[16384];
+        api->set_param(h, "clip", "17");
+        api->set_param(h, "generate", "1");
+        for (int b = 0; b < 4; b++) api->render_block(h, o, 128);
+        int np = api->get_param(h, "rpads", rp, sizeof rp);
+        api->get_param(h, "rview", rv, sizeof rv);
+        int shapes = 0, nulls = 0;
+        for (const char *q = rp; (q = strstr(q, "{\"p\":\"")) != NULL; q++) shapes++;
+        for (const char *q = rp; (q = strstr(q, "null")) != NULL; q++) nulls++;
+        int with_clip = 0;
+        for (int c = 1; c <= TS_NUM_CLIPS; c++) with_clip += bank_clip(in->eng, in->eng->p.sample, in->eng->view_page * CID_PAGE + c) != NULL;
+        CHECK(np > 0 && rp[0] == '{' && rp[np - 1] == '}' && np < 4096, "rpads is a whole object, and small (%d bytes)", np);
+        CHECK(shapes == with_clip + 1 && nulls == TS_NUM_CLIPS - with_clip, "a shape for each of the %d pads with a clip and for the try, null for the empty pads (%d shapes, %d empty)",
+              with_clip, shapes, nulls);
+        CHECK(!strcmp(jfield(rv, "pk", f, sizeof f), jfield(rp, "pk", g, sizeof g)) && f[0], "rview names the pads' key (pk %s), so the page knows when its pictures are stale", f);
+        api->set_param(h, "page", "1");
+        api->get_param(h, "rpads", rp, sizeof rp);
+        CHECK(strcmp(jfield(rp, "pk", g, sizeof g), f) != 0 && atoi(jfield(rp, "pg", g, sizeof g)) == 1, "another page of pads is another key");
+        api->set_param(h, "page", "0");
+        api->set_param(h, "clip", "0");
+        for (int b = 0; b < 40; b++) api->render_block(h, o, 128);
+    }
+
+    /* a hand on the record: the playhead goes there and the fader opens, where a Turntable write alone leaves it shut */
+    {
+        api->set_param(h, "clip", "0");
+        api->set_param(h, "note_gate", "On");
+        api->set_param(h, "sample", "0");
+        for (int b = 0; b < 400; b++) api->render_block(h, o, 128);                   /* (any hand hold from before has gone) */
+        api->set_param(h, "turntable", "0.2");
+        for (int b = 0; b < 8; b++) api->render_block(h, o, 128);
+        int pk0 = 0;
+        for (int i = 0; i < 256; i++) pk0 = pk0 > abs(o[i]) ? pk0 : abs(o[i]);
+        api->set_param(h, "scratch", "0.45");
+        int pk1 = 0;
+        for (int b = 0; b < 8; b++) { api->render_block(h, o, 128); for (int i = 0; i < 256; i++) pk1 = pk1 > abs(o[i]) ? pk1 : abs(o[i]); }
+        CHECK(pk0 == 0 && pk1 > 50 && fabs(in->eng->man - 0.45) < 1e-6, "scratch moves the playhead and opens the fader (peak %d; a Turntable write alone: %d)", pk1, pk0);
+        for (int b = 0; b < 260; b++) api->render_block(h, o, 128);                   /* 0.75 s: the hand is off */
+        int pk2 = 0;
+        for (int b = 0; b < 4; b++) { api->render_block(h, o, 128); for (int i = 0; i < 256; i++) pk2 = pk2 > abs(o[i]) ? pk2 : abs(o[i]); }
+        CHECK(pk2 == 0 && in->eng->scratch_hold == 0, "0.6 s after the last write the hand lets go, and the fader is as it was (peak %d)", pk2);
+        static char st[4096];
+        api->get_param(h, "state", st, sizeof st);
+        CHECK(!strstr(st, "scratch"), "a scratch is not saved with the project");
+    }
+
+    /* a hand over a network: the points come 60 a second but arrive unevenly (20 to 50 ms late). With the times, the record moves as
+     * the hand did; without them it jumps to each point and stops there until the next, which is heard as a stutter. */
+    {
+        api->set_param(h, "drag", "0");
+        double stall_frac[2] = { 0, 0 }, err_ms[2] = { 0, 0 };
+        for (int timed = 0; timed < 2; timed++) {
+            for (int b = 0; b < 400; b++) api->render_block(h, o, 128);       /* (any hand from before has let go) */
+            uint32_t r = 12345u;
+            double arrive[80], t_page[80];
+            float hp[80];
+            const double base = (double)in->eng->frames * 1000.0 / 44100.0 + 5.0;   /* the page's clock, as the engine sees it */
+            double prev = 0;
+            for (int k = 0; k < 80; k++) {
+                t_page[k] = 16.0 * k;
+                hp[k] = 0.5f + 0.15f * sinf(6.2831853f * (float)t_page[k] / 500.0f);
+                r = r * 1664525u + 1013904223u;
+                double a = base + t_page[k] + 20.0 + 30.0 * (double)(r >> 8) / 16777216.0;
+                arrive[k] = a < prev ? prev : a;                              /* (a socket keeps them in order) */
+                prev = arrive[k];
+            }
+            int next = 0, fast = 0, stalls = 0, n_err = 0;
+            double last_pos = in->eng->pos, sum_err = 0;
+            int16_t ob[64];
+            for (int blk = 0; blk < 1600; blk++) {                              /* blocks of 32 frames: arrivals land to the millisecond */
+                const double now = (double)in->eng->frames * 1000.0 / 44100.0;
+                while (next < 80 && arrive[next] <= now) {
+                    char v[64];
+                    if (timed) snprintf(v, sizeof v, "%.5f %.1f", (double)hp[next], t_page[next]); else snprintf(v, sizeof v, "%.5f", (double)hp[next]);
+                    api->set_param(h, "scratch", v);
+                    next++;
+                }
+                api->render_block(h, ob, 32);
+                const double page_t = now - base;
+                if (page_t > 250 && page_t < 1150) {                            /* well into the gesture */
+                    const double speed = fabs(cos(6.2831853 * (page_t - 60.0) / 500.0));
+                    const double moved = fabs(in->eng->pos - last_pos);
+                    const double want = 0.15 * 6.2831853 / 500.0 * speed * (32.0 * 1000.0 / 44100.0);
+                    if (speed > 0.6) { fast++; if (moved < 0.15 * want) stalls++; }
+                    /* how far behind the hand, in ms: the page time whose point is nearest where the record is */
+                    if (timed && speed > 0.6) {
+                        double best = 1e9, best_dt = 0;
+                        for (double dt = 0; dt < 150; dt += 1) {
+                            const double x = 0.5 + 0.15 * sin(6.2831853 * (page_t - dt) / 500.0);
+                            if (fabs(x - in->eng->pos) < best) { best = fabs(x - in->eng->pos); best_dt = dt; }
+                        }
+                        sum_err += best_dt; n_err++;
+                    }
+                }
+                last_pos = in->eng->pos;
+            }
+            stall_frac[timed] = fast ? (double)stalls / fast : 1.0;
+            err_ms[timed] = n_err ? sum_err / n_err : 0;
+        }
+        printf("  (a hand over the network: the playhead stalls %.0f%% of the time without the times, %.0f%% with them; with them it is %.0f ms behind the hand)\n",
+               stall_frac[0] * 100, stall_frac[1] * 100, err_ms[1]);
+        CHECK(stall_frac[1] < 0.03 && stall_frac[0] > 4 * stall_frac[1] + 0.05, "with the times the record moves as the hand did, without stalls (%.1f%% of the time, against %.0f%% without)",
+              stall_frac[1] * 100, stall_frac[0] * 100);
+        CHECK(err_ms[1] > 30 && err_ms[1] < 110, "...and a steady way behind it: the network's least delay and the jitter room (%.0f ms)", err_ms[1]);
+        api->set_param(h, "drag", "0.5");
+    }
 
     /* a name with a quote in it is still JSON */
     snprintf(in->eng->slot[0].name, sizeof in->eng->slot[0].name, "A\"B\\C");

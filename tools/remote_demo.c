@@ -26,7 +26,7 @@ static const ts_plugin_api_v2_t *api;
 static void *inst;
 static FILE *js;
 static int nframes_out;
-static char last_rview[65536], last_rclip[65536];
+static char last_rview[65536], last_rclip[65536], last_rpads[65536];
 
 /* a JSON string of a value (the values are ours: only quotes and backslashes to escape) */
 static void put_str(const char *s)
@@ -53,6 +53,12 @@ static void push_extras(double t)
         any = 1;
         fputs("\"rclip\":", js); put_str(buf);
         strcpy(last_rclip, buf);
+    }
+    if (api->get_param(inst, "rpads", buf, sizeof buf) > 0 && strcmp(buf, last_rpads)) {
+        if (!any) frame_begin(t); else fputc(',', js);
+        any = 1;
+        fputs("\"rpads\":", js); put_str(buf);
+        strcpy(last_rpads, buf);
     }
     if (any) fputs("}}", js);
 }

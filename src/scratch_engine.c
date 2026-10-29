@@ -1964,6 +1964,54 @@ void ts_engine_set_zoom(ts_engine_t *e, int zoom)
     if (e) e->zoom = clampi(zoom, 0, 3);
 }
 
+void ts_engine_scratch(ts_engine_t *e, float pos)
+{
+    if (!e || !isfinite(pos)) return;
+    e->sc_n = 0;                                             /* (no times: the hand goes where it is, at once) */
+    e->man = clampf(pos, 0.0f, 1.0f);
+    e->hand_hold = (int)(0.6f * e->sr);
+    e->scratch_hold = e->hand_hold;
+}
+
+void ts_engine_scratch_at(ts_engine_t *e, float pos, double t_ms)
+{
+    if (!e || !isfinite(pos) || !isfinite(t_ms)) return;
+    const double now = (double)e->frames * 1000.0 / (double)e->sr;
+    const int last = (e->sc_head + e->sc_n - 1) % TS_SCRATCH_PTS;
+    if (e->sc_n == 0 || e->scratch_hold <= 0 || t_ms < e->sc_t[last] || t_ms - e->sc_t[last] > 1000.0) {
+        e->sc_n = 0; e->sc_head = 0;                         /* a new gesture: its own clock */
+        e->sc_off = now - t_ms;
+    } else if (now - t_ms < e->sc_off) {
+        e->sc_off = now - t_ms;                              /* a quicker delivery: the network's least delay so far */
+    }
+    if (e->sc_n == TS_SCRATCH_PTS) { e->sc_head = (e->sc_head + 1) % TS_SCRATCH_PTS; e->sc_n--; }
+    const int at = (e->sc_head + e->sc_n) % TS_SCRATCH_PTS;
+    e->sc_t[at] = t_ms;
+    e->sc_pos[at] = clampf(pos, 0.0f, 1.0f);
+    e->sc_n++;
+    /* held until the last point has been played, and 0.6 s more: the hand lets go as it does with no times */
+    const int hold = (int)((TS_SCRATCH_DELAY_MS + 600.0) * 0.001 * e->sr);
+    e->hand_hold = hold;
+    e->scratch_hold = hold;
+}
+
+/* where the hand was at the page's time t: a straight line between the points either side, the first or last beyond them */
+static float scratch_pos_at(const ts_engine_t *e, double t)
+{
+    const int first = e->sc_head, last = (e->sc_head + e->sc_n - 1) % TS_SCRATCH_PTS;
+    if (t <= e->sc_t[first]) return e->sc_pos[first];
+    if (t >= e->sc_t[last]) return e->sc_pos[last];
+    for (int k = 1; k < e->sc_n; k++) {
+        const int b = (e->sc_head + k) % TS_SCRATCH_PTS, a = (b + TS_SCRATCH_PTS - 1) % TS_SCRATCH_PTS;
+        if (t <= e->sc_t[b]) {
+            const double span = e->sc_t[b] - e->sc_t[a];
+            const double u = span > 1e-6 ? (t - e->sc_t[a]) / span : 1.0;
+            return e->sc_pos[a] + (float)u * (e->sc_pos[b] - e->sc_pos[a]);
+        }
+    }
+    return e->sc_pos[last];
+}
+
 void ts_engine_pad_cuts(ts_engine_t *e, unsigned mask)
 {
     if (!e || e->pad_raw <= 0) return;
@@ -2444,7 +2492,9 @@ void ts_engine_service(ts_engine_t *e)
         int slot = e->rec_slot, c0 = 0, c1 = 0;
         rec_crop(e->rec_buf, e->rec_len, e->sr, &c0, &c1);
         int n = c1 - c0;
-        if (n >= TS_REC_MIN && slot >= 2 && slot < TS_SLOTS) {
+        float pk = 0.0f;                                                        /* a recording with no sound in it (the room, a silent input) is not kept */
+        for (int i = c0; i < c1; i++) pk = fmaxf(pk, fabsf(e->rec_buf[i]));
+        if (n >= TS_REC_MIN && pk >= TS_REC_FLOOR && slot >= 2 && slot < TS_SLOTS) {
             float *buf = (float *)TS_CALLOC(mip_total(n) * sizeof(float));
             if (buf) {
                 memcpy(buf, e->rec_buf + c0, (size_t)n * sizeof(float));
@@ -2623,6 +2673,9 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         if (p->humanise > 0.0f && clip > 0 && live) humanise_at(p, (double)e->bpm, clip, ck->len, e->mclock - t0, sw_t, &t_path, &t_gate, &pos_off, &lv_scale);
 
         if (e->hand_hold > 0) e->hand_hold--;
+        if (e->scratch_hold > 0) e->scratch_hold--;
+        if (e->scratch_hold > 0 && e->sc_n > 0)                                  /* the Remote UI's hand, replayed as it moved */
+            e->man = scratch_pos_at(e, ((double)(e->frames - (uint64_t)frames) + (double)i) * 1000.0 / (double)e->sr - e->sc_off - TS_SCRATCH_DELAY_MS);
         if (e->hand_hold > 0 || !live) e->target = e->man;
         else if (clip > 0) {
             double v = (double)ts_clip_pos(e, clip, t_path) * (double)p->clip_depth + (double)p->clip_offset + pos_off;     /* Swing, Humanise, Depth and Offset */
@@ -2650,6 +2703,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         if (running && clip > 0) { lv = ts_clip_level(e, clip, ct) * lv_scale; open = lv > 0.0f && !(p->note_gate && held); }        /* the pads are the fader: hold one to cut the clip out */
         else if (live && clip > 0) { lv = ts_clip_level(e, clip, ct) * lv_scale; open = lv > 0.0f; }                                 /* a pad held with the transport stopped runs the clip, cuts and all */
         else open = !p->note_gate || held;
+        if (e->scratch_hold > 0) { open = 1; lv = 1.0f; }                         /* a hand on the Remote UI's record: the fader is open */
         float want = open ? lv : 0.0f;
         if (e->gate < want) { e->gate += ramp; if (e->gate > want) e->gate = want; }
         else if (e->gate > want) { e->gate -= ramp; if (e->gate < want) e->gate = want; }
@@ -2841,6 +2895,8 @@ static void jw_str(jw_t *j, const char *s)
     jw(j, "\"");
 }
 
+static unsigned pads_key(const ts_engine_t *e);
+
 /* the clip the screens show (as the view has it), and where its turn began */
 static const ts_clip_t *remote_clip(const ts_engine_t *e, double *t0)
 {
@@ -2882,8 +2938,8 @@ int ts_engine_rview(const ts_engine_t *e, char *buf, int cap)
        rec ? rec->style : -1, rec && known ? k->extras & 7 : -1, rec ? rec->groove : 0, rec && known ? (k->extras >> TS_EX_TMPL_SHIFT) & 15 : 0);
     jw(&j, "\"cs\":%d,\"cq\":%d,\"cu\":[", p->cues, e->cue_on ? e->cue_pad : -1);
     for (int i = 0; i < 8; i++) jw(&j, "%s%.4f", i ? "," : "", (double)cu[i]);
-    jw(&j, "],\"rc\":%d,\"rt\":%d,\"rl\":%d,\"ln\":%d,\"nc\":%d,\"s\":%d,\"n\":",
-       e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
+    jw(&j, "],\"pk\":%u,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"ln\":%d,\"nc\":%d,\"s\":%d,\"n\":",
+       pads_key(e), e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
        e->last_note, e->nclips, p->sample);
     jw_str(&j, s->loaded ? s->name : "EMPTY");
     jw(&j, ",\"sn\":[");
@@ -2962,6 +3018,47 @@ int ts_engine_rclip(const ts_engine_t *e, char *buf, int cap)
         for (int c = 0; c < TS_RLANE; c++) jw(&j, "%c", e->hand_gate[c] ? '1' : '0');
         jw(&j, "\"");
     }
+    jw(&j, "}");
+    if (j.len < 0) buf[0] = 0;
+    return j.len;
+}
+
+/* what the pads hold, for the pictures on them: names the sample, the page the Pads screen shows, the clips and the try */
+static unsigned pads_key(const ts_engine_t *e)
+{
+    return ((e->clips_ver * 2654435761u) ^ (e->gen_count * 40503u) ^ ((unsigned)e->try_valid << 30)) + (unsigned)e->p.sample * 31u + (unsigned)e->view_page * 7u + 1u;
+}
+
+/* one clip's shape: its playhead (two hex digits) and whether it is cut in (a digit), TS_RPAD_PTS points over the whole clip */
+#define TS_RPAD_PTS 32
+static void jw_pad_shape(jw_t *j, const ts_clip_t *k)
+{
+    jw(j, "{\"p\":\"");
+    for (int i = 0; i < TS_RPAD_PTS; i++) jw_hex(j, (unsigned)k->pos[(int)((long long)i * k->n / TS_RPAD_PTS)] >> 8, 2);
+    jw(j, "\",\"g\":\"");
+    for (int i = 0; i < TS_RPAD_PTS; i++) {
+        const int a = (int)((long long)i * k->n / TS_RPAD_PTS), b = (int)((long long)(i + 1) * k->n / TS_RPAD_PTS);
+        int on = 0;
+        for (int x = a; x < b && !on; x++) on = k->gate[x] != 0;
+        jw(j, "%c", on ? '1' : '0');
+    }
+    jw(j, "\",\"lb\":%d}", k->len);
+}
+
+int ts_engine_rpads(const ts_engine_t *e, char *buf, int cap)
+{
+    if (!e || !buf || cap < 2) return -1;
+    jw_t j = { buf, cap, 0 };
+    const ts_params_t *p = &e->p;
+    jw(&j, "{\"v\":1,\"sq\":%u,\"pk\":%u,\"s\":%d,\"pg\":%d,\"pads\":[", (unsigned)(e->frames / (uint64_t)(2.0f * e->sr)), pads_key(e), p->sample, e->view_page);
+    for (int c = 0; c < TS_NUM_CLIPS; c++) {
+        const ts_clip_t *k = bank_clip(e, p->sample, e->view_page * CID_PAGE + c + 1);
+        if (c) jw(&j, ",");
+        if (k) jw_pad_shape(&j, k); else jw(&j, "null");
+    }
+    jw(&j, "],\"try\":");
+    const ts_clip_t *t = clip_at(e, TS_CLIP_TRY);
+    if (t) jw_pad_shape(&j, t); else jw(&j, "null");
     jw(&j, "}");
     if (j.len < 0) buf[0] = 0;
     return j.len;
