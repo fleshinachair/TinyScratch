@@ -140,7 +140,7 @@
 
     function drawTitle(ctx, v) {
         if (num(v.rc, 0)) {                                       /* recording: REC and the seconds so far, and the level of the input */
-            textBig(ctx, 0, 0, "REC " + (clamp(num(v.rt, 0), 0, 99) / 10).toFixed(1));
+            textBig(ctx, 0, 0, "REC " + (clamp(num(v.rt, 0), 0, 100) / 10).toFixed(1));
             ctx.fillRect(0, 10, Math.round(clamp(num(v.rl, 0), 0, 100) * 1.05), 1, 1);
         } else {
             textBig(ctx, 0, 0, fit(typeof v.n === "string" && v.n ? v.n : "EMPTY", 13));

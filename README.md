@@ -39,7 +39,7 @@ Each page has its own colour, and a clip on another page than the first is label
 
 **5. Add your own sample.** Best at one to two seconds, noisy and aggressive, with a little silence at each end.
 
-- **Record it:** hold an **empty User pad** (row 3) and make the sound into the Move's input; let go and it is kept (up to four seconds).
+- **Record it:** hold an **empty User pad** (row 3) and make the sound into the Move's input; let go and it is kept (up to ten seconds).
   It is cropped to the sound and brought up to the level of the built-in samples. Recording starts once the pad has been held a moment
   (0.3 s): a tap on an empty User pad just selects it. A recording with no sound in it is not kept.
 - **Or load a file:** pick **Load Sample** in the first menu and choose a `.wav` from the Move's library.
@@ -193,6 +193,12 @@ from the end of "Change the Beat" (Fab 5 Freddy, 1982), described as public doma
 - **Copying files** into `samples/`: any `.wav` (16-bit, mono or stereo, any rate, up to ten seconds) fills the User slots that are left.
 - A kept clip is rebuilt from its recipe against the same sample if its data is missing, so unload a sample before putting a different one
   in its slot.
+- **Long samples** (over 1.2 s: a phrase, a run of words, a loop) are scratched the way a DJ works a phrase. Each bar of a generated clip
+  starts on one of the sample's words or hits, and its strokes are as long in seconds as on a short sample (a quarter to a third of a turn),
+  not a sweep through the whole phrase. **Clip Depth** turns the strokes up or down around where each bar starts, so a clip turned down
+  stays on its words; a built-in clip on a long sample is scaled down the same way. **Finish** plays the phrase from the bar's word to its
+  end, at up to twice its own speed. Ahhh, Fresssh and anything up to 1.2 s are not touched by any of this: they and their clips sound
+  exactly as they always have.
 
 `tools/audio_convert.c` (`scripts/build_converter.sh`) converts FLAC / WAV / AIFF / MP3 to that format and can cut a one-second excerpt.
 

@@ -449,9 +449,28 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   }
   function clipActive() { return !!(rv && rv.cm > 0 && rc && rc.lp && rc.rk === rv.rk); }
 
+  /* a long sample (over 1.2 s, scratch_engine.h TS_REACH_S): Depth works around where each bar of the clip starts (scratch_engine.c
+     clip_bar_ref), and a clip not made for it is scaled down as a generated one is; 1 for Ahhh, Fresssh and anything as short */
+  var REACH_S = 1.2;
+  function reachK() { return rv && rv.sl > REACH_S ? REACH_S / rv.sl : 1; }
+  function barRef(t) {
+    var lp = rc.lp, lb = rc.lb, bars = Math.max(1, Math.floor(lb / 4));
+    if (rc._br !== lp) {                       /* each bar's lowest point, worked out once a plan */
+      rc._brv = [];
+      var per = lp.length * 4 / lb;
+      for (var b = 0; b < bars; b++) { var m = 1; for (var i = Math.floor(b * per); i < Math.min(lp.length, Math.floor((b + 1) * per)); i++) m = Math.min(m, lp[i]); rc._brv.push(m); }
+      rc._br = lp;
+    }
+    var x = ((t % lb) + lb) % lb, b0 = Math.min(bars - 1, Math.floor(x / 4)), r = rc._brv[b0], u = (x - (4 * b0 + 3.75)) / 0.25;
+    if (u > 0) r += (rc._brv[(b0 + 1) % bars] - r) * Math.min(1, u);
+    return r;
+  }
+
   /* where the plan sends the playhead at clip time t, through Depth, Offset and the sample's extent */
-  function mapPos(raw) {
-    var v = clamp(raw * num("clip_depth", 1) + num("clip_offset", 0), 0, 1);
+  function mapPos(raw, t) {
+    var k = reachK(), v;
+    if (k < 1) { var r = barRef(t); v = clamp(r + (raw - r) * num("clip_depth", 1) * (rv.nat ? 1 : k) + num("clip_offset", 0), 0, 1); }
+    else v = clamp(raw * num("clip_depth", 1) + num("clip_offset", 0), 0, 1);
     return rv.nat ? v : rv.lo + (rv.hi - rv.lo) * v;
   }
 
@@ -473,7 +492,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       var useH = rc.hp && rc.hk === pass && num("humanise", 0) > 0;
       var raw = useH ? planAt(rc.hp, rc.lb, t) : planAt(rc.lp, rc.lb, t);
       if (rv.hh || !live) target = rv.tx;
-      else target = mapPos(raw);
+      else target = mapPos(raw, t);
       if (live) {
         var li = stepAt(rc.lg, rc.lb, t);
         if (useH && rc.hg && !stepAt(rc.hg, rc.lb, t)) li = 0;

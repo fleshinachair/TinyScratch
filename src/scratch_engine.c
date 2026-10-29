@@ -919,12 +919,48 @@ static void gen_plan(gen_t *g, int style, int bars, int plan[4], int grp[4])
     else if (bars == 2 && style == GS_ANY) { plan[1] = b; grp[1] = 1; }
 }
 
+/* A long sample (over TS_REACH_S): how much its strokes are scaled down so they are as long in seconds as on a sample TS_REACH_S long,
+ * a DJ's quarter or third of a turn, not a sweep through the whole phrase. 1 for anything up to TS_REACH_S: Ahhh and Fresssh, and their
+ * clips, are exactly what they were. */
+static float slot_reach(const ts_slot_t *s)
+{
+    if (!s || !s->loaded || s->len <= 0) return 1.0f;
+    const float secs = (float)s->len / TS_SAMPLE_RATE;
+    return secs > TS_REACH_S ? TS_REACH_S / secs : 1.0f;
+}
+
+/* A long sample's attacks, read the same way in seconds from the finer overview: a rise over 30 ms out of a dip, at least 0.2 s after the last
+ * (a word, a syllable, a hit), so a long phrase has a place to start for each of its words, not one an eighth of the sample. */
+static int slot_onsets_long(const ts_slot_t *s, float *out, int cap)
+{
+    float e[TS_RCOLS], mx = 0.0f;
+    for (int i = 0; i < TS_RCOLS; i++) { e[i] = (float)s->rms_hi[i] / 255.0f; mx = fmaxf(mx, e[i]); }
+    if (mx < 0.05f) return 0;
+    const float secs = (float)s->len / TS_SAMPLE_RATE, col = secs / (float)TS_RCOLS;
+    const int w = clampi((int)lrintf(0.03f / col), 1, 8), gap = clampi((int)lrintf(0.2f / col), w + 1, TS_RCOLS / 4);
+    const float pre = 0.01f / secs;                                             /* (ten milliseconds ahead of the attack, as on a short sample) */
+    int n = 0, last = (int)(s->lo * (float)TS_RCOLS);
+    out[n++] = clampf((float)last / (float)TS_RCOLS - pre, 0.0f, 0.9f);
+    for (int i = last + gap; i < TS_RCOLS - w - 1 && n < cap; i++) {
+        float rise = e[i + w] - e[i];
+        if (rise > 0.25f * mx && e[i] < 0.6f * e[i + w] && e[i] <= e[i - 1] + 0.01f) {
+            const float at = (float)i / (float)TS_RCOLS - pre;
+            if (at > 0.9f) break;
+            out[n++] = clampf(at, 0.0f, 0.9f);
+            last = i;
+            i += gap - 1;
+        }
+    }
+    return n;
+}
+
 /* Where a sample has its attacks: the start of its sound, and every place its level climbs fast out of a dip (a new word, the next hit),
  * read from the 128-column overview. Positions 0..1, a column before the attack, at most `cap` of them. A DJ puts the record there so a
  * stroke begins on the attack; the real performances and the example clips turn where the sample is quiet and about to get loud. */
 static int slot_onsets(const ts_slot_t *s, float *out, int cap)
 {
     if (!s || !s->loaded || cap < 1) return 0;
+    if (slot_reach(s) < 1.0f) return slot_onsets_long(s, out, cap);
     float e[TS_VIEW_COLS], mx = 0.0f;
     for (int i = 0; i < TS_VIEW_COLS; i++) { e[i] = (float)s->rms[i] / 255.0f; mx = fmaxf(mx, e[i]); }
     if (mx < 0.05f) return 0;
@@ -946,7 +982,13 @@ static int slot_onsets(const ts_slot_t *s, float *out, int cap)
 static void cue_points(const ts_slot_t *s, float out[8])
 {
     float p[9];
-    int n = slot_onsets(s, p, 8);
+    int n;
+    if (slot_reach(s) < 1.0f) {                                                 /* a long sample: eight of its attacks, spread along all of it */
+        float all[32];
+        const int m = slot_onsets(s, all, 32);
+        n = m < 8 ? m : 8;
+        for (int k = 0; k < n; k++) p[k] = all[m <= 8 ? k : k * (m - 1) / 7];
+    } else n = slot_onsets(s, p, 8);
     const float lo = s && s->loaded ? s->lo : 0.0f, hi = s && s->loaded ? s->hi : 1.0f;
     if (n == 0) p[n++] = clampf(lo - 0.01f, 0.0f, 0.9f);
     for (int k = 1; k < n && s && s->loaded; k++) {                              /* a stroke starts a few columns ahead of an attack; a pad you tap lands on it */
@@ -1083,7 +1125,7 @@ static void gen_phrase(gen_t *g, int bars, const float *bases)
     }
 }
 
-static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch, float spx, float groove_p)
+static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch, float spx, float groove_p, float reach)
 {
     if (!out) return;
     bars = bars <= 1 ? 1 : (bars >= 4 ? 4 : 2);
@@ -1152,6 +1194,20 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
             if (s != GS_BABY && s != GS_SCRIBBLE && s != GS_FLARE && s != GS_ORBIT && s != GS_DRAG && s != GS_TEAR) g_limit_open(&g, o);       /* (a baby is open all the way: that is what it is) */
         }
     }
+    /* A long sample: every stroke scaled down toward where its bar (Improv: its phrase) starts, so it is as long in seconds as on a short one
+     * and stays on the word it starts on. The last sixteenth, where the record goes on to the next bar's start, moves between the two. */
+    if (reach < 1.0f) {
+        const int P = bars >= 2 ? 2 : 1;
+        float ref[4];
+        for (int b = 0; b < bars; b++) ref[b] = style == GS_ANY ? bases[(b / P) * P] : bases[b];
+        for (int i = 0; i < n; i++) {
+            const int b = i / (16 * GP) < bars ? i / (16 * GP) : bars - 1;
+            const float u = (float)i / (float)GP - (16.0f * (float)b + 15.0f);
+            const float r = u > 0.0f ? ref[b] + (ref[(b + 1) % bars] - ref[b]) * u : ref[b];
+            const float x = r + ((float)out->pos[i] / 65535.0f - r) * reach;
+            out->pos[i] = (uint16_t)(clampf(x, 0.0f, 1.0f) * 65535.0f + 0.5f);
+        }
+    }
     /* now and then the last half bar runs out: a stroke on to the end of the sample, so its tail plays, and a silent jump back */
     g.rng = mix32(seed ^ 0xA5A5F00Du) | 1u;
     int last = plan[bars - 1];
@@ -1160,6 +1216,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         int i0 = (int)((o + 8.0f) * (float)GP);
         g.used |= TS_EX_FWD;
         float from = (float)out->pos[i0] / 65535.0f, to = gr(&g, 0.93f, 0.99f);
+        if (reach < 1.0f) to = from + (to - from) * reach;                      /* (a long sample: on through its next words, not all of it) */
         g_seg(&g, o + 8.0f, o + 15.0f, from, to, gi(&g, 0, 1) ? SH_LIN : SH_SLOW);
         g_gate(&g, o + 8.0f, o + 15.0f, 1);
         g_seg(&g, o + 15.0f, o + 16.0f, to, bases[0], SH_FAST);
@@ -1175,6 +1232,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
             g.used |= TS_EX_FIN;
             float o = 16.0f * (float)(bars - 1);
             float from = bases[bars - 1], span = fmaxf(hi - from, 0.2f);
+            if (reach < 1.0f) span = fmaxf(fminf(hi - from, 2.0f * (bars >= 2 ? 12.0f : 8.0f) * pps), 0.2f);     /* a long sample: to its end if that is no faster than twice its own speed, else as much as that plays */
             /* sixteenths the sound takes at the sample's own speed: up to three quarters of a bar (half a bar in a one bar clip); a sample
              * longer than that is still played right to its end, a little faster than its own speed, not cut short */
             float x = clampf(span / fmaxf(pps, 0.01f), 3.0f, bars >= 2 ? 12.0f : 8.0f);
@@ -1396,12 +1454,14 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     }
     float fw_p = isfinite(fwd) ? clampf(fwd, 0.0f, 1.0f) : 0.0f;
     if (!out) return;
-    float onsets[8];
-    int n_on = slot_onsets(slot, onsets, 8);
+    const float reach = slot_reach(slot);
+    float onsets[32];
+    int n_on = slot_onsets(slot, onsets, reach < 1.0f ? 32 : 8);
     /* how long a forward takes: most of the sound at about the sample's own speed, at 120 bpm (a sixteenth is 1/8 s); fixed, so a recipe
      * makes the same clip whatever the tempo it is loaded at */
     int fw16 = 4;
     if (slot && slot->loaded && slot->len > 0) fw16 = clampi((int)(0.8f * (slot->hi - slot->lo) * (float)slot->len / TS_SAMPLE_RATE / 0.125f + 0.5f), 3, 7);
+    if (reach < 1.0f) fw16 = clampi((int)(0.8f * TS_REACH_S / 0.125f + 0.5f), 3, 7);     /* (a long sample: a forward through a word or two) */
     /* A hand can make about 6 sounds a second at most (the real DJ in the measurements: 5.7). The grid is sixteenths, so on a fast song the
      * clips would run past that (8.6 a second at 160 bpm, strokes five times the sample's own speed). Above 120 bpm the strokes are as
      * long in seconds as at 120 bpm, and the cuts as rare per second; at 120 and below nothing changes. */
@@ -1412,7 +1472,7 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;
     for (int attempt = 0; attempt < 8; attempt++) {                             /* a seed that comes out mostly silent is thrown again: same seed, same clip, always */
-        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on, fw16, fw_p, fin_p, pps, hi, echo_p, stretch, spx, groove_p);
+        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on, fw16, fw_p, fin_p, pps, hi, echo_p, stretch, spx, groove_p, reach);
         float a = gen_audible(out);
         if (a >= need[style]) return;
         if (a > best_a) { best_a = a; best = *out; }
@@ -2549,6 +2609,30 @@ static float read_hermite(const float *d, int len, double pos)
  * pass is different). The timing drifts (up to 60 ms either way, a new drift every beat), each cut lands early or late (up to 25 ms more, every
  * sixteenth) and softer (down to 55% of its level), and each stroke runs short or long (up to 8% of the sample), all at 100%. The playback and
  * the clip view both come here, so the picture is what you hear. */
+/* A long sample's Clip Depth works around where each bar of the clip starts (its lowest point: the strokes go up from there), not from the
+ * start of the sample, so a clip turned down still scratches the words it is on. Read once a block (render time: no more than a scan of the
+ * clip); in the last sixteenth of a bar it moves on to the next bar's. */
+static double clip_bar_ref(ts_engine_t *e, const ts_clip_t *k, double beat)
+{
+    const int bars = k->len >= 4 ? k->len / 4 : 1;
+    if (e->bref_ck != (const void *)k || e->bref_at != e->frames) {
+        for (int b = 0; b < bars && b < TS_CLIP_MAX_BEATS / 4; b++) {
+            const int i0 = b * 4 * TS_CLIP_RES, i1 = (b + 1) * 4 * TS_CLIP_RES < k->n ? (b + 1) * 4 * TS_CLIP_RES : k->n;
+            uint16_t m = 65535;
+            for (int i = i0; i < i1; i++) if (k->pos[i] < m) m = k->pos[i];
+            e->bref[b] = (float)m / 65535.0f;
+        }
+        e->bref_ck = (const void *)k;
+        e->bref_at = e->frames;
+    }
+    const double x = beat - floor(beat / k->len) * k->len;
+    const int b = clampi((int)(x / 4.0), 0, bars - 1);
+    double r = e->bref[b];
+    const double u = (x - (4.0 * b + 3.75)) / 0.25;
+    if (u > 0.0) r += ((double)e->bref[(b + 1) % bars] - r) * (u > 1.0 ? 1.0 : u);
+    return r;
+}
+
 static void humanise_at(const ts_params_t *p, double bpm, int clip, int len_beats, double pass_beat, double sw_t,
                         double *t_path, double *t_gate, double *pos_off, float *lv_scale)
 {
@@ -2679,6 +2763,11 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         if (e->hand_hold > 0 || !live) e->target = e->man;
         else if (clip > 0) {
             double v = (double)ts_clip_pos(e, clip, t_path) * (double)p->clip_depth + (double)p->clip_offset + pos_off;     /* Swing, Humanise, Depth and Offset */
+            const float rk = slot_reach(s);
+            if (rk < 1.0f) {                                                     /* a long sample: Depth around where the bar starts; a clip not made for it is scaled down as a generated one is */
+                const double r = clip_bar_ref(e, ck, t_path);
+                v = r + ((double)ts_clip_pos(e, clip, t_path) - r) * (double)p->clip_depth * (native ? 1.0 : (double)rk) + (double)p->clip_offset + pos_off * (double)rk;
+            }
             v = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
             e->target = native ? v : (double)s->lo + (double)(s->hi - s->lo) * v;
         }
@@ -2837,7 +2926,7 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
             double tp, tg, po;
             float lvs;
             humanise_at(p, (double)e->bpm, e->clip_now, pk->len, e->mclock - t0, t, &tp, &tg, &po, &lvs);
-            jw(&j, "%x", clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po), 0.0f, 1.0f) * 15.0f + 0.5f), 0, 15));
+            jw(&j, "%x", clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po * (double)slot_reach(s)), 0.0f, 1.0f) * 15.0f + 0.5f), 0, 15));
             hg[k] = ts_clip_cut(e, e->clip_now, tg) ? '1' : '0';
         }
         hg[TS_LANE] = 0;
@@ -3004,7 +3093,7 @@ int ts_engine_rclip(const ts_engine_t *e, char *buf, int cap)
                 double tp, tg, po;
                 float lvs;
                 humanise_at(p, (double)e->bpm, e->clip_now, k->len, e->mclock - t0, t, &tp, &tg, &po, &lvs);
-                jw_hex(&j, (unsigned)clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po), 0.0f, 1.0f) * 4095.0f + 0.5f), 0, 4095), 3);
+                jw_hex(&j, (unsigned)clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po * (double)slot_reach(s)), 0.0f, 1.0f) * 4095.0f + 0.5f), 0, 4095), 3);
                 hg[i] = ts_clip_cut(e, e->clip_now, tg) ? '1' : '0';
             }
             hg[hn] = 0;

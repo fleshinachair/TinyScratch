@@ -177,7 +177,7 @@
         "",
         "Record a User sample",
         "by holding its empty",
-        "pad (4 s at most), or",
+        "pad (10 s at most), or",
         "use Load Sample for a",
         ".wav file.",
         "",

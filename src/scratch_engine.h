@@ -15,7 +15,7 @@
 #define TS_SAMPLE_RATE   44100.0f
 #define TS_SLOTS         8          /* Ahhh, Fresssh, User 1..6: the eight pads of the sample row */
 #define TS_MAX_SECONDS   10         /* longest sample; scratching works best with 1 to 2 s */
-#define TS_REC_SECONDS   4          /* the longest recording from the audio input (it is cropped to its sound when it is kept) */
+#define TS_REC_SECONDS   10         /* the longest recording from the audio input, as long as a loaded sample (it is cropped to its sound when it is kept) */
 #define TS_REC_MIN       2048       /* a recording shorter than this (about 46 ms) is thrown away */
 #define TS_REC_FLOOR     0.003f     /* ...and one never louder than this (about -50 dBFS): nothing was there to keep */
 #define TS_NAME_LEN      64
@@ -27,6 +27,7 @@
 #define TS_RCLIP_RES     64         /* the Remote UI's clip plan: points to the beat (half the clip's own resolution) */
 #define TS_SCRATCH_PTS   64         /* the Remote UI's hand on the record: points held (a second at 60 a second) */
 #define TS_SCRATCH_DELAY_MS 40.0    /* ...and how late they are played: the room the network's jitter gets */
+#define TS_REACH_S       1.2f       /* a sample longer than this is a long one: its strokes are as long in seconds as on one this long, and start on its words (Ahhh and Fresssh are shorter: nothing changes for them) */
 #define TS_CUT_NOTE      60         /* C3: this note and above cut the sound in */
 #define TS_PAD_FIRST     36         /* the Move's 32 pads send notes 36..67 (drum layout) or 68..99 (pad ids) */
 #define TS_PAD_LAST      99
@@ -163,6 +164,9 @@ typedef struct ts_engine {
     float       sc_pos[TS_SCRATCH_PTS];
     int         sc_n, sc_head;  /* points held, and where the oldest is */
     double      sc_off;         /* engine ms minus page ms, at the quickest delivery seen in this gesture */
+    const void *bref_ck;        /* a long sample's Clip Depth: the clip whose bars' starting points are in bref, and the block they were read in */
+    uint64_t    bref_at;
+    float       bref[TS_CLIP_MAX_BEATS / 4];
 
     /* the clip view: where the playhead was and whether the sound was cut in, over one bar of the clock */
     uint8_t     lane_pos[TS_LANE], lane_gate[TS_LANE];

@@ -3148,15 +3148,15 @@ static void test_recording(void)
     render_n(e, buf, 128);
     CHECK(e->pend_ready == 0 && e->slot[3].len == 5120 && e->slot[3].data[100] < 0.6f, "a recording under 46 ms is thrown away and the sample already there stays");
 
-    /* it stops by itself after four seconds, and replaces the old one, which the service call frees */
+    /* it stops by itself after ten seconds, and replaces the old one, which the service call frees */
     ts_engine_rec_start(e);
-    for (int b = 0; b < 1500; b++) ts_engine_feed_input(e, in, 128);
-    CHECK(e->rec_state == 2 && e->rec_len == e->rec_cap && e->rec_cap == 176400, "it stops by itself after four seconds (%d frames)", e->rec_len);
+    for (int b = 0; b < 3500; b++) ts_engine_feed_input(e, in, 128);
+    CHECK(e->rec_state == 2 && e->rec_len == e->rec_cap && e->rec_cap == 441000, "it stops by itself after ten seconds (%d frames)", e->rec_len);
     ts_engine_service(e);
     render_n(e, buf, 128);
     int parked = 0;
     for (int i = 0; i < TS_SLOTS + 2; i++) parked += e->garbage[i] != NULL;
-    CHECK(e->slot[3].len == 176400 - 2646 - 4410 && parked == 1, "recording over a sample replaces it (less the first 60 ms and the last 100 ms: the pad's press and let-go); the old data waits for the service call, not freed on the audio thread (%d)", e->slot[3].len);
+    CHECK(e->slot[3].len == 441000 - 2646 - 4410 && parked == 1, "recording over a sample replaces it (less the first 60 ms and the last 100 ms: the pad's press and let-go); the old data waits for the service call, not freed on the audio thread (%d)", e->slot[3].len);
     ts_engine_service(e);
     parked = 0;
     for (int i = 0; i < TS_SLOTS + 2; i++) parked += e->garbage[i] != NULL;
@@ -3849,6 +3849,86 @@ static void test_shipped_clips(void)
     ts_engine_destroy(e);
 }
 
+/* A long sample (over TS_REACH_S): strokes as long in seconds as on a short one, bars that start on its words, Clip Depth around those.
+ * Ahhh and Fresssh are shorter, so nothing about them may change: the shipped clips are still exactly what their recipes make. */
+static int cmp_float(const void *a, const void *b) { const float x = *(const float *)a, y = *(const float *)b; return x < y ? -1 : x > y; }
+
+static void test_long_samples(void)
+{
+    printf("long samples\n");
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_engine_load_dir(e, "samples");
+    ts_engine_set_recipes_path(e, "clips/recipes.txt");
+    ts_engine_load_recipes(e);
+    int known = 0, kept = 0;
+    for (int sm = 0; sm < 2; sm++)
+        for (int pad = 1; pad <= 3; pad++) { const ts_clip_t *c = bank_clip(e, sm, pad); kept++; known += c && (c->extras & TS_EX_KNOWN); }
+    CHECK(slot_reach(&e->slot[0]) == 1.0f && slot_reach(&e->slot[1]) == 1.0f, "Ahhh and Fresssh are under %.1f s: none of this touches them", (double)TS_REACH_S);
+    CHECK(kept == 6 && known == 2, "...the shipped clips whose recipes still make exactly their saved data are the same two of six as before (%d; the rest play from their data)", known);
+
+    /* a phrase: Ahhh, Fresssh, Ahhh, Fresssh, Ahhh, a gap after each (about 5 s); its words start at these seconds */
+    static int16_t pcm[44100 * 6];
+    double words[5];
+    int n = 0;
+    for (int w = 0; w < 5; w++) {
+        const ts_slot_t *src = &e->slot[w % 2];
+        words[w] = (double)n / 44100.0;
+        for (int i = 0; i < src->len; i++) pcm[n++] = (int16_t)lrintf(clampf(src->data[i], -1.0f, 1.0f) * 30000.0f);
+        for (int i = 0; i < 6615; i++) pcm[n++] = 0;
+    }
+    const double secs = (double)n / 44100.0;
+    size_t sz = make_wav(g_wav, pcm, n, 44100, 1, 16, 1);
+    const int loaded = ts_engine_load_wav_mem(e, 2, "phrase", g_wav, sz);
+    CHECK(loaded == TS_WAV_OK && slot_reach(&e->slot[2]) < 0.3f, "a 5 s phrase loads, and is a long sample");
+    static ts_clip_t c;
+    static float strokes[40000];
+    int ns = 0, on_word = 0, starts = 0, hit[5] = { 0 };
+    for (int st = 0; st < TS_GEN_STYLES; st++)
+        for (uint32_t seed = 1; seed <= 12; seed++) {
+            ts_clip_generate_ex(&c, st, seed * 31u, 4, &e->slot[2], 0.5f, 96.0f, 0.3f, 0.25f, 0.5f);
+            float prev = (float)c.pos[0] / 65535.0f, from = prev;
+            int dir = 0;
+            for (int i = 1; i < c.n; i++) {
+                const float x = (float)c.pos[i] / 65535.0f;
+                const int d = x > prev + 1e-5f ? 1 : (x < prev - 1e-5f ? -1 : 0);
+                if (d && dir && d != dir) { if (fabsf(prev - from) > 0.01f && ns < 40000) strokes[ns++] = fabsf(prev - from) * (float)secs; from = prev; }
+                if (d) dir = d;
+                prev = x;
+            }
+            for (int b = 0; b < 4; b++) {                                         /* where each bar starts (its lowest point): on a word? */
+                uint16_t m = 65535;
+                for (int i = b * 4 * TS_CLIP_RES; i < (b + 1) * 4 * TS_CLIP_RES; i++) if (c.pos[i] < m) m = c.pos[i];
+                const double at = (double)m / 65535.0 * secs;
+                starts++;
+                for (int w = 0; w < 5; w++) if (at >= words[w] - 0.05 && at <= words[w] + 0.6) { on_word++; hit[w] = 1; break; }
+            }
+        }
+    qsort(strokes, (size_t)ns, sizeof strokes[0], cmp_float);
+    const float med = strokes[ns / 2];
+    CHECK(med > 0.2f && med < 0.8f, "a long sample's strokes are as long as on a short one: the median is %.2f s (a turn is 1.8 s; on 5 s they were 1.6 to 2.8 s)", (double)med);
+    CHECK(on_word >= starts * 8 / 10 && hit[0] + hit[1] + hit[2] + hit[3] + hit[4] >= 4,
+          "...the bars start on its words (%d of %d bars), and on %d of the five", on_word, starts, hit[0] + hit[1] + hit[2] + hit[3] + hit[4]);
+
+    /* Clip Depth turned down: the record stays on the words the clip starts on, not pulled toward the start of the sample */
+    ts_params_t p;
+    ts_params_default(&p);
+    p.lock = 0; p.sample = 2; p.gen_bars = 2; p.gen_style = GS_BABY; p.clip_depth = 0.4f; p.humanise = 0.0f;
+    ts_engine_set_tempo(e, 96.0f);
+    ts_engine_set_params(e, &p);
+    ts_engine_select_sample(e, 2);
+    ts_engine_generate(e);
+    p.clip = TS_CLIP_TRY;
+    ts_engine_set_params(e, &p);
+    const ts_clip_t *k = &e->clip_data[e->try_idx];
+    uint16_t lo = 65535;
+    for (int i = 0; i < k->n; i++) if (k->pos[i] < lo) lo = k->pos[i];
+    static float out[512];
+    float below = 0.0f;
+    for (int b = 0; b < 600; b++) { ts_engine_render(e, out, 256); below = fmaxf(below, (float)lo / 65535.0f - (float)e->target); }
+    CHECK(below < 0.01f, "Clip Depth at 40%% keeps the record on the clip's words: never more than %.3f below where it starts", (double)below);
+    ts_engine_destroy(e);
+}
+
 static void test_plugin_generate(void)
 {
     printf("plugin generate\n");
@@ -4343,6 +4423,7 @@ int main(int argc, char **argv)
     test_clip_pages();
     test_groove();
     test_shipped_clips();
+    test_long_samples();
     test_pad_runs_clip();
     test_unload_files();
     test_load_file_and_zoom();
