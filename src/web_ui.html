@@ -576,7 +576,7 @@ footer b { color: var(--pink); }
     g.restore();
     g.lineCap = "butt";
 
-    /* start/stop, the strobe light, the pitch fader */
+    /* start/stop and the strobe light */
     var on = rv && rv.tp;
     var bx0 = W * 0.06, by0 = H * 0.86, bw = W * 0.16, bh = H * 0.075;
     g.fillStyle = on ? C.lime : "#2b2733"; if (on) { g.shadowColor = C.lime; g.shadowBlur = 16 * d; }
@@ -585,15 +585,6 @@ footer b { color: var(--pink); }
     /* the strobe light, bottom left of the platter */
     g.fillStyle = on ? "#ff3b3b" : "#3a1a1a"; if (on) { g.shadowColor = "#ff3b3b"; g.shadowBlur = 18 * d; }
     g.beginPath(); g.arc(cx - R0 * 1.0, cy + R0 * 1.0, R0 * 0.06, 0, Math.PI * 2); g.fill(); noGlow(g);
-    /* the pitch fader, at 0: the clips keep the song's tempo */
-    var fx = W * 0.9, fy0 = H * 0.5, fy1 = H * 0.92;
-    g.fillStyle = "#07050a"; roundRect(g, fx - 4 * d, fy0, 8 * d, fy1 - fy0, 4 * d); g.fill();
-    for (var tk = 0; tk <= 8; tk++) { var ty = fy0 + (fy1 - fy0) * tk / 8; g.fillStyle = tk === 4 ? C.lime : "#4a4456"; g.fillRect(fx - 14 * d, ty, tk === 4 ? 9 * d : 6 * d, 1.5 * d); }
-    var fyc = (fy0 + fy1) / 2;
-    g.fillStyle = "#c9c6d2"; roundRect(g, fx - 12 * d, fyc - 7 * d, 24 * d, 14 * d, 3 * d); g.fill();
-    g.fillStyle = "#07020f"; g.fillRect(fx - 10 * d, fyc - 0.75 * d, 20 * d, 1.5 * d);
-    label(g, "PITCH", fx, fy0 - 16 * d, C.dim, Math.round(9 * d), "center");
-    label(g, rv ? rv.bpm.toFixed(1) : "--", fx, fy1 + 6 * d, C.acid, Math.round(10 * d), "center");
 
     /* readouts, top left: the speed under the needle and where it is */
     var spd = sim.velS, mag = Math.abs(spd);
