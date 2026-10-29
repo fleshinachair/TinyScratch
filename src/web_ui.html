@@ -1388,10 +1388,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     /* the pictures: redrawn only when they are of other clips */
     if (pads && pads.pk !== thumbsDrawn) {
       thumbsDrawn = pads.pk;
-      clipPads.forEach(function (b, idx) {
-        if (idx < CLIP_PADS) drawThumb(b, pads.list[idx]);
-        else if (idx === CLIP_PADS) drawThumb(b, pads.tryShape);
-      });
+      clipPads.forEach(function (b, idx) { if (idx < CLIP_PADS) drawThumb(b, pads.list[idx]); });      /* (not on Generate: its word is what matters there) */
     }
   }
 
