@@ -7,7 +7,7 @@
     the dials     under the deck, grouped as the module's pages are: PRE-GEN (Main), PLAYBACK
     the scopes    beside them, the Move's graphs at full size: the waveform (and where the clip is sending the playhead, the
                   cues), the clip view (the playhead's path and the cuts, what Humanise is playing this pass), and the zoom
-    the pads      under both: the samples, the clip pads of the page the Pads screen shows, Generate and Auto; and PAD PLAY
+    the pads      at the top: the samples, the clip pads of the page the Pads screen shows, Generate and Auto; and PAD PLAY
 
   The DSP serves two values for this page (scratch_engine.h, ts_engine_rview / ts_engine_rclip): rview, small and live, and
   rclip, the clip playing at 64 points to the beat. The host sends them twice a second, so between reads the page runs the
@@ -182,6 +182,17 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
 
   <div class="demobar" id="demobar"><button id="demoStop">STOP DEMO</button><span id="demoTime">0:00</span><div class="prog"><i id="demoProg"></i></div><span>DEMO: RECORDED FROM THE REAL ENGINE</span></div>
 
+  <section class="lower">
+    <div class="panel pads"><h2>Pads</h2>
+      <div class="prow" id="samples"></div>
+      <div class="prow pages" id="pages"><span class="lbl">PAGE</span></div>
+      <div class="prow" id="clips1"></div>
+      <div class="prow" id="clips2"></div>
+      <div class="hint">tap a pad to play it &middot; tap an empty pad while a generated clip plays to keep it &middot; hold a clip 1.5 s to delete it</div>
+    </div>
+    <div class="panel"><h2>Pad play</h2><div class="toggles" id="kPadplay"></div></div>
+  </section>
+
   <section class="stage">
     <div class="left">
       <div class="panel"><h2>Deck<span class="sub" id="deckSub"></span></h2>
@@ -200,16 +211,6 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     </div>
   </section>
 
-  <section class="lower">
-    <div class="panel pads"><h2>Pads</h2>
-      <div class="prow" id="samples"></div>
-      <div class="prow pages" id="pages"><span class="lbl">PAGE</span></div>
-      <div class="prow" id="clips1"></div>
-      <div class="prow" id="clips2"></div>
-      <div class="hint">tap a pad to play it &middot; tap an empty pad while a generated clip plays to keep it &middot; hold a clip 1.5 s to delete it</div>
-    </div>
-    <div class="panel"><h2>Pad play</h2><div class="toggles" id="kPadplay"></div></div>
-  </section>
 
   <footer>drag a dial up or down (shift: fine) &middot; scroll &middot; double-click resets &middot; &#9786;</footer>
 </div>

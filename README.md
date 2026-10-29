@@ -218,7 +218,7 @@ page of its own (Schwung's Remote UI shows it in place of the plain list of cont
 - **The graphs**, at full size: the **Waveform** (with where the clip is sending the playhead, the cues, and a trail of where it has
   been), the **Clip View** (the playhead's path and the cuts, the cuts as tall as the fader opens, so an echo steps down; with Humanise
   up, what is played this pass over the path as written), and the **Zoom** (4, 2 or 1 beats scrolling past now).
-- **The pads:** the samples, the clip pads of the page the Pads screen shows, Generate and Auto (hold a clip a second and a half to delete it).
+- **The pads**, at the top: the samples, the clip pads of the page the Pads screen shows, Generate and Auto (hold a clip a second and a half to delete it).
 - **The dials**, under the deck and grouped as the pages are: **Pre-Gen** (Style, Length, Forwards, Finish, Echo, Groove), **Playback** (Swing, Humanise,
   Bite, Clip Depth, Clip Offset, Drag, Gain) and **Pad Play**. Drag up or down (Shift for fine), scroll, or double-click to reset.
 
