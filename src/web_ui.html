@@ -720,13 +720,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     var kx = 0.075 * u, ky = 0.915 * u;
     metalDisc(g, kx, ky, 0.042 * u, d);
     g.fillStyle = "#3a1d18"; g.beginPath(); g.arc(kx + 0.03 * u, ky - 0.03 * u, 0.012 * u, 0, Math.PI * 2); g.fill();
-    /* START/STOP, along the front */
-    var bx = 0.14 * u, by = 0.875 * u, bw = 0.15 * u, bh = 0.085 * u;
-    g.save(); g.shadowColor = "rgba(0,0,0,.6)"; g.shadowBlur = 0.01 * u; g.shadowOffsetY = 0.004 * u;
-    var bgr = g.createLinearGradient(0, by, 0, by + bh); bgr.addColorStop(0, "#c9c9cc"); bgr.addColorStop(1, "#8f8f94");
-    g.fillStyle = bgr; roundRect(g, bx, by, bw, bh, 0.008 * u); g.fill(); g.restore();
-    g.fillStyle = "rgba(20,20,22,.75)"; g.font = "600 " + Math.round(0.017 * u) + "px " + css("--sans"); g.textAlign = "center"; g.textBaseline = "middle";
-    g.fillText("START · STOP", bx + bw / 2, by + bh / 2);
+    g.textAlign = "center"; g.textBaseline = "middle";
     /* the tonearm's base: the turret, the height ring, the anti-skate dial, the arm rest */
     var p = armPivot(u);
     metalDisc(g, p.x, p.y, 0.1 * u, d, true);
