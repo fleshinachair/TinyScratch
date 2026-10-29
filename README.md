@@ -40,7 +40,8 @@ Each page has its own colour, and a clip on another page than the first is label
 **5. Add your own sample.** Best at one to two seconds, noisy and aggressive, with a little silence at each end.
 
 - **Record it:** hold an **empty User pad** (row 3) and make the sound into the Move's input; let go and it is kept (up to four seconds).
-  It is cropped to the sound and brought up to the level of the built-in samples.
+  It is cropped to the sound and brought up to the level of the built-in samples. Recording starts once the pad has been held a moment
+  (0.3 s): a tap on an empty User pad just selects it. A recording with no sound in it is not kept.
 - **Or load a file:** pick **Load Sample** in the first menu and choose a `.wav` from the Move's library.
 - **Remove it:** hold its pad for a second and a half. The clips you kept for it go with it.
 

@@ -2492,7 +2492,9 @@ void ts_engine_service(ts_engine_t *e)
         int slot = e->rec_slot, c0 = 0, c1 = 0;
         rec_crop(e->rec_buf, e->rec_len, e->sr, &c0, &c1);
         int n = c1 - c0;
-        if (n >= TS_REC_MIN && slot >= 2 && slot < TS_SLOTS) {
+        float pk = 0.0f;                                                        /* a recording with no sound in it (the room, a silent input) is not kept */
+        for (int i = c0; i < c1; i++) pk = fmaxf(pk, fabsf(e->rec_buf[i]));
+        if (n >= TS_REC_MIN && pk >= TS_REC_FLOOR && slot >= 2 && slot < TS_SLOTS) {
             float *buf = (float *)TS_CALLOC(mip_total(n) * sizeof(float));
             if (buf) {
                 memcpy(buf, e->rec_buf + c0, (size_t)n * sizeof(float));

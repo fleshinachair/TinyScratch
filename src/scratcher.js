@@ -24,6 +24,7 @@
     var GROOVES = ["BOOM", "FLOOR", "BRKS", "HALF", "FUNK", "DEMBO", "OPEN"];     /* the seven grooves, as the engine numbers them */
     var PAGE_CLIP = [23, 16, 26, 8];                    /* a clip pad's colour on each page (the palette: purple, azure, magenta, yellow) */
     var CLIP_AUTO = 17, CLIP_TRY = 18;               /* the clip parameter: 0 off, 1..16 a clip, 17 auto, 18 the clip just generated */
+    var REC_HOLD_MS = 300;                             /* hold an empty User slot this long and it records (a tap selects it) */
     var HOLD_MS = 1500;                                /* hold a clip you made, or a User sample, this long to delete / unload it (the Delete button never reaches a screen) */
     var TOAST_MS = 1600;                               /* how long a dial's new value stays on the screen */
     var STYLE_SHORT = ["IMPRO", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
@@ -559,6 +560,17 @@
     /* A clip pad you made, held: after a moment it is deleted. (The Delete button itself is read by the host from the shim and
      * never sent to a screen, so this is the gesture.) A tap still just plays the clip. */
     function checkHold(ctx, st) {
+        /* An empty User slot records only once it has been held a moment: a tap selects it. (Recording from the press made every
+         * tap on an empty slot a tenth of a second of the room, kept as that slot's sample.) */
+        if (st.recPend) {
+            if (!st.held[st.recPend.idx]) st.recPend = null;
+            else if (ctx.now() - st.recPend.since >= REC_HOLD_MS) {
+                setNow(ctx, "record", "1");
+                if (st.view) st.view.rc = 1;
+                st.recHold = st.recPend.idx;
+                st.recPend = null;
+            }
+        }
         if (!st.hold) return;
         if (!st.held[st.hold.idx]) { st.hold = null; return; }
         var now = ctx.now();
@@ -601,6 +613,7 @@
         }
         if (!down) {
             if (st.recHold === idx) { setNow(ctx, "record", "0"); if (v) v.rc = 0; st.recHold = -1; }     /* let go: the recording stops (and is cropped and kept) */
+            if (st.recPend && st.recPend.idx === idx) st.recPend = null;                                  /* a tap: the slot is selected, nothing recorded */
             return;
         }
         if (row === 1) {
@@ -609,11 +622,7 @@
                 if (v) v.s = col;
                 var ld = v && typeof v.ld === "string" ? v.ld : "";
                 if (col < 2 || ld[col] === "1") st.hold = { kind: "sample", n: col, idx: idx, since: ctx.now(), ok: col >= 2 };       /* held: a User sample is unloaded */
-                else {                                                           /* an empty User slot, held: it records for as long as it is held */
-                    setNow(ctx, "record", "1");
-                    if (v) v.rc = 1;
-                    st.recHold = idx;
-                }
+                else st.recPend = { idx: idx, n: col, since: ctx.now() };          /* an empty User slot: a tap selects it; held, it records (checkHold) */
             }
             return;                                                             /* (hold an empty slot to record) */
         }

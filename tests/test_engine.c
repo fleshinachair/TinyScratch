@@ -3190,6 +3190,18 @@ static void test_recording(void)
         CHECK(e->slot[3].len == len, "a recording of nothing but the taps is thrown away; the sample already there stays");
     }
 
+    /* a quiet room: held long enough, but nothing in it worth keeping */
+    {
+        static float blk3[128];
+        const int before = e->slot[3].len;
+        ts_engine_rec_start(e);
+        for (int b = 0; b < 200; b++) { for (int i = 0; i < 128; i++) blk3[i] = 0.001f * sinf(0.2f * (float)(b * 128 + i)); ts_engine_feed_input(e, blk3, 128); }
+        ts_engine_rec_stop(e);
+        ts_engine_service(e);
+        render_n(e, buf, 128);
+        CHECK(e->slot[3].len == before && e->rec_state == 0, "a recording with no sound in it (under -50 dBFS) is thrown away; the sample already there stays");
+    }
+
     /* clicks a little way in from either end (past what is skipped), with silence between them and the voice, are dropped; the ends fade */
     {
         ts_engine_rec_start(e);
