@@ -4037,6 +4037,67 @@ static void test_remote_ui(void)
         CHECK(!strstr(st, "scratch"), "a scratch is not saved with the project");
     }
 
+    /* a hand over a network: the points come 60 a second but arrive unevenly (20 to 50 ms late). With the times, the record moves as
+     * the hand did; without them it jumps to each point and stops there until the next, which is heard as a stutter. */
+    {
+        api->set_param(h, "drag", "0");
+        double stall_frac[2] = { 0, 0 }, err_ms[2] = { 0, 0 };
+        for (int timed = 0; timed < 2; timed++) {
+            for (int b = 0; b < 400; b++) api->render_block(h, o, 128);       /* (any hand from before has let go) */
+            uint32_t r = 12345u;
+            double arrive[80], t_page[80];
+            float hp[80];
+            const double base = (double)in->eng->frames * 1000.0 / 44100.0 + 5.0;   /* the page's clock, as the engine sees it */
+            double prev = 0;
+            for (int k = 0; k < 80; k++) {
+                t_page[k] = 16.0 * k;
+                hp[k] = 0.5f + 0.15f * sinf(6.2831853f * (float)t_page[k] / 500.0f);
+                r = r * 1664525u + 1013904223u;
+                double a = base + t_page[k] + 20.0 + 30.0 * (double)(r >> 8) / 16777216.0;
+                arrive[k] = a < prev ? prev : a;                              /* (a socket keeps them in order) */
+                prev = arrive[k];
+            }
+            int next = 0, fast = 0, stalls = 0, n_err = 0;
+            double last_pos = in->eng->pos, sum_err = 0;
+            int16_t ob[64];
+            for (int blk = 0; blk < 1600; blk++) {                              /* blocks of 32 frames: arrivals land to the millisecond */
+                const double now = (double)in->eng->frames * 1000.0 / 44100.0;
+                while (next < 80 && arrive[next] <= now) {
+                    char v[64];
+                    if (timed) snprintf(v, sizeof v, "%.5f %.1f", (double)hp[next], t_page[next]); else snprintf(v, sizeof v, "%.5f", (double)hp[next]);
+                    api->set_param(h, "scratch", v);
+                    next++;
+                }
+                api->render_block(h, ob, 32);
+                const double page_t = now - base;
+                if (page_t > 250 && page_t < 1150) {                            /* well into the gesture */
+                    const double speed = fabs(cos(6.2831853 * (page_t - 60.0) / 500.0));
+                    const double moved = fabs(in->eng->pos - last_pos);
+                    const double want = 0.15 * 6.2831853 / 500.0 * speed * (32.0 * 1000.0 / 44100.0);
+                    if (speed > 0.6) { fast++; if (moved < 0.15 * want) stalls++; }
+                    /* how far behind the hand, in ms: the page time whose point is nearest where the record is */
+                    if (timed && speed > 0.6) {
+                        double best = 1e9, best_dt = 0;
+                        for (double dt = 0; dt < 150; dt += 1) {
+                            const double x = 0.5 + 0.15 * sin(6.2831853 * (page_t - dt) / 500.0);
+                            if (fabs(x - in->eng->pos) < best) { best = fabs(x - in->eng->pos); best_dt = dt; }
+                        }
+                        sum_err += best_dt; n_err++;
+                    }
+                }
+                last_pos = in->eng->pos;
+            }
+            stall_frac[timed] = fast ? (double)stalls / fast : 1.0;
+            err_ms[timed] = n_err ? sum_err / n_err : 0;
+        }
+        printf("  (a hand over the network: the playhead stalls %.0f%% of the time without the times, %.0f%% with them; with them it is %.0f ms behind the hand)\n",
+               stall_frac[0] * 100, stall_frac[1] * 100, err_ms[1]);
+        CHECK(stall_frac[1] < 0.03 && stall_frac[0] > 4 * stall_frac[1] + 0.05, "with the times the record moves as the hand did, without stalls (%.1f%% of the time, against %.0f%% without)",
+              stall_frac[1] * 100, stall_frac[0] * 100);
+        CHECK(err_ms[1] > 30 && err_ms[1] < 110, "...and a steady way behind it: the network's least delay and the jitter room (%.0f ms)", err_ms[1]);
+        api->set_param(h, "drag", "0.5");
+    }
+
     /* a name with a quote in it is still JSON */
     snprintf(in->eng->slot[0].name, sizeof in->eng->slot[0].name, "A\"B\\C");
     api->get_param(h, "rview", rv, sizeof rv);

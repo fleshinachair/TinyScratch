@@ -409,7 +409,15 @@ static void ts_set_param(void *h, const char *key, const char *val)
     if (!in || !key || !val) return;
     ts_engine_service(in->eng);                          /* finishes a recording, frees what the audio thread let go of */
     if (strcmp(key, "state") == 0) { restore_state(in, val); return; }
-    if (strcmp(key, "scratch") == 0) { ts_engine_scratch(in->eng, strtof(val, NULL)); return; }   /* the Remote UI's hand on the record: not a parameter */
+    if (strcmp(key, "scratch") == 0) {                   /* the Remote UI's hand on the record, "pos" or "pos ms" (when it was there): not a parameter */
+        char *end = NULL;
+        const float pos = strtof(val, &end);
+        if (end == val) return;
+        char *end2 = NULL;
+        const double t = strtod(end, &end2);
+        if (end2 != end) ts_engine_scratch_at(in->eng, pos, t); else ts_engine_scratch(in->eng, pos);
+        return;
+    }
     int i = find_param(key);
     if (i < 0) return;                                   /* (an unknown key changes nothing: the Remote UI's rui_pull is one) */
     const pdef_t *d = &k_params[i];

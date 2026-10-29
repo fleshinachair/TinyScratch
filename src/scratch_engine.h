@@ -24,6 +24,8 @@
 #define TS_RCOLS         512        /* the Remote UI's waveform: columns of the high-resolution overview */
 #define TS_RLANE         512        /* the Remote UI's clip view with no clip: what the playhead did, a column each */
 #define TS_RCLIP_RES     64         /* the Remote UI's clip plan: points to the beat (half the clip's own resolution) */
+#define TS_SCRATCH_PTS   64         /* the Remote UI's hand on the record: points held (a second at 60 a second) */
+#define TS_SCRATCH_DELAY_MS 40.0    /* ...and how late they are played: the room the network's jitter gets */
 #define TS_CUT_NOTE      60         /* C3: this note and above cut the sound in */
 #define TS_PAD_FIRST     36         /* the Move's 32 pads send notes 36..67 (drum layout) or 68..99 (pad ids) */
 #define TS_PAD_LAST      99
@@ -154,6 +156,12 @@ typedef struct ts_engine {
 
     int         hand_hold;      /* samples left in which the knob, not the clip, moves the playhead */
     int         scratch_hold;   /* samples left in which a hand on the Remote UI's record also holds the fader open */
+    /* where the hand was, and when (the page's clock, ms): replayed TS_SCRATCH_DELAY_MS late, a straight line between points, so the
+     * network's uneven delivery is not heard as a stutter */
+    double      sc_t[TS_SCRATCH_PTS];
+    float       sc_pos[TS_SCRATCH_PTS];
+    int         sc_n, sc_head;  /* points held, and where the oldest is */
+    double      sc_off;         /* engine ms minus page ms, at the quickest delivery seen in this gesture */
 
     /* the clip view: where the playhead was and whether the sound was cut in, over one bar of the clock */
     uint8_t     lane_pos[TS_LANE], lane_gate[TS_LANE];
@@ -236,6 +244,9 @@ void ts_engine_pad_cuts(ts_engine_t *e, unsigned mask);
 /* A hand on the record in the Remote UI: the playhead goes to pos (0..1) as with the Turntable, and the fader is held open while the
  * hand is on, as a DJ's is while scratching (a Turntable write alone leaves the fader where it was). Not a parameter: never saved. */
 void ts_engine_scratch(ts_engine_t *e, float pos);
+/* The same, with when the hand was there (t_ms, the page's own clock). The points are replayed TS_SCRATCH_DELAY_MS behind the
+ * quickest delivery seen, joined by straight lines, so the record moves as the hand did however unevenly the writes arrive. */
+void ts_engine_scratch_at(ts_engine_t *e, float pos, double t_ms);
 
 /* Clips. Position 0..1 and whether the sound is cut in, at a beat of the song (a clip loops over its length). */
 float ts_clip_pos(const ts_engine_t *e, int clip, double beat);

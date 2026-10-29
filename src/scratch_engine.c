@@ -1967,9 +1967,49 @@ void ts_engine_set_zoom(ts_engine_t *e, int zoom)
 void ts_engine_scratch(ts_engine_t *e, float pos)
 {
     if (!e || !isfinite(pos)) return;
+    e->sc_n = 0;                                             /* (no times: the hand goes where it is, at once) */
     e->man = clampf(pos, 0.0f, 1.0f);
     e->hand_hold = (int)(0.6f * e->sr);
     e->scratch_hold = e->hand_hold;
+}
+
+void ts_engine_scratch_at(ts_engine_t *e, float pos, double t_ms)
+{
+    if (!e || !isfinite(pos) || !isfinite(t_ms)) return;
+    const double now = (double)e->frames * 1000.0 / (double)e->sr;
+    const int last = (e->sc_head + e->sc_n - 1) % TS_SCRATCH_PTS;
+    if (e->sc_n == 0 || e->scratch_hold <= 0 || t_ms < e->sc_t[last] || t_ms - e->sc_t[last] > 1000.0) {
+        e->sc_n = 0; e->sc_head = 0;                         /* a new gesture: its own clock */
+        e->sc_off = now - t_ms;
+    } else if (now - t_ms < e->sc_off) {
+        e->sc_off = now - t_ms;                              /* a quicker delivery: the network's least delay so far */
+    }
+    if (e->sc_n == TS_SCRATCH_PTS) { e->sc_head = (e->sc_head + 1) % TS_SCRATCH_PTS; e->sc_n--; }
+    const int at = (e->sc_head + e->sc_n) % TS_SCRATCH_PTS;
+    e->sc_t[at] = t_ms;
+    e->sc_pos[at] = clampf(pos, 0.0f, 1.0f);
+    e->sc_n++;
+    /* held until the last point has been played, and 0.6 s more: the hand lets go as it does with no times */
+    const int hold = (int)((TS_SCRATCH_DELAY_MS + 600.0) * 0.001 * e->sr);
+    e->hand_hold = hold;
+    e->scratch_hold = hold;
+}
+
+/* where the hand was at the page's time t: a straight line between the points either side, the first or last beyond them */
+static float scratch_pos_at(const ts_engine_t *e, double t)
+{
+    const int first = e->sc_head, last = (e->sc_head + e->sc_n - 1) % TS_SCRATCH_PTS;
+    if (t <= e->sc_t[first]) return e->sc_pos[first];
+    if (t >= e->sc_t[last]) return e->sc_pos[last];
+    for (int k = 1; k < e->sc_n; k++) {
+        const int b = (e->sc_head + k) % TS_SCRATCH_PTS, a = (b + TS_SCRATCH_PTS - 1) % TS_SCRATCH_PTS;
+        if (t <= e->sc_t[b]) {
+            const double span = e->sc_t[b] - e->sc_t[a];
+            const double u = span > 1e-6 ? (t - e->sc_t[a]) / span : 1.0;
+            return e->sc_pos[a] + (float)u * (e->sc_pos[b] - e->sc_pos[a]);
+        }
+    }
+    return e->sc_pos[last];
 }
 
 void ts_engine_pad_cuts(ts_engine_t *e, unsigned mask)
@@ -2632,6 +2672,8 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
 
         if (e->hand_hold > 0) e->hand_hold--;
         if (e->scratch_hold > 0) e->scratch_hold--;
+        if (e->scratch_hold > 0 && e->sc_n > 0)                                  /* the Remote UI's hand, replayed as it moved */
+            e->man = scratch_pos_at(e, ((double)(e->frames - (uint64_t)frames) + (double)i) * 1000.0 / (double)e->sr - e->sc_off - TS_SCRATCH_DELAY_MS);
         if (e->hand_hold > 0 || !live) e->target = e->man;
         else if (clip > 0) {
             double v = (double)ts_clip_pos(e, clip, t_path) * (double)p->clip_depth + (double)p->clip_offset + pos_off;     /* Swing, Humanise, Depth and Offset */
