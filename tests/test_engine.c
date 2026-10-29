@@ -3925,9 +3925,9 @@ static void test_remote_ui(void)
     int16_t o[256];
 
     CHECK(ts_plugin_json_chain_params(cp, sizeof cp) > 0 &&
-          strstr(cp, "\"key\":\"view\",\"name\":\"View\",\"type\":\"string\",\"access\":\"read\",\"live\":true,\"viz\":{\"extra_keys\":[\"rview\",\"rclip\"]}}") &&
-          !strstr(cp, "\"key\":\"rview\"") && !strstr(cp, "\"key\":\"rclip\""),
-          "the hidden View parameter names rview and rclip as extras (which the host's extras pump sends), and neither is a parameter of its own");
+          strstr(cp, "\"key\":\"view\",\"name\":\"View\",\"type\":\"string\",\"access\":\"read\",\"live\":true,\"viz\":{\"extra_keys\":[\"rview\",\"rclip\",\"rpads\"]}}") &&
+          !strstr(cp, "\"key\":\"rview\"") && !strstr(cp, "\"key\":\"rclip\"") && !strstr(cp, "\"key\":\"rpads\""),
+          "the hidden View parameter names rview, rclip and rpads as extras (which the host's extras pump sends), and none is a parameter of its own");
 
     /* a clip, the transport running */
     api->set_param(h, "sample", "0");
@@ -3988,6 +3988,54 @@ static void test_remote_ui(void)
     const char *hl = strstr(rc, "\"hl\":\"");
     CHECK(nc > 0 && hl && (int)(strchr(hl + 6, '"') - (hl + 6)) == TS_RLANE * 2 && !strstr(rc, "\"lp\":") && !strcmp(jfield(rc, "rk", f, sizeof f), "0"),
           "with no clip, rclip holds what the playhead did (%d columns) and names no clip", TS_RLANE);
+
+    /* the pads' pictures: every pad of the page shown, a shape for each that has a clip */
+    {
+        static char rp[16384];
+        api->set_param(h, "clip", "17");
+        api->set_param(h, "generate", "1");
+        for (int b = 0; b < 4; b++) api->render_block(h, o, 128);
+        int np = api->get_param(h, "rpads", rp, sizeof rp);
+        api->get_param(h, "rview", rv, sizeof rv);
+        int shapes = 0, nulls = 0;
+        for (const char *q = rp; (q = strstr(q, "{\"p\":\"")) != NULL; q++) shapes++;
+        for (const char *q = rp; (q = strstr(q, "null")) != NULL; q++) nulls++;
+        int with_clip = 0;
+        for (int c = 1; c <= TS_NUM_CLIPS; c++) with_clip += bank_clip(in->eng, in->eng->p.sample, in->eng->view_page * CID_PAGE + c) != NULL;
+        CHECK(np > 0 && rp[0] == '{' && rp[np - 1] == '}' && np < 4096, "rpads is a whole object, and small (%d bytes)", np);
+        CHECK(shapes == with_clip + 1 && nulls == TS_NUM_CLIPS - with_clip, "a shape for each of the %d pads with a clip and for the try, null for the empty pads (%d shapes, %d empty)",
+              with_clip, shapes, nulls);
+        CHECK(!strcmp(jfield(rv, "pk", f, sizeof f), jfield(rp, "pk", g, sizeof g)) && f[0], "rview names the pads' key (pk %s), so the page knows when its pictures are stale", f);
+        api->set_param(h, "page", "1");
+        api->get_param(h, "rpads", rp, sizeof rp);
+        CHECK(strcmp(jfield(rp, "pk", g, sizeof g), f) != 0 && atoi(jfield(rp, "pg", g, sizeof g)) == 1, "another page of pads is another key");
+        api->set_param(h, "page", "0");
+        api->set_param(h, "clip", "0");
+        for (int b = 0; b < 40; b++) api->render_block(h, o, 128);
+    }
+
+    /* a hand on the record: the playhead goes there and the fader opens, where a Turntable write alone leaves it shut */
+    {
+        api->set_param(h, "clip", "0");
+        api->set_param(h, "note_gate", "On");
+        api->set_param(h, "sample", "0");
+        for (int b = 0; b < 400; b++) api->render_block(h, o, 128);                   /* (any hand hold from before has gone) */
+        api->set_param(h, "turntable", "0.2");
+        for (int b = 0; b < 8; b++) api->render_block(h, o, 128);
+        int pk0 = 0;
+        for (int i = 0; i < 256; i++) pk0 = pk0 > abs(o[i]) ? pk0 : abs(o[i]);
+        api->set_param(h, "scratch", "0.45");
+        int pk1 = 0;
+        for (int b = 0; b < 8; b++) { api->render_block(h, o, 128); for (int i = 0; i < 256; i++) pk1 = pk1 > abs(o[i]) ? pk1 : abs(o[i]); }
+        CHECK(pk0 == 0 && pk1 > 50 && fabs(in->eng->man - 0.45) < 1e-6, "scratch moves the playhead and opens the fader (peak %d; a Turntable write alone: %d)", pk1, pk0);
+        for (int b = 0; b < 260; b++) api->render_block(h, o, 128);                   /* 0.75 s: the hand is off */
+        int pk2 = 0;
+        for (int b = 0; b < 4; b++) { api->render_block(h, o, 128); for (int i = 0; i < 256; i++) pk2 = pk2 > abs(o[i]) ? pk2 : abs(o[i]); }
+        CHECK(pk2 == 0 && in->eng->scratch_hold == 0, "0.6 s after the last write the hand lets go, and the fader is as it was (peak %d)", pk2);
+        static char st[4096];
+        api->get_param(h, "state", st, sizeof st);
+        CHECK(!strstr(st, "scratch"), "a scratch is not saved with the project");
+    }
 
     /* a name with a quote in it is still JSON */
     snprintf(in->eng->slot[0].name, sizeof in->eng->slot[0].name, "A\"B\\C");

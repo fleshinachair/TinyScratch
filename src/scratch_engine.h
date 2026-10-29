@@ -153,6 +153,7 @@ typedef struct ts_engine {
     uint32_t    rng;
 
     int         hand_hold;      /* samples left in which the knob, not the clip, moves the playhead */
+    int         scratch_hold;   /* samples left in which a hand on the Remote UI's record also holds the fader open */
 
     /* the clip view: where the playhead was and whether the sound was cut in, over one bar of the clock */
     uint8_t     lane_pos[TS_LANE], lane_gate[TS_LANE];
@@ -232,6 +233,9 @@ void ts_engine_pad_raw(ts_engine_t *e, int on);
 void ts_engine_set_page(ts_engine_t *e, int page);   /* the page of clip pads the Pads screen shows, 0..TS_PAGES-1 */
 void ts_engine_set_zoom(ts_engine_t *e, int zoom);      /* the zoomed clip view: 0 off, 1..3 a window of 4, 2 or 1 beats */
 void ts_engine_pad_cuts(ts_engine_t *e, unsigned mask);
+/* A hand on the record in the Remote UI: the playhead goes to pos (0..1) as with the Turntable, and the fader is held open while the
+ * hand is on, as a DJ's is while scratching (a Turntable write alone leaves the fader where it was). Not a parameter: never saved. */
+void ts_engine_scratch(ts_engine_t *e, float pos);
 
 /* Clips. Position 0..1 and whether the sound is cut in, at a beat of the song (a clip loops over its length). */
 float ts_clip_pos(const ts_engine_t *e, int clip, double beat);
@@ -300,6 +304,9 @@ int  ts_engine_view(const ts_engine_t *e, char *buf, int cap);
  * Both are flat JSON objects; neither is a parameter (a declared parameter would be read only every few seconds). */
 int  ts_engine_rview(const ts_engine_t *e, char *buf, int cap);
 int  ts_engine_rclip(const ts_engine_t *e, char *buf, int cap);
+/*   rpads   the shapes of the clips on the pads of the page the Pads screen shows, and of the try (Generate's): a picture on each
+ *           pad. Named by pk, which rview carries too, so the page knows when its pictures are another page's or out of date. */
+int  ts_engine_rpads(const ts_engine_t *e, char *buf, int cap);
 
 enum {
     TS_WAV_OK = 0,

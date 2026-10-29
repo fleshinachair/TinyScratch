@@ -111,9 +111,9 @@ static const pdef_t k_params[P_COUNT] = {
     [P_FULL]        = { "pads_screen", "Pads", K_CANVAS, NULL, 0, 0, 0, 0, 0,
                         "\"canvas_script\":\"scratcher.js\",\"show_value\":false,\"show_footer\":false,"
                         "\"fullscreen_live_ms\":50,\"extra_keys\":[\"view\"]" },
-    /* ...and it names the Remote UI's two (rview, rclip): a key named only as an extra is what the host's extras pump sends to the browser,
+    /* ...and it names the Remote UI's three (rview, rclip, rpads): a key named only as an extra is what the host's extras pump sends to the browser,
      * twice a second and on every edit. "view" is on no page, so the Move never reads them; a declared parameter would be read every few seconds. */
-    [P_STATUS]      = { "view", "View", K_STRING, NULL, 0, 0, 0, 0, 0, "\"access\":\"read\",\"live\":true,\"viz\":{\"extra_keys\":[\"rview\",\"rclip\"]}" },
+    [P_STATUS]      = { "view", "View", K_STRING, NULL, 0, 0, 0, 0, 0, "\"access\":\"read\",\"live\":true,\"viz\":{\"extra_keys\":[\"rview\",\"rclip\",\"rpads\"]}" },
 };
 
 /* The pages, in the order the host shows them: the picture, then
@@ -409,8 +409,9 @@ static void ts_set_param(void *h, const char *key, const char *val)
     if (!in || !key || !val) return;
     ts_engine_service(in->eng);                          /* finishes a recording, frees what the audio thread let go of */
     if (strcmp(key, "state") == 0) { restore_state(in, val); return; }
+    if (strcmp(key, "scratch") == 0) { ts_engine_scratch(in->eng, strtof(val, NULL)); return; }   /* the Remote UI's hand on the record: not a parameter */
     int i = find_param(key);
-    if (i < 0) return;
+    if (i < 0) return;                                   /* (an unknown key changes nothing: the Remote UI's rui_pull is one) */
     const pdef_t *d = &k_params[i];
     if (i == P_SAMPLE_FILE) {                                                          /* the file browser's choice: a path */
         ts_engine_load_file(in->eng, val);
@@ -488,6 +489,7 @@ static int ts_get_param(void *h, const char *key, char *buf, int cap)
     if (strcmp(key, "view") == 0) return ts_engine_view(in->eng, buf, cap);
     if (strcmp(key, "rview") == 0) return ts_engine_rview(in->eng, buf, cap);     /* the Remote UI's (web_ui.html): see scratch_engine.h */
     if (strcmp(key, "rclip") == 0) return ts_engine_rclip(in->eng, buf, cap);
+    if (strcmp(key, "rpads") == 0) return ts_engine_rpads(in->eng, buf, cap);
     if (strcmp(key, "state") == 0) {
         char st[2048];
         int n = build_state(in, st, sizeof st);

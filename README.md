@@ -218,7 +218,11 @@ page of its own (Schwung's Remote UI shows it in place of the plain list of cont
 - **The graphs**, at full size: the **Waveform** (with where the clip is sending the playhead, the cues, and a trail of where it has
   been), the **Clip View** (the playhead's path and the cuts, the cuts as tall as the fader opens, so an echo steps down; with Humanise
   up, what is played this pass over the path as written), and the **Zoom** (4, 2 or 1 beats scrolling past now).
-- **The pads**, at the top: the samples, the clip pads of the page the Pads screen shows, Generate and Auto (hold a clip a second and a half to delete it).
+- **The pads**, at the top: the samples, the clip pads of the page the Pads screen shows (each with a small picture of its clip), Generate
+  and Auto (hold a clip a second and a half to delete it). On a computer, the keys play them: 1 to 8 the samples, Q to I and A to H the
+  clips, Space or J Generate, K Auto, the arrow keys the pages.
+- **Scratch the record**: grab the vinyl and turn it. The playhead goes where your hand takes it (a turn at 33 1/3 is the sample at its own
+  speed) and the fader is open while your hand is on; let go and the clip takes over again. You hear it after the network's delay.
 - **The dials**, under the deck and grouped as the pages are: **Pre-Gen** (Style, Length, Forwards, Finish, Echo, Groove), **Playback** (Swing, Humanise,
   Bite, Clip Depth, Clip Offset, Drag, Gain) and **Pad Play**. Drag up or down (Shift for fine), scroll, or double-click to reset.
 
@@ -249,8 +253,9 @@ TinyScratch's code is released under the [MIT licence](LICENSE). The two sample 
     help.json                         the on-device help (Schwung's Help viewer, and the Module Help row on this module's pages)
 
 - The DSP serves the screens one JSON string, `view`; `scratcher.js` and `waveform.js` are canvas scripts that only draw it.
-- The Remote UI (`src/web_ui.html`) reads two more, `rview` (live: the playhead, the clock, the status) and `rclip` (the clip at 64 points
-  to the beat and the waveform at 512 columns). They are named as `viz.extra_keys` of the hidden View parameter, which is what makes the
+- The Remote UI (`src/web_ui.html`) reads three more, `rview` (live: the playhead, the clock, the status), `rclip` (the clip at 64 points
+  to the beat and the waveform at 512 columns) and `rpads` (the shapes of the clips on the pads). It writes `scratch` (a hand on the
+  record) and `rui_pull` (ignored: any write makes the host send the values again). They are named as `viz.extra_keys` of the hidden View parameter, which is what makes the
   host's extras pump send them (a declared parameter is read only every few seconds); nothing on the Move reads them.
   `tests/remote_ui_test.mjs` plays a recording of the engine (`tools/remote_demo.c`) to the page in Chromium and holds where it draws
   the record to where the playhead really was.
