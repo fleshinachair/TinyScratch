@@ -208,6 +208,24 @@ open it is told which pad was pressed, so the pads are always this grid, and the
 is repainted with the colour the Move itself had. **Pad Grid** (on) makes notes 36 to 99 a grid of eight to a row, counting from the
 bottom left, for playing the pads without the Pads screen.
 
+## The Remote UI
+
+Open **http://move.local:7700/remote-ui** in a browser on the same network, with TinyScratch in a track's synth slot, and the module has a
+page of its own (Schwung's Remote UI shows it in place of the plain list of controls):
+
+- **The deck:** a turntable seen from above. The record turns with the playhead, at 33 1/3 when it plays the sample at its own speed,
+  backwards when the scratch goes back; the platter spins while the Move's transport runs, a hand rides the record while a clip scratches,
+  and the crossfader opens and shuts with the cuts.
+- **The graphs**, at full size: the **Waveform** (with where the clip is sending the playhead, the cues, and a trail of where it has
+  been), the **Clip View** (the playhead's path and the cuts, the cuts as tall as the fader opens, so an echo steps down; with Humanise
+  up, what is played this pass over the path as written), and the **Zoom** (4, 2 or 1 beats scrolling past now).
+- **The pads:** the samples, the clip pads of the page the Pads screen shows, Generate and Auto (hold a clip a second and a half to delete it).
+- **The dials**, grouped as the pages are: **Pre-Gen** (Style, Length, Forwards, Finish, Echo, Groove), **Playback** (Swing, Humanise,
+  Bite, Clip Depth, Clip Offset, Drag, Gain) and **Pad Play**. Drag up or down (Shift for fine), scroll, or double-click to reset.
+
+The host sends the page what it shows twice a second, so between those it plays the clip itself, on the beat clock the DSP sends, through
+the same Swing, Depth, Offset and Drag: the record moves with the sound, not half a second behind it.
+
 ## Credits
 
 **The look and workflow are inspired by the Live Scratcher module by Andrew Norris** (a sample, clips on the pads, a fader you
@@ -221,7 +239,8 @@ TinyScratch's code is released under the [MIT licence](LICENSE). The two sample 
 
 ## Development
 
-    scripts/test.sh                   engine + plugin tests (UBSan, leak and overrun checks) and the screen test
+    scripts/test.sh                   engine + plugin tests (UBSan, leak and overrun checks), the screen test, and the Remote UI in a browser
+    scripts/build_demo.sh             the Remote UI as a page of its own, playing a recording of the engine (build/demo/), with sound
     scripts/build.sh                  aarch64 dsp.so + build/tinyscratch-<version>.tar.gz
     scripts/install_move.sh           build, copy to the Move over SSH, verify, restart
     scripts/fetch_audition_samples.sh public-domain samples of your own to try as a User sample (samples_audition/, gitignored)
@@ -229,6 +248,11 @@ TinyScratch's code is released under the [MIT licence](LICENSE). The two sample 
     help.json                         the on-device help (Schwung's Help viewer, and the Module Help row on this module's pages)
 
 - The DSP serves the screens one JSON string, `view`; `scratcher.js` and `waveform.js` are canvas scripts that only draw it.
+- The Remote UI (`src/web_ui.html`) reads two more, `rview` (live: the playhead, the clock, the status) and `rclip` (the clip at 64 points
+  to the beat and the waveform at 512 columns). They are named as `viz.extra_keys` of the hidden View parameter, which is what makes the
+  host's extras pump send them (a declared parameter is read only every few seconds); nothing on the Move reads them.
+  `tests/remote_ui_test.mjs` plays a recording of the engine (`tools/remote_demo.c`) to the page in Chromium and holds where it draws
+  the record to where the playhead really was.
 - `module.json` is generated from the plugin's parameter table (`scripts/gen_manifest.sh`) so the two cannot drift.
 - Every setting is kept with the project. The host's tempo and beat position drive the clips; the DSP sends no MIDI.
 - Files are read only when the module starts and written only when you record, unload, keep or delete, never on the audio thread.

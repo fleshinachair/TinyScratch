@@ -111,7 +111,9 @@ static const pdef_t k_params[P_COUNT] = {
     [P_FULL]        = { "pads_screen", "Pads", K_CANVAS, NULL, 0, 0, 0, 0, 0,
                         "\"canvas_script\":\"scratcher.js\",\"show_value\":false,\"show_footer\":false,"
                         "\"fullscreen_live_ms\":50,\"extra_keys\":[\"view\"]" },
-    [P_STATUS]      = { "view", "View", K_STRING, NULL, 0, 0, 0, 0, 0, "\"access\":\"read\",\"live\":true" },
+    /* ...and it names the Remote UI's two (rview, rclip): a key named only as an extra is what the host's extras pump sends to the browser,
+     * twice a second and on every edit. "view" is on no page, so the Move never reads them; a declared parameter would be read every few seconds. */
+    [P_STATUS]      = { "view", "View", K_STRING, NULL, 0, 0, 0, 0, 0, "\"access\":\"read\",\"live\":true,\"viz\":{\"extra_keys\":[\"rview\",\"rclip\"]}" },
 };
 
 /* The pages, in the order the host shows them: the picture, then
@@ -484,6 +486,8 @@ static int ts_get_param(void *h, const char *key, char *buf, int cap)
     if (strcmp(key, "ui_hierarchy") == 0) return ts_plugin_json_ui_hierarchy(buf, cap);
     if (strcmp(key, "name") == 0) return out_str(buf, cap, "TinyScratch");
     if (strcmp(key, "view") == 0) return ts_engine_view(in->eng, buf, cap);
+    if (strcmp(key, "rview") == 0) return ts_engine_rview(in->eng, buf, cap);     /* the Remote UI's (web_ui.html): see scratch_engine.h */
+    if (strcmp(key, "rclip") == 0) return ts_engine_rclip(in->eng, buf, cap);
     if (strcmp(key, "state") == 0) {
         char st[2048];
         int n = build_state(in, st, sizeof st);
