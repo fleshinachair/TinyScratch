@@ -214,7 +214,7 @@ Open **http://move.local:7700/remote-ui** in a browser on the same network, with
 page of its own (Schwung's Remote UI shows it in place of the plain list of controls):
 
 - **The deck:** a turntable seen from above. The record turns with the playhead, at 33 1/3 when it plays the sample at its own speed,
-  backwards when the scratch goes back; the platter spins while the Move's transport runs, a hand rides the record while a clip scratches,
+  backwards when the scratch goes back; the platter spins while the Move's transport runs,
   and the crossfader opens and shuts with the cuts.
 - **The graphs**, at full size: the **Waveform** (with where the clip is sending the playhead, the cues, and a trail of where it has
   been), the **Clip View** (the playhead's path and the cuts, the cuts as tall as the fader opens, so an echo steps down; with Humanise
