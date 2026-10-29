@@ -211,7 +211,7 @@ bottom left, for playing the pads without the Pads screen.
 
 ## The Remote UI
 
-![TinyScratch's Remote UI: the pads and dials on the left, the deck in the middle, the waveform, clip view and zoom on the right](docs/remote-ui.jpg)
+![TinyScratch's Remote UI: the pads and Pad Play on the left, the Pre-gen and Playback dials along the top, the deck in the middle, the waveform, clip view and zoom on the right](docs/remote-ui.jpg)
 
 Open **http://move.local:7700/remote-ui** in a browser on the same network, with TinyScratch in a track's synth slot, and the module has a
 page of its own (Schwung's Remote UI shows it in place of the plain list of controls):
@@ -232,10 +232,10 @@ page of its own (Schwung's Remote UI shows it in place of the plain list of cont
   when Ahhh or Fresssh is selected).
 - **Scratch the record**: grab the vinyl and turn it. The playhead goes where your hand takes it (a turn at 33 1/3 is the sample at its own
   speed) and the fader is open while your hand is on; let go and the clip takes over again. You hear it after the network's delay.
-- **The dials**, under the deck and grouped as the pages are: **Pre-Gen** (Style, Length, Forwards, Finish, Echo, Groove), **Playback** (Swing, Humanise,
+- **The dials**, along the top and grouped as the pages are: **Pre-Gen** (Style, Length, Forwards, Finish, Echo, Groove), **Playback** (Swing, Humanise,
   Bite, Clip Depth, Clip Offset, Drag, Gain) and **Pad Play**. Drag up or down (Shift for fine), scroll, or double-click to reset.
 
-On a wide screen (1400 px and over, or the pop-out window) it lays out in three columns: the pads and dials, the deck, the graphs.
+On a wide screen (1400 px and over, or the pop-out window) it lays out in three columns: the pads and Pad Play; Pre-Gen over the deck; Playback over the graphs.
 **PERFORM** (top right) shows only the deck, big pads and the zoom, full screen where the browser allows it (the pop-out window does).
 
 The host sends the page what it shows twice a second, so between those it plays the clip itself, on the beat clock the DSP sends, through
