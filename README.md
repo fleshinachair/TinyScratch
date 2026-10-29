@@ -210,6 +210,8 @@ bottom left, for playing the pads without the Pads screen.
 
 ## The Remote UI
 
+![TinyScratch's Remote UI: the pads and dials on the left, the deck in the middle, the waveform, clip view and zoom on the right](docs/remote-ui.jpg)
+
 Open **http://move.local:7700/remote-ui** in a browser on the same network, with TinyScratch in a track's synth slot, and the module has a
 page of its own (Schwung's Remote UI shows it in place of the plain list of controls):
 
@@ -217,14 +219,21 @@ page of its own (Schwung's Remote UI shows it in place of the plain list of cont
   backwards when the scratch goes back; the platter spins while the Move's transport runs.
 - **The graphs**, at full size: the **Waveform** (with where the clip is sending the playhead, the cues, and a trail of where it has
   been), the **Clip View** (the playhead's path and the cuts, the cuts as tall as the fader opens, so an echo steps down; with Humanise
-  up, what is played this pass over the path as written), and the **Zoom** (4, 2 or 1 beats scrolling past now).
+  up, what is played this pass over the path as written), and the **Zoom** (4, 2 or 1 beats scrolling past now). Both name the strokes
+  as the turntablists do (baby, chirp, transform, flare, stab, drag, tear, fwd, scribble), read from the path and the fader.
 - **The pads**, at the top: the samples, the clip pads of the page the Pads screen shows (each with a small picture of its clip), Generate
   and Auto (hold a clip a second and a half to delete it). On a computer, the keys play them: 1 to 8 the samples, Q to I and A to H the
   clips, Space or J Generate, K Auto, the arrow keys the pages.
+- **Load a sound**: drop any audio file on the deck (or press LOAD SOUND). The page makes it a mono WAV of up to 10 s, cut to its
+  first sound, puts it in the Move's sample library (Samples/TinyScratch) and loads it onto the selected User slot (the first empty one
+  when Ahhh or Fresssh is selected).
 - **Scratch the record**: grab the vinyl and turn it. The playhead goes where your hand takes it (a turn at 33 1/3 is the sample at its own
   speed) and the fader is open while your hand is on; let go and the clip takes over again. You hear it after the network's delay.
 - **The dials**, under the deck and grouped as the pages are: **Pre-Gen** (Style, Length, Forwards, Finish, Echo, Groove), **Playback** (Swing, Humanise,
   Bite, Clip Depth, Clip Offset, Drag, Gain) and **Pad Play**. Drag up or down (Shift for fine), scroll, or double-click to reset.
+
+On a wide screen (1400 px and over, or the pop-out window) it lays out in three columns: the pads and dials, the deck, the graphs.
+**PERFORM** (top right) shows only the deck, big pads and the zoom, full screen where the browser allows it (the pop-out window does).
 
 The host sends the page what it shows twice a second, so between those it plays the clip itself, on the beat clock the DSP sends, through
 the same Swing, Depth, Offset and Drag: the record moves with the sound, not half a second behind it. The line under the title says
