@@ -3864,7 +3864,16 @@ static void test_long_samples(void)
     for (int sm = 0; sm < 2; sm++)
         for (int pad = 1; pad <= 3; pad++) { const ts_clip_t *c = bank_clip(e, sm, pad); kept++; known += c && (c->extras & TS_EX_KNOWN); }
     CHECK(slot_reach(&e->slot[0]) == 1.0f && slot_reach(&e->slot[1]) == 1.0f, "Ahhh and Fresssh are under %.1f s: none of this touches them", (double)TS_REACH_S);
-    CHECK(kept == 6 && known == 2, "...the shipped clips whose recipes still make exactly their saved data are the same two of six as before (%d; the rest play from their data)", known);
+    {   /* the shipped clips play from their saved data, so a change to the generator never changes them: their sound, exactly as in 1.1.0 */
+        uint32_t h = 2166136261u;
+        for (int sm = 0; sm < 2; sm++)
+            for (int pad = 1; pad <= 3; pad++) {
+                const ts_clip_t *c = bank_clip(e, sm, pad);
+                for (int i = 0; c && i < c->n; i++) { h = (h ^ (c->pos[i] & 255u)) * 16777619u; h = (h ^ (c->pos[i] >> 8)) * 16777619u; h = (h ^ c->gate[i]) * 16777619u; }
+                if (c) h = (h ^ (uint32_t)c->len) * 16777619u;
+            }
+        CHECK(kept == 6 && h == 0xae0c5a42u, "...and the six shipped clips are exactly as they were in 1.1.0, whatever the generator has become (%08x; %d still made by their recipes)", h, known);
+    }
 
     /* a phrase: Ahhh, Fresssh, Ahhh, Fresssh, Ahhh, a gap after each (about 5 s); its words start at these seconds */
     static int16_t pcm[44100 * 6];

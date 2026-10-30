@@ -97,7 +97,7 @@ int ts_wav_decode(const uint8_t *d, size_t n, float *dst, int cap, float dst_sr)
  * slow sweep, a chirp, a flare in jerks, a full orbit, a ramp that restarts, three strokes to the bar (so the sixteenths
  * play across the strokes in a different rhythm), and a backwards one. */
 typedef struct { uint8_t t, v, shape; } clip_pt_t;      /* units, 0..100, how it gets to the next point */
-enum { SH_EASE, SH_LIN, SH_FAST, SH_SLOW, SH_FLICK, SH_PUSH, SH_LETGO };
+enum { SH_EASE, SH_LIN, SH_FAST, SH_SLOW, SH_FLICK, SH_PUSH, SH_LETGO, SH_HAND };
 #define CLIP_MAX_PTS 16
 #define TS_BUILTIN_CLIPS 8
 #define TS_CLIP_UNITS 128                       /* the built-in clips: 128 units to the bar */
@@ -415,8 +415,10 @@ enum { GS_ANY /* shown as "Improv": a phrase, not a technique */, GS_BABY, GS_CU
 typedef struct { ts_clip_t *c; uint32_t rng; float amp_t; int shape; int bars; int fw16; float fw_p; int nfw; float fw_t[64], fw_d[64]; int fw_kind[64];
                  float echo_p; uint32_t seed; float stretch, thin; int dmin; float spx, fps, word, attack; int stut_n, stut_skipped; unsigned used; float groove; int tmpl; uint32_t grng; float dens[4]; } gen_t;         /* amp_t: how tall the strokes are, 0..1, the same all through the clip; stretch: how many sixteenths longer a stroke is (and thin: how much rarer a cut) on a fast song, 1 up to 120 bpm */
 
-/* The curve a stroke takes. The hand does not move like a sine: it bites in and settles (a fast start: 60-90% of the strokes in the
- * clips measured), now and then a plain S-curve, and rarely builds slowly. One is the clip's own (g->shape) and most strokes use it. */
+/* The curve a stroke takes. A real hand speeds up into a stroke, is fastest a little before its middle and slows into the turn: LM4K's
+ * recorded strokes (ScratchML), 1.9 times their average speed at the fastest, about 42% of the way (the example clips, drawn, had them
+ * biting in fastest at the start, which a recorded hand does not). Now and then a plain S-curve, rarely one that builds slowly. One is
+ * the clip's own (g->shape) and most strokes use it. */
 static int g_shape(gen_t *g);
 
 static float grnd(gen_t *g)
@@ -496,6 +498,12 @@ static float g_ease(int shape, float u)
     case SH_FAST: return 1.0f - powf(1.0f - u, 2.4f);
     case SH_SLOW: return powf(u, 2.4f);
     case SH_FLICK: return logf(1.0f + 6.0f * u) / 1.9459101f;                   /* speed 1/(1+6u): the hand's push, fastest at the start and never quite stopping */
+    case SH_HAND: {                                                             /* a real hand's stroke: the average of LM4K's 98 strokes (ScratchML): it speeds up, is fastest about 42% of the way, and slows into the turn */
+        static const float k[17] = { 0.000f, 0.018f, 0.059f, 0.117f, 0.188f, 0.268f, 0.352f, 0.440f, 0.527f, 0.613f, 0.697f, 0.775f, 0.846f, 0.909f, 0.958f, 0.990f, 1.000f };
+        const float f = u * 16.0f;
+        const int i = f >= 16.0f ? 15 : (int)f;
+        return k[i] + (k[i + 1] - k[i]) * (f - (float)i);
+    }
     case SH_PUSH: {                                                             /* a hand's short push: halfway to its bell-shaped speed (slow, fast, slow: the "minimum jerk" of a reach), so the record sweeps in pitch as a pushed one does */
         const float lin = u + 0.15f * u * (1.0f - u), bell = u * u * u * (10.0f + u * (6.0f * u - 15.0f));
         return lin + 0.5f * (bell - lin);
@@ -1166,7 +1174,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
         if (eat == t && t + 8 <= len16 && ns + 10 < cap) {                       /* the echo scratch: four stabs, each lower */
             g->used |= TS_EX_ECHO;
             for (int r = 0; r < 4; r++) {
-                sl[ns].dur = 1; sl[ns].to = clampf(base + es[bar], base + 0.12f, 0.9f); sl[ns].shape = SH_FLICK; sl[ns].fw = 3 + r; ns++;
+                sl[ns].dur = 1; sl[ns].to = clampf(base + es[bar], base + 0.12f, 0.9f); sl[ns].shape = SH_HAND; sl[ns].fw = 3 + r; ns++;
                 sl[ns].dur = 1; sl[ns].to = base; sl[ns].shape = SH_LIN; sl[ns].fw = 7; ns++;
             }
             t += 8; cur = base; up = 1;
@@ -1211,7 +1219,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
         if (last || to_start) to = base;
         else if (up) to = clampf(cur + span, base + 0.12f, 0.97f);
         else to = grnd(g) < 0.5f ? clampf(base + gr(g, -0.01f, 0.04f), 0.0f, 0.97f) : clampf(cur - span, base, 0.97f);
-        sl[ns].dur = d; sl[ns].to = to; sl[ns].shape = grnd(g) < 0.88f ? SH_FLICK : SH_EASE; sl[ns].fw = 0;
+        sl[ns].dur = d; sl[ns].to = to; sl[ns].shape = grnd(g) < 0.88f ? SH_HAND : SH_EASE; sl[ns].fw = 0;
         ns++; cur = to; up = !up; t += d;
     }
     return ns;
@@ -1240,6 +1248,28 @@ static void gen_phrase(gen_t *g, int bars, const float *bases)
             cur = to; t += (float)v[k].dur;
         }
     }
+}
+
+/* How fast a stretch of a clip's strokes go, as the median of their average speeds, times the sample's own speed (fps: sample lengths a
+ * second; spx: sixteenths a second); 0 if it has none. A stroke runs from one change of direction to the next. */
+static float stroke_speed(const ts_clip_t *c, int i0, int i1, float fps, float spx)
+{
+    float sp[96];
+    int ns = 0, a = i0, dir = 0;
+    if (i1 > c->n) i1 = c->n;
+    for (int i = i0 + 1; i < i1 && ns < 96; i++) {
+        const int d = c->pos[i] > c->pos[i - 1] + 8 ? 1 : (c->pos[i] < c->pos[i - 1] - 8 ? -1 : 0);
+        if ((d && dir && d != dir) || i == i1 - 1) {
+            const int b = i - 1;
+            const float span = fabsf((float)c->pos[b] - (float)c->pos[a]) / 65535.0f, secs = (float)(b - a) / (float)GP / spx;
+            if (secs > 0.02f && span > 0.004f) sp[ns++] = span / secs / fps;
+            a = b;
+        }
+        if (d) dir = d;
+    }
+    if (!ns) return 0.0f;
+    for (int x = 1; x < ns; x++) for (int y = x; y > 0 && sp[y] < sp[y - 1]; y--) { const float t = sp[y]; sp[y] = sp[y - 1]; sp[y - 1] = t; }
+    return sp[ns / 2];
 }
 
 static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, const float *attacks, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch, float spx, float groove_p, float reach)
@@ -1278,7 +1308,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     for (int i = 0; i < n; i++) { out->pos[i] = b16; out->gate[i] = 1; }
     static const float heights[3] = { 0.15f, 0.5f, 0.85f };
     g.amp_t = heights[gi(&g, 0, 2)];                                            /* how tall the strokes are, for the whole clip */
-    { int r = gi(&g, 0, 19); g.shape = r < 17 ? SH_FLICK : (r < 19 ? SH_EASE : SH_SLOW); }  /* and how they are shaped: almost always a flick */
+    { int r = gi(&g, 0, 19); g.shape = r < 17 ? SH_HAND : (r < 19 ? SH_EASE : SH_SLOW); }  /* and how they are shaped: almost always a hand's */
     int plan[4], grp[4];
     gen_plan(&g, style, bars, plan, grp);
     float bases[4], words[4], atks[4] = { 0.0f, 0.0f, 0.0f, 0.0f };                                                   /* where each bar's strokes start from: an attack of the sample, if there is one to find; and the word itself, a stutter's start */
@@ -1318,18 +1348,72 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
             if (s != GS_BABY && s != GS_SCRIBBLE && s != GS_FLARE && s != GS_ORBIT && s != GS_DRAG && s != GS_TEAR) g_limit_open(&g, o);       /* (a baby is open all the way: that is what it is) */
         }
     }
-    /* A long sample: every stroke scaled down toward where its bar (Improv: its phrase) starts, so it is as long in seconds as on a short one
-     * and stays on the word it starts on. The last sixteenth, where the record goes on to the next bar's start, moves between the two. */
-    if (reach < 1.0f) {
+    /* The strokes' size, scaled toward where each bar (Improv: each phrase) starts:
+     * - a long sample: so they are as long in seconds as on a short one, and stay on the word they start on;
+     * - every sample: so they go about as fast as a DJ's. A real hand works small strokes near the record's own speed (0.91 on average for
+     *   LM4K, 0.94 for Hansen's DJs); drawn ones ran 1.3 to 2.3 times it, three times as far, high and squealing. A bar whose strokes go
+     *   faster than its own speed on average is scaled down until they do not (a scribble's wiggle, a stab's jab and a stutter are their
+     *   speed, and keep it).
+     * The last sixteenth, where the record goes on to the next bar's start, moves between the two. */
+    {
         const int P = bars >= 2 ? 2 : 1;
-        float ref[4];
-        for (int b = 0; b < bars; b++) ref[b] = style == GS_ANY ? bases[(b / P) * P] : bases[b];
+        float ref[4], k[4];
+        for (int b = 0; b < bars; b++) {                                        /* (toward each bar's or phrase's lowest point, where its strokes rise from: Improv's answer can play round another attack than its first bar's) */
+            const int b0 = style == GS_ANY ? (b / P) * P : b, b1 = style == GS_ANY ? (b0 + P < bars ? b0 + P : bars) : b + 1;
+            uint16_t lo = 65535;
+            for (int i = b0 * 16 * GP; i < b1 * 16 * GP && i < n; i++) if (out->pos[i] < lo) lo = out->pos[i];
+            ref[b] = (float)lo / 65535.0f;
+            k[b] = reach < 1.0f ? reach : 1.0f;
+        }
+        for (int b0 = 0; b0 < bars; b0 += style == GS_ANY ? P : 1) {            /* (Improv: one factor for a phrase, so nothing jumps inside it) */
+            const int b1 = style == GS_ANY ? (b0 + P < bars ? b0 + P : bars) : b0 + 1;
+            if (plan[b0] == GS_STUTTER || plan[b0] == GS_SCRIBBLE || plan[b0] == GS_STAB) continue;
+            const float sp = stroke_speed(out, b0 * 16 * GP, b1 * 16 * GP, g.fps, spx);
+            if (sp > 0.0f && sp * k[b0] > 1.0f) for (int b = b0; b < b1; b++) k[b] = clampf(1.0f / sp, 0.3f, k[b]);
+        }
+        /* the record's move on to the next bar's start (from its last turn before the bar line), its first stroke from there, and a
+         * forward (the record let go through the word) are not scaled: the factor fades to 1 across them, so each bar or phrase starts and
+         * ends where it was written, and a forward plays as far at its own speed, joined to what is around it without a jump */
+        static float kk[TS_CLIP_MAX_BEATS * TS_CLIP_RES];
+        for (int i = 0; i < n; i++) { const int b = i / (16 * GP) < bars ? i / (16 * GP) : bars - 1; kk[i] = plan[b] == GS_STUTTER ? 1.0f : k[b]; }
+        for (int b = 0; b < bars; b++) {
+            const int nb = (b + 1) % bars, e1 = (b + 1) * 16 * GP;
+            if (kk[e1 - 1] >= 1.0f && kk[(e1) % n] >= 1.0f) continue;
+            if (style == GS_ANY && (b + 1) % P && b + 1 < bars) continue;     /* (every bar line, so bars written the same stay the same; Improv: every phrase's) */
+            (void)nb;
+            int tr = e1 - 1, dir = 0;
+            const int back = style == GS_ANY ? 6 * GP : GP;                      /* (a named style moves on in its last sixteenth; Improv's phrase in its last stroke, at most six sixteenths) */
+            for (int i = e1 - 1; i > e1 - back && i > b * 16 * GP; i--) {
+                const int d = out->pos[i] > out->pos[i - 1] + 8 ? 1 : (out->pos[i] < out->pos[i - 1] - 8 ? -1 : 0);
+                if (d && dir && d != dir) { tr = i; break; }
+                if (d) dir = d;
+                tr = i;
+            }
+            for (int i = tr; i < e1; i++) { const float f = (float)(i - tr) / (float)(e1 - tr); kk[i] = kk[i] + (1.0f - kk[i]) * f; }
+            if (style != GS_ANY) continue;                                      /* (a named style's bar starts on its lowest point: nothing to fade in) */
+            const int s0 = e1 % n;                                              /* the next phrase's first stroke, up to its first turn */
+            int ft = s0 + 1;
+            dir = 0;
+            for (int i = s0 + 1; i < s0 + 6 * GP && i < n; i++) {
+                const int d = out->pos[i] > out->pos[i - 1] + 8 ? 1 : (out->pos[i] < out->pos[i - 1] - 8 ? -1 : 0);
+                if (d && dir && d != dir) break;
+                if (d) dir = d;
+                ft = i;
+            }
+            for (int i = s0; i <= ft && i < n; i++) { const float f = (float)(ft - i) / (float)(ft - s0 + 1); kk[i] = kk[i] + (1.0f - kk[i]) * f; }
+        }
+        for (int f = 0; f < g.nfw; f++) {
+            if (g.fw_kind[f] != 1) continue;
+            const int a = (int)(g.fw_t[f] * (float)GP), z = (int)((g.fw_t[f] + g.fw_d[f]) * (float)GP), w = GP / 2;
+            for (int i = a - w; i < z + w && i < n; i++) if (i >= 0) {
+                const float f0 = i < a ? (float)(a - i) / (float)w : (i >= z ? (float)(i - z + 1) / (float)w : 0.0f);     /* (eased in and out over half a sixteenth) */
+                kk[i] = 1.0f + (kk[i] - 1.0f) * clampf(f0, 0.0f, 1.0f);
+            }
+        }
         for (int i = 0; i < n; i++) {
+            if (kk[i] >= 1.0f) continue;
             const int b = i / (16 * GP) < bars ? i / (16 * GP) : bars - 1;
-            if (plan[b] == GS_STUTTER) continue;                                /* (a stutter's lengths are in seconds already) */
-            const float u = (float)i / (float)GP - (16.0f * (float)b + 15.0f);
-            const float r = u > 0.0f ? ref[b] + (ref[(b + 1) % bars] - ref[b]) * u : ref[b];
-            const float x = r + ((float)out->pos[i] / 65535.0f - r) * reach;
+            const float x = ref[b] + ((float)out->pos[i] / 65535.0f - ref[b]) * kk[i];
             out->pos[i] = (uint16_t)(clampf(x, 0.0f, 1.0f) * 65535.0f + 0.5f);
         }
     }

@@ -127,7 +127,13 @@ gives the same clip. A kept clip is saved exactly (its playhead path and fader),
   [Analysis of a genuine scratch performance](https://www.speech.kth.se/~hansen/files/thesis/HansenBresin03_GW.pdf) (2004), and Hansen's thesis
   [The acoustics and performance of DJ scratching](https://www.speech.kth.se/~hansen/files/thesis/KjetilFalkenbergHansen_2010_phdthesis.pdf)
   (2010). The example clips used for measuring are not in this repository and nothing of them is copied; only the measures were used.
-  What was not matched: the real DJ's strokes are not constant in speed (the platter turns in an arc).
+- **Moved like a real hand.** Every style's strokes take the shape of a recorded hand's: LM4K's 98 strokes in the one surviving
+  [ScratchML](https://jamiedubs.com/scratchml) performance, which speed up, are fastest about 42% of the way (1.9 times their average) and
+  slow into the turn (drawn strokes had bitten in fastest at the start, which a recorded hand does not). And they go about as fast as a DJ's:
+  near the record's own speed on average (LM4K 0.91, Hansen's DJs 0.94), where drawn ones ran 1.3 to 2.3 times it, three times as far,
+  high and squealing; a bar whose strokes are faster is scaled down toward where it starts (a scribble's wiggle, a stab's jab and a
+  stutter keep their speed: it is what they are). Played back, Improv's strokes now average 0.91 of the sample's speed with the hand's
+  shape. Clips already kept, and the shipped ones, play from their saved data, so they do not change.
 
 **The named styles** are built from the definitions in the Turntablist Transcription Methodology
 ([TTM basics](https://www.ttm-dj.com/ttm-01-01-basics/), [the TTM guide](https://lcme.uwl.ac.uk/media/tmpfvcmu/ttm-guide-may-2021.pdf)) and
