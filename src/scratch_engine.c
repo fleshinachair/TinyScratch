@@ -97,7 +97,7 @@ int ts_wav_decode(const uint8_t *d, size_t n, float *dst, int cap, float dst_sr)
  * slow sweep, a chirp, a flare in jerks, a full orbit, a ramp that restarts, three strokes to the bar (so the sixteenths
  * play across the strokes in a different rhythm), and a backwards one. */
 typedef struct { uint8_t t, v, shape; } clip_pt_t;      /* units, 0..100, how it gets to the next point */
-enum { SH_EASE, SH_LIN, SH_FAST, SH_SLOW, SH_FLICK, SH_PUSH };
+enum { SH_EASE, SH_LIN, SH_FAST, SH_SLOW, SH_FLICK, SH_PUSH, SH_LETGO };
 #define CLIP_MAX_PTS 16
 #define TS_BUILTIN_CLIPS 8
 #define TS_CLIP_UNITS 128                       /* the built-in clips: 128 units to the bar */
@@ -497,6 +497,10 @@ static float g_ease(int shape, float u)
     case SH_SLOW: return powf(u, 2.4f);
     case SH_FLICK: return logf(1.0f + 6.0f * u) / 1.9459101f;                   /* speed 1/(1+6u): the hand's push, fastest at the start and never quite stopping */
     case SH_PUSH: return u + 0.15f * u * (1.0f - u);                            /* a short push: a little faster at the start (1.15), a little slower into the turn (0.85) */
+    case SH_LETGO: {                                                            /* let go: from 0.7 of its speed up to all of it over the first eighth, then steady */
+        const float k = 0.125f, sp0 = 0.7f, tot = 1.0f - (1.0f - sp0) * k * 0.5f;
+        return (u < k ? sp0 * u + (1.0f - sp0) * u * u / (2.0f * k) : u - (1.0f - sp0) * k * 0.5f) / tot;
+    }
     default: return u;
     }
 }
@@ -782,7 +786,7 @@ static void stut_release(gen_t *g, float t, float end, float base, float secs)
 {
     const float to = clampf(base + secs * g->fps, base, 0.97f);                /* (a short sample: to its end) */
     const float d = fmaxf(0.5f, fminf((to - base) / fmaxf(0.8f * g->fps, 0.01f) * g->spx, end - t - 0.5f));     /* at 0.8 of its own speed: a released record plays a little slow (170 deg/s against 180, Hansen), and a word let go a touch slower is clearer */
-    g_seg(g, t, t + d, base, to, SH_FAST);                                      /* (let go: it comes up to speed and runs on, not a ruler-straight line) */
+    g_seg(g, t, t + d, base, to, SH_LETGO);                                     /* (let go: it comes up to speed and runs on steady) */
     g_gate(g, t, t + d - 0.08f, 1);
     g_seg(g, t + d, end, to, base, SH_EASE);
 }
