@@ -234,7 +234,7 @@
     /* the style the clip on the screen was made in (a kept clip keeps its recipe), or -1 when it has none (a built-in one, or hand playing) */
     function clipStyle(v) {
         var cy = Math.round(num(v.cy, -1));
-        return num(v.cm, 0) > 0 && cy >= 0 && cy <= 12 ? cy : -1;
+        return num(v.cm, 0) > 0 && cy >= 0 && cy < STYLES.length ? cy : -1;
     }
 
     /* The pages of clip pads, a mark each, top right: the page the pads show is solid, a page with clips is a box and an empty one a dot. While the
@@ -253,9 +253,9 @@
 
     function clipLabel(v, plain) {
         var cm = clamp(Math.round(num(v.cm, 0)), 0, 18), cl = clamp(Math.round(num(v.cl, 0)), 0, 18);
-        var ln = Math.round(num(v.ln, 0)), tg = clamp(Math.round(num(v.tg, 0)), 0, 12), cy = clipStyle(v);
+        var ln = Math.round(num(v.ln, 0)), tg = clamp(Math.round(num(v.tg, 0)), 0, STYLES.length - 1), cy = clipStyle(v);
         var cp = clamp(Math.round(num(v.cp, 0)), 0, PAGES - 1), pgl = cp > 0 ? (cp + 1) + "." : "";                  /* a clip on another page than the first: CLIP 2.3 */
-        var head = cm === CLIP_TRY ? "TRY " + STYLES[tg].slice(0, 5) : (cm ? (cm === CLIP_AUTO ? "AUTO " : "CLIP ") + pgl + cl + (cy >= 0 ? " " + STYLE_SHORT[cy] : "") : "HAND");
+        var head = cm === CLIP_TRY ? "TRY " + STYLE_SHORT[tg] : (cm ? (cm === CLIP_AUTO ? "AUTO " : "CLIP ") + pgl + cl + (cy >= 0 ? " " + STYLE_SHORT[cy] : "") : "HAND");
         return head + (ln > 0 && !plain ? " N" + ln : "");                                          /* N: the last note that arrived */
     }
 
@@ -318,7 +318,7 @@
         var made = clipStyle(v) >= 0;
         text(ctx, 1, 59, notice || (clipLabel(v) + (made ? "" : (pad !== undefined && pad >= 0 ? " P" + pad : "") + (cc !== undefined && cc >= 0 ? " C" + cc : ""))), inv ? 0 : 1);
         /* a clip with a recipe: its style is in the label and here is what else it was made with; otherwise what Generate makes (the dials 1 and 2), then how the pads are being read */
-        var right = made ? clipExtras(v, clipLabel(v).length) : (STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : ""));
+        var right = made ? clipExtras(v, clipLabel(v).length) : (STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, STYLE_SHORT.length - 1)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : ""));
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 
@@ -358,7 +358,7 @@
         if (inv) ctx.fillRect(0, 57, 128, 7, 1);
         var zl = "BAR " + bar + " BEAT " + beat + (pad !== undefined && pad >= 0 ? "  P" + pad : "");
         text(ctx, 1, 59, notice || zl, inv ? 0 : 1);
-        var right = clipStyle(v) >= 0 ? clipExtras(v, zl.length) : STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
+        var right = clipStyle(v) >= 0 ? clipExtras(v, zl.length) : STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, STYLE_SHORT.length - 1)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 
