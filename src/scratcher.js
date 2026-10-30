@@ -17,7 +17,7 @@
 (function () {
     "use strict";
 
-    var STYLES = ["IMPROV", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTTER", "IMPV 1.1", "IMPV MIX"];
+    var STYLES = ["IMPROV", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTTER", "IMPV 1.1"];
     var CLIP_PADS = 14;                                 /* clip pads 1-14; the next two places are Generate (15) and Auto (16) */
     var PAGES = 4;                                      /* pages of clip pads: < and > turn them (the Move's left and right buttons, CC 62 and 63) */
     var LEFT_CC = 62, RIGHT_CC = 63;
@@ -27,7 +27,7 @@
     var REC_HOLD_MS = 300;                             /* hold an empty User slot this long and it records (a tap selects it) */
     var HOLD_MS = 1500;                                /* hold a clip you made, or a User sample, this long to delete / unload it (the Delete button never reaches a screen) */
     var TOAST_MS = 1600;                               /* how long a dial's new value stays on the screen */
-    var STYLE_SHORT = ["IMPRO", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTR", "IM1.1", "IMMIX"];
+    var STYLE_SHORT = ["IMPRO", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTR", "IM1.1"];
     var BARS = [1, 2, 4];
     var BACK_CC = 51;                                  /* the Move's Back button */
     var JOG_CC = 14;                                   /* the jog wheel: right zooms the clip view in, left out */
@@ -49,7 +49,7 @@
      * then what Generate adds (Groove, Echo, Forwards, Finish). Swing is on the Playback page. The sample, the clip and Generate are on the pads; Load Sample and the rest of
      * the settings (Bite, Clip Depth, Gain, ...) are on the module's own pages. */
     var KNOBS = [
-        { key: "gen_style", v: "gs", min: 0, max: 15, steps: true, detents: 2 },
+        { key: "gen_style", v: "gs", min: 0, max: 14, steps: true, detents: 2 },
         { key: "gen_bars", v: "gb", min: 0, max: 2, steps: true, detents: 3 },
         { key: "drag", v: "dr", min: 0, max: 1, step: 0.02 },                          /* how quickly the playhead follows: digital to analogue */
         { key: "humanise", v: "hu", min: 0, max: 1, step: 0.02 },                      /* every clip, as it plays: looser timing, cuts, strokes */

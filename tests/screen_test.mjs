@@ -540,7 +540,7 @@ fixtures.forEach((v, i) => {
     knob(0, 1);
     check(has(ctx, "gen_style", "1"), "...then goes one style on (Improv, then Baby): " + JSON.stringify(ctx.sets));
     for (let i = 0; i < 100; i++) knob(0, 1);
-    check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "15", "it stops at the last style");
+    check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "14", "it stops at the last style");
     for (let i = 0; i < 100; i++) knob(0, 127);
     check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "0", "...and at Improv");
     ctx.sets.length = 0;

@@ -620,26 +620,25 @@ static void g_limit_open(gen_t *g, float o)
 }
 
 /* The fader plays notes on the sixteenth grid. In the example clips 57% of the openings fall in the first quarter of a sixteenth and a sound
- * lasts about half a sixteenth, cut in on the beat (in recordings of real DJs a sound rings longer: most of a sixteenth, often tied over), while the turns (one sixteenth or so earlier) are hidden. That is
+ * lasts about half a sixteenth: staccato sixteenths, cut in on the beat, while the turns (one sixteenth or so earlier) are hidden. That is
  * the bite and the rhythm. The record turns a little before the grid (the path is moved earlier as a whole) and the fader opens on the grid,
  * so every sound starts with the record already moving fast. Which steps sound depends on which way the record is going (a push is
  * almost always heard; a pull often is not), on the style, and on the seed; now and then a note is held over the next step (a swoop). */
 typedef struct { float push, pull, len_lo, len_hi, tie; } grid_t;
 static const grid_t k_grid[GS_COUNT] = {
-    [GS_ANY]      = { 0.95f, 0.65f, 0.60f, 1.05f, 0.30f },               /* measured against 74 s of real dry scratching (17 clips): sounds ring ~115 ms with ~60 ms between, ~4 a second */
+    [GS_ANY]      = { 0.95f, 0.72f, 0.22f, 0.72f, 0.12f },               /* (real DJs, measured, let sounds ring longer, ~115 ms; by ear over a beat these short ones won) */
 };
-/* A trial, to be settled by ear on the device over a track and then removed: two more entries in the Style list, both Improv.
- * "Impv 1.1" is Improv as 1.1.0 made it (a flick's stroke shape, no cap on the strokes' speed, short sounds on the grid); "Impv Mix" is that
- * with the longer sounds above. They are generated as Improv with these switched; a recipe keeps their own number, so they regenerate the same. */
-static const grid_t k_grid_v110 = { 0.95f, 0.72f, 0.22f, 0.72f, 0.12f };
-static int g_tr_flick = 0, g_tr_nocap = 0, g_tr_grid = 0;
+/* A trial, to be settled by ear on the device over a track and then removed: one more entry in the Style list, "Impv 1.1": Improv as
+ * 1.1.0 made it (a flick's stroke shape, no cap on the strokes' speed). It is generated as Improv with these switched; a recipe keeps its
+ * own number, so it regenerates the same. */
+static int g_tr_flick = 0, g_tr_nocap = 0;
 /* Only "Any", a phrase from the example clips, has its fader laid on the grid. Every named style keeps the fader it is defined by (TTM): a
  * baby has none, a cut shuts on the pull, a flare clicks mid-stroke and so on, and its strokes and its fader move together. */
 static int grid_style(int s) { return s == GS_ANY; }
 
 static void g_grid_gate(gen_t *g, float o, int style)
 {
-    const grid_t *k = g_tr_grid ? &k_grid_v110 : &k_grid[style];
+    const grid_t *k = &k_grid[style];
     int a = (int)(o * (float)GP), b = (int)((o + 16.0f) * (float)GP);
     if (b > g->c->n) b = g->c->n;
     for (int i = a; i < b; i++) g->c->gate[i] = 0;
@@ -1683,8 +1682,8 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     const float stretch = isfinite(bpm) && bpm > 120.0f ? fminf(bpm / 120.0f, 2.0f) : 1.0f;
     const float spx = isfinite(bpm) && bpm > 0.0f ? bpm / 15.0f : 8.0f;           /* sixteenths a second (what a hand does is in seconds: a scribble's vibration, a crab's fingers) */
     static const float need[GS_COUNT] = { 0.42f, 0.45f, 0.40f, 0.40f, 0.50f, 0.28f, 0.42f, 0.38f, 0.45f, 0.15f, 0.45f, 0.45f, 0.40f, 0.20f };       /* (a crab is a few clicks a beat: about a fifth of it is heard) */
-    if (style == TS_GS_IMPV_110 || style == TS_GS_IMPV_MIX) { g_tr_flick = g_tr_nocap = 1; g_tr_grid = style == TS_GS_IMPV_110; style = GS_ANY; }
-    else g_tr_flick = g_tr_nocap = g_tr_grid = 0;
+    if (style == TS_GS_IMPV_110) { g_tr_flick = g_tr_nocap = 1; style = GS_ANY; }
+    else g_tr_flick = g_tr_nocap = 0;
     style = clampi(style, 0, GS_COUNT - 1);
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;

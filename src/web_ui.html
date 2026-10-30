@@ -343,8 +343,8 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   /* ================================================================
      What the module is: the dials, as module.json has them.
      ================================================================ */
-  var STYLES = ["IMPROV", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTTER", "IMPV 1.1", "IMPV MIX"];
-  var STYLE_SHORT = ["IMPRO", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTR", "IM1.1", "IMMIX"];
+  var STYLES = ["IMPROV", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTTER", "IMPV 1.1"];
+  var STYLE_SHORT = ["IMPRO", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTR", "IM1.1"];
   var GROOVES = ["BOOM", "FLOOR", "BRKS", "HALF", "FUNK", "DEMBO", "OPEN"];
   var BARS = ["1 BAR", "2 BARS", "4 BARS"];
   var CLIP_AUTO = 17, CLIP_TRY = 18, CLIP_PADS = 14, PAGES = 4;
@@ -355,7 +355,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   function pct(v) { return Math.round(v * 100) + "%"; }
   /* the Main page's dials, then Playback's, in the module's own order */
   var PREGEN = [
-    { key: "gen_style", name: "STYLE", min: 0, max: 15, def: 0, step: 1, opts: STYLES, c: "--acid" },
+    { key: "gen_style", name: "STYLE", min: 0, max: 14, def: 0, step: 1, opts: STYLES, c: "--acid" },
     { key: "gen_bars", name: "LENGTH", min: 0, max: 2, def: 1, step: 1, opts: BARS, c: "--acid" },
     { key: "gen_fwd", name: "FORWARDS", min: 0, max: 1, def: 0, step: 0.05, fmt: pct, c: "--acid" },
     { key: "gen_fin", name: "FINISH", min: 0, max: 1, def: 0.1, step: 0.05, fmt: pct, c: "--acid" },
