@@ -759,12 +759,13 @@ static float st_stab(gen_t *g, float o, float base)
 /* Stutter: a word's first sound pushed again and again in time, then the word let go ("f-f-f-f-fight"). Each push is a forward: the record
  * pushed over the word's first 50 to 85 ms with the fader open (about the sample's own speed, faster if the slot is short), pulled back
  * with it shut; the release pushes through the whole word (a third to half a second) at about its own speed. Lengths are in seconds,
- * not shares of the sample, so a long sample's word is stuttered as a short sample's is. One of five rhythms a bar: the classic run of
+ * not shares of the sample, so a long sample's word is stuttered as a short sample's is. One of six rhythms a bar: the classic run of
  * sixteenths into a roll of thirty-seconds, a call and answer, a build-up that shows a little more of the word each time, an off-grid
- * pattern, and the word first with the stutter after it. A hand makes about six record strokes a second at most (Hansen's DJ: 5.7), so on a
- * song over 120 bpm the pushes are an eighth apart, not a sixteenth; a faster "ffff" is a roll: one slow push through the first sound with the
- * fader clicked open on each thirty-second over it (the fingers manage sixteen a second, as in a crab), not the record pushed thirty-two
- * times a bar. */
+ * pattern, rubs (back and forth, the fader open, both ways heard) then the word let go, and the word first with the stutter after it. A hand makes about six record strokes a second at most (Hansen's DJ: 5.7), so on a
+ * song over 120 bpm the pushes are an eighth apart, not a sixteenth; a faster "ffff" is a roll: a push a sixteenth with the fader splitting
+ * each into two sounds ("one single, fast record hand movement can produce multiple tone attacks, normally from 2 to 5", Hansen), not the
+ * record pushed thirty-two times a bar. A stutter is played firm: Drag does not soften its pushes (the engine knows a clip is one from its
+ * recipe), as a slow run-up on every push sounds like a robot. */
 static void stut_push(gen_t *g, float t, float slot, float base, float secs)
 {
     const float d = fminf(secs * g->spx, slot * 0.62f), to = clampf(base + secs * g->fps, base, 0.97f);
@@ -774,24 +775,28 @@ static void stut_push(gen_t *g, float t, float slot, float base, float secs)
 }
 static void stut_release(gen_t *g, float t, float end, float base, float secs)
 {
-    const float d = fmaxf(0.5f, fminf(secs * g->spx, end - t - 0.5f)), to = clampf(base + secs * g->fps, base, 0.97f);
+    const float to = clampf(base + secs * g->fps, base, 0.97f);                /* (a short sample: to its end, at its own speed, not slower) */
+    const float d = fmaxf(0.5f, fminf((to - base) / fmaxf(g->fps, 0.01f) * g->spx, end - t - 0.5f));
     g_seg(g, t, t + d, base, to, SH_LIN);
     g_gate(g, t, t + d - 0.08f, 1);
     g_seg(g, t + d, end, to, base, SH_EASE);
 }
 static void stut_roll(gen_t *g, float t, float len, float base, float secs)
 {
-    const float to = clampf(base + secs * g->fps, base, 0.97f);
-    g_seg(g, t, t + len, base, to, SH_LIN);
-    for (float u = 0.0f; u + 0.25f <= len + 1e-3f; u += 0.5f) g_gate(g, t + u, t + u + 0.28f, 1);
-    g_seg(g, t + len, t + len + 0.5f, to, base, SH_EASE);
+    for (float u = 0.0f; u + 1.0f <= len + 1e-3f; u += 1.0f) {                 /* a push a sixteenth at about its own speed, two sounds each: "one single, fast record hand movement can produce multiple tone attacks, normally from 2 to 5" (Hansen) */
+        const float d = fminf(fmaxf(secs, 0.06f) * g->spx, 0.8f), to = clampf(base + d / g->spx * g->fps, base, 0.97f);
+        g_seg(g, t + u, t + u + d, base, to, SH_LIN);
+        g_gate(g, t + u, t + u + 0.3f * d, 1);
+        g_gate(g, t + u + 0.5f * d, t + u + 0.85f * d, 1);
+        g_seg(g, t + u + d, t + u + 1.0f, to, base, SH_EASE);
+    }
 }
 static float st_stutter(gen_t *g, float o, float base)
 {
     const float c = gr(g, 0.05f, 0.085f), word = gr(g, 0.32f, 0.5f), step = g->spx > 8.01f ? 2.0f : 1.0f;     /* (over 120 bpm: an eighth apart) */
     g_gate(g, o, o + 16.0f, 0);
     g_seg(g, o, o + 16.0f, base, base, SH_LIN);
-    switch (gi(g, 0, 4)) {
+    switch (gi(g, 0, 5)) {
     case 0:                                                                     /* f f f f f f f f, fffff, fight */
         for (float i = 0.0f; i < 8.0f; i += step) stut_push(g, o + i, step, base, c);
         stut_roll(g, o + 8.0f, 3.0f, base, c * 1.5f);
@@ -812,6 +817,16 @@ static float st_stutter(gen_t *g, float o, float base)
     case 3: {                                                                   /* off the grid: x . x x . x . x x . x . , fight */
         const int k = gi(g, 5, 7), rot = gi(g, 0, 11);
         for (int i = 0, last = -2; i < 12; i++) if (euclid_hit(i, k, 12, rot) && (float)(i - last) >= step) { stut_push(g, o + (float)i, 1.0f, base, c); last = i; }
+        stut_release(g, o + 12.0f, o + 15.0f, base, word);
+        break;
+    }
+    case 4: {                                                                   /* rubs then the word: back and forth with the fader open, both ways heard, then let go */
+        const float r = c * 2.0f, d = fminf(r * g->spx, 1.0f), to = clampf(base + r * g->fps, base, 0.97f);
+        for (float i = 0.0f; i < 12.0f; i += 2.0f * step) {
+            g_seg(g, o + i, o + i + d, base, to, SH_EASE);                       /* (a baby: the turns heard, eased as a hand turns) */
+            g_seg(g, o + i + d, o + i + 2.0f * d, to, base, SH_EASE);
+            g_gate(g, o + i, o + i + 2.0f * d - 0.12f, 1);                     /* (caught for a moment before the next: the release is a sound of its own) */
+        }
         stut_release(g, o + 12.0f, o + 15.0f, base, word);
         break;
     }
@@ -2758,6 +2773,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
     const float drag = p->drag;
     const float tau = (0.003f + 0.08f * drag * drag) * e->sr;                // 3 .. 83 ms
     const float alpha = 1.0f - expf(-1.0f / tau);
+    const float alpha_firm = 1.0f - expf(-1.0f / (0.003f * e->sr));          /* a stutter's pushes are stabs, "performed faster by using more force" (Hansen): Drag does not soften them */
     const float ramp = 1.0f / (0.001f * e->sr);                             // a cut takes 1 ms: a scratch DJ sets the crossfader curve very steep, so it acts as an on-off switch (Hansen)
     const float nrm = p->normalise && s->loaded ? s->norm : 1.0f;
     const float gain = powf(10.0f, p->gain_db / 20.0f) * nrm;
@@ -2832,8 +2848,11 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         if (e->scratch_hold > 0) e->scratch_hold--;
         if (e->scratch_hold > 0 && e->sc_n > 0)                                  /* the Remote UI's hand, replayed as it moved */
             e->man = scratch_pos_at(e, ((double)(e->frames - (uint64_t)frames) + (double)i) * 1000.0 / (double)e->sr - e->sc_off - TS_SCRATCH_DELAY_MS);
+        int firm = 0;
         if (e->hand_hold > 0 || !live) e->target = e->man;
         else if (clip > 0) {
+            const ts_recipe_t *rr = recipe_at(e, clip);
+            firm = rr && rr->style == GS_STUTTER;
             double v = (double)ts_clip_pos(e, clip, t_path) * (double)p->clip_depth + (double)p->clip_offset + pos_off;     /* Swing, Humanise, Depth and Offset */
             const float rk = slot_reach(s);
             if (rk < 1.0f) {                                                     /* a long sample: Depth around where the bar starts; a clip not made for it is scaled down as a generated one is */
@@ -2846,7 +2865,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         else if (e->cue_on) e->target = e->cue_pos;
         else e->target = e->man;
         double before = e->pos;
-        e->pos += (double)alpha * (e->target - e->pos);
+        e->pos += (double)(firm ? alpha_firm : alpha) * (e->target - e->pos);
         e->vel_out = len > 0 ? (float)((e->pos - before) * (double)(len - 1)) : 0.0f;
 
         float smp = 0.0f;
@@ -3092,6 +3111,7 @@ int ts_engine_rview(const ts_engine_t *e, char *buf, int cap)
     jw(&j, "\"p\":%.5f,\"tx\":%.5f,\"vl\":%.3f,\"g\":%.3f,\"sl\":%.4f,\"lo\":%.4f,\"hi\":%.4f,\"nat\":%d,\"hh\":%d,",
        e->pos, e->target, (double)e->vel_out, (double)e->gate, s->loaded ? (double)s->len / (double)e->sr : 0.0, (double)s->lo, (double)s->hi,
        native, e->hand_hold > 0);
+    { const ts_recipe_t *fr = e->clip_now > 0 ? recipe_at(e, e->clip_now) : NULL; jw(&j, "\"fm\":%d,", fr && fr->style == GS_STUTTER); }     /* (a stutter is played firm: no Drag) */
     jw(&j, "\"rk\":%u,\"lb\":%d,\"hk\":%d,\"cm\":%d,\"cl\":%d,\"cp\":%d,\"pg\":%d,\"tv\":%d,\"tg\":%d,\"cy\":%d,\"cx\":%d,\"cg\":%d,\"ct\":%d,",
        remote_key(e, k), k ? k->len : TS_LANE_BEATS, k ? (int)floor((e->mclock - t0) / (double)k->len) : 0,
        p->clip, p->clip ? e->clip_now % CID_PAGE : 0, p->clip ? e->clip_now / CID_PAGE : 0, e->view_page,

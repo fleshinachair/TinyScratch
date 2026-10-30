@@ -546,7 +546,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       if (rv.cq >= 0 && live && rv.sl > 0) target = Math.min(1, rv.tx + el / rv.sl);     /* a cue pad plays the sound on at its own speed */
     }
     if (scratch.on || now - scratch.end < 650) target = scratch.pos;        /* a hand on the record: it goes where the hand takes it (as long as the engine's hand hold) */
-    var drag = num("drag", 0.5), tau = 0.003 + 0.08 * drag * drag;
+    var drag = num("drag", 0.5), tau = clip && live && rv.fm && !(scratch.on || now - scratch.end < 650) && !rv.hh ? 0.003 : 0.003 + 0.08 * drag * drag;     /* (a stutter is played firm: no Drag) */
     var before = sim.pos;
     if (!sim.seeded) { sim.pos = rv.p; sim.seeded = true; before = sim.pos; }
     var k = 1 - Math.exp(-dt / tau);

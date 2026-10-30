@@ -3925,13 +3925,17 @@ static void test_long_samples(void)
                 if (!c.gate[i]) { i++; continue; }
                 int j = i;
                 float lo = 1.0f, hi = 0.0f;
+                int fwd = 0, back = 0;
                 while (j < c.n + (c.gate[c.n - 1] ? i0 : 0) && c.gate[j % c.n]) {
                     const float x = (float)c.pos[j % c.n] / 65535.0f;
                     lo = fminf(lo, x); hi = fmaxf(hi, x);
-                    if (j > i && c.pos[j % c.n] + 30 < c.pos[(j - 1) % c.n]) back_open++;
+                    if (j > i && c.pos[j % c.n] + 30 < c.pos[(j - 1) % c.n]) back++;
+                    if (j > i && c.pos[j % c.n] > c.pos[(j - 1) % c.n] + 30) fwd++;
                     j++;
                 }
+                back_open += back > 0 && fwd == 0;                                /* (a rub is open both ways; a pull alone is never heard) */
                 const float span = (hi - lo) * (float)secs, len16 = (float)(j - i) / (float)(TS_CLIP_RES / 4), at16 = (float)i / (float)(TS_CLIP_RES / 4);
+                if (back > 0 && fwd > 0) { i = j; continue; }                    /* (a rub: its own measure) */
                 if (span > 0.25f) { releases++; had = 1; }
                 else if (len16 > 0.3f) {                                          /* (a push, not a roll's click; a build-up's pushes grow, to 0.3 s) */
                     pushes++; push_ok += span > 0.035f && span < 0.32f;
@@ -3945,7 +3949,7 @@ static void test_long_samples(void)
             if (first < 0.9f) { n_first++; push_first += first > 0.035f && first < 0.11f; }
         }
         CHECK(pushes > 40 && push_ok == pushes && push_first == n_first, "Stutter at %.0f bpm: each bar's pushes are a word's first 35-110 ms on a 5 s phrase (%d of %d bars), and none is longer than a build-up's 0.3 s", (double)bpm, push_first, n_first);
-        CHECK(bars_with_release == nbars && back_open == 0, "...every bar lets the word go (%d of %d), and the fader is never open while the record goes back (%d)", bars_with_release, nbars, back_open);
+        CHECK(bars_with_release == nbars && back_open == 0, "...every bar lets the word go (%d of %d), and the fader is never open on a pull alone, only on a rub (%d)", bars_with_release, nbars, back_open);
         CHECK(too_close == 0, "...the record hand never pushes faster than a sixteenth apart (an eighth over 120 bpm) (%d too close)", too_close);
     }
 
