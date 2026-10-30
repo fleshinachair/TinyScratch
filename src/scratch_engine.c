@@ -761,7 +761,10 @@ static float st_stab(gen_t *g, float o, float base)
  * with it shut; the release pushes through the whole word (a third to half a second) at about its own speed. Lengths are in seconds,
  * not shares of the sample, so a long sample's word is stuttered as a short sample's is. One of five rhythms a bar: the classic run of
  * sixteenths into a roll of thirty-seconds, a call and answer, a build-up that shows a little more of the word each time, an off-grid
- * pattern, and the word first with the stutter after it. */
+ * pattern, and the word first with the stutter after it. A hand makes about six record strokes a second at most (Hansen's DJ: 5.7), so on a
+ * song over 120 bpm the pushes are an eighth apart, not a sixteenth; a faster "ffff" is a roll: one slow push through the first sound with the
+ * fader clicked open on each thirty-second over it (the fingers manage sixteen a second, as in a crab), not the record pushed thirty-two
+ * times a bar. */
 static void stut_push(gen_t *g, float t, float slot, float base, float secs)
 {
     const float d = fminf(secs * g->spx, slot * 0.62f), to = clampf(base + secs * g->fps, base, 0.97f);
@@ -776,20 +779,27 @@ static void stut_release(gen_t *g, float t, float end, float base, float secs)
     g_gate(g, t, t + d - 0.08f, 1);
     g_seg(g, t + d, end, to, base, SH_EASE);
 }
+static void stut_roll(gen_t *g, float t, float len, float base, float secs)
+{
+    const float to = clampf(base + secs * g->fps, base, 0.97f);
+    g_seg(g, t, t + len, base, to, SH_LIN);
+    for (float u = 0.0f; u + 0.25f <= len + 1e-3f; u += 0.5f) g_gate(g, t + u, t + u + 0.28f, 1);
+    g_seg(g, t + len, t + len + 0.5f, to, base, SH_EASE);
+}
 static float st_stutter(gen_t *g, float o, float base)
 {
-    const float c = gr(g, 0.05f, 0.085f), word = gr(g, 0.32f, 0.5f);
+    const float c = gr(g, 0.05f, 0.085f), word = gr(g, 0.32f, 0.5f), step = g->spx > 8.01f ? 2.0f : 1.0f;     /* (over 120 bpm: an eighth apart) */
     g_gate(g, o, o + 16.0f, 0);
     g_seg(g, o, o + 16.0f, base, base, SH_LIN);
     switch (gi(g, 0, 4)) {
     case 0:                                                                     /* f f f f f f f f, fffff, fight */
-        for (int i = 0; i < 8; i++) stut_push(g, o + (float)i, 1.0f, base, c);
-        for (int i = 0; i < 6; i++) stut_push(g, o + 8.0f + 0.5f * (float)i, 0.5f, base, c * 0.8f);
+        for (float i = 0.0f; i < 8.0f; i += step) stut_push(g, o + i, step, base, c);
+        stut_roll(g, o + 8.0f, 3.0f, base, c * 1.5f);
         stut_release(g, o + 12.0f, o + 15.0f, base, word);
         break;
     case 1:                                                                     /* f f fight, f f fight */
         for (int h = 0; h < 2; h++) {
-            for (int i = 0; i < 3; i++) stut_push(g, o + 8.0f * (float)h + (float)i, 1.0f, base, c);
+            for (float i = 0.0f; i < 3.0f; i += step) stut_push(g, o + 8.0f * (float)h + i, step, base, c);
             stut_release(g, o + 8.0f * (float)h + 3.0f, o + 8.0f * (float)h + 7.0f, base, word);
         }
         break;
@@ -801,14 +811,14 @@ static float st_stutter(gen_t *g, float o, float base)
     }
     case 3: {                                                                   /* off the grid: x . x x . x . x x . x . , fight */
         const int k = gi(g, 5, 7), rot = gi(g, 0, 11);
-        for (int i = 0; i < 12; i++) if (euclid_hit(i, k, 12, rot)) stut_push(g, o + (float)i, 1.0f, base, c);
+        for (int i = 0, last = -2; i < 12; i++) if (euclid_hit(i, k, 12, rot) && (float)(i - last) >= step) { stut_push(g, o + (float)i, 1.0f, base, c); last = i; }
         stut_release(g, o + 12.0f, o + 15.0f, base, word);
         break;
     }
     default:                                                                    /* fight, f f f f f f, fffff */
         stut_release(g, o, o + 5.0f, base, word);
-        for (int i = 0; i < 6; i++) stut_push(g, o + 5.0f + (float)i, 1.0f, base, c);
-        for (int i = 0; i < 6; i++) stut_push(g, o + 11.0f + 0.5f * (float)i, 0.5f, base, c * 0.8f);
+        for (float i = 0.0f; i < 6.0f; i += step) stut_push(g, o + 5.0f + i, step, base, c);
+        stut_roll(g, o + 11.0f, 3.5f, base, c * 1.5f);
         break;
     }
     return base;

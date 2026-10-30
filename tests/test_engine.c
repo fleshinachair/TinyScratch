@@ -3909,6 +3909,46 @@ static void test_long_samples(void)
     CHECK(on_word >= starts * 8 / 10 && hit[0] + hit[1] + hit[2] + hit[3] + hit[4] >= 4,
           "...the bars start on its words (%d of %d bars), and on %d of the five", on_word, starts, hit[0] + hit[1] + hit[2] + hit[3] + hit[4]);
 
+    /* Stutter: short forwards on a word's first sound, in seconds whatever the sample's length, the fader open only while the record goes
+     * forward, a release through the word in every bar, and no more than one push a sixteenth (an eighth over 120 bpm) */
+    for (int pass = 0; pass < 2; pass++) {
+        const float bpm = pass ? 160.0f : 96.0f;
+        int pushes = 0, push_ok = 0, push_first = 0, n_first = 0, releases = 0, bars_with_release = 0, nbars = 0, back_open = 0, too_close = 0;
+        for (uint32_t seed = 1; seed <= 40; seed++) {
+            ts_clip_generate_ex(&c, GS_STUTTER, seed * 131u, 1, &e->slot[2], 0.0f, bpm, 0.0f, 0.0f, 0.0f);
+            int had = 0;
+            float last_push = -10.0f;
+            int i0 = 0;
+            while (c.gate[c.n - 1] && i0 < c.n && c.gate[i0]) i0++;              /* (a push across the loop's end, as the clip runs a little ahead: counted once, at the end) */
+            float first = 1.0f;
+            for (int i = i0; i < c.n;) {
+                if (!c.gate[i]) { i++; continue; }
+                int j = i;
+                float lo = 1.0f, hi = 0.0f;
+                while (j < c.n + (c.gate[c.n - 1] ? i0 : 0) && c.gate[j % c.n]) {
+                    const float x = (float)c.pos[j % c.n] / 65535.0f;
+                    lo = fminf(lo, x); hi = fmaxf(hi, x);
+                    if (j > i && c.pos[j % c.n] + 30 < c.pos[(j - 1) % c.n]) back_open++;
+                    j++;
+                }
+                const float span = (hi - lo) * (float)secs, len16 = (float)(j - i) / (float)(TS_CLIP_RES / 4), at16 = (float)i / (float)(TS_CLIP_RES / 4);
+                if (span > 0.25f) { releases++; had = 1; }
+                else if (len16 > 0.3f) {                                          /* (a push, not a roll's click; a build-up's pushes grow, to 0.3 s) */
+                    pushes++; push_ok += span > 0.035f && span < 0.32f;
+                    first = fminf(first, span);
+                    too_close += at16 - last_push < (bpm > 120.0f ? 1.9f : 0.9f);
+                    last_push = at16;
+                }
+                i = j;
+            }
+            nbars++; bars_with_release += had;
+            if (first < 0.9f) { n_first++; push_first += first > 0.035f && first < 0.11f; }
+        }
+        CHECK(pushes > 40 && push_ok == pushes && push_first == n_first, "Stutter at %.0f bpm: each bar's pushes are a word's first 35-110 ms on a 5 s phrase (%d of %d bars), and none is longer than a build-up's 0.3 s", (double)bpm, push_first, n_first);
+        CHECK(bars_with_release == nbars && back_open == 0, "...every bar lets the word go (%d of %d), and the fader is never open while the record goes back (%d)", bars_with_release, nbars, back_open);
+        CHECK(too_close == 0, "...the record hand never pushes faster than a sixteenth apart (an eighth over 120 bpm) (%d too close)", too_close);
+    }
+
     /* Clip Depth turned down: the record stays on the words the clip starts on, not pulled toward the start of the sample */
     ts_params_t p;
     ts_params_default(&p);
