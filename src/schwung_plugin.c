@@ -347,7 +347,9 @@ static int find_param(const char *key)
 
 /* ---- saved state ----
  * get_param("state") is what Schwung stores with a project or preset; set_param("state") gives it back. A flat object
- * of strings: every parameter by key (enums as their index; Style as the style's number, which does not change when the list is reordered). */
+ * of strings: every parameter by key (enums as their index), and "style_n", the style's own number. Style's index is its place in the list, which
+ * can be reordered; the number never changes, so a project opens with the same style. (The host shows the state's values as they are, so
+ * "gen_style" is the list's index like everything else.) A state without "style_n" is from 1.5.0 or before, whose "gen_style" was the number. */
 
 /* written by the screens or one-shots, never saved with the project */
 static int is_transient(int i)
@@ -362,11 +364,11 @@ static int build_state(const ts_inst_t *in, char *buf, int cap)
     jb_put(&j, "{\"v\":\"1\"");
     for (int i = 0; i < P_COUNT; i++) {
         if (k_params[i].kind == K_CANVAS || k_params[i].kind == K_STRING || k_params[i].kind == K_FILEPATH || is_transient(i)) continue;
-        float v = i == P_GEN_STYLE ? (float)in->p.gen_style : pget(&in->p, i);
+        float v = pget(&in->p, i);
         if (k_params[i].kind == K_FLOAT) jb_put(&j, ",\"%s\":\"%.4f\"", k_params[i].key, (double)v);
         else jb_put(&j, ",\"%s\":\"%d\"", k_params[i].key, (int)v);
     }
-    jb_put(&j, "}");
+    jb_put(&j, ",\"style_n\":\"%d\"}", in->p.gen_style);
     return j.len;
 }
 
@@ -399,7 +401,12 @@ static void restore_state(ts_inst_t *in, const char *json)
         if (!state_get(json, k_params[i].key, val, sizeof val)) continue;
         char *end = NULL;
         float v = strtof(val, &end);
-        if (end != val) { if (i == P_GEN_STYLE) p.gen_style = (int)lrintf(v); else pset(&p, i, v); }
+        if (end != val) { if (i == P_GEN_STYLE) p.gen_style = (int)lrintf(v); else pset(&p, i, v); }     /* (Style: read as a number: 1.5.0's; "style_n" overrides it) */
+    }
+    if (state_get(json, "style_n", val, sizeof val)) {
+        char *end = NULL;
+        float v = strtof(val, &end);
+        if (end != val && isfinite(v)) p.gen_style = (int)lrintf(v);
     }
     ts_engine_set_params(in->eng, &p);
 
