@@ -1536,7 +1536,7 @@ static void test_generator(void)
     char js[8192], cf[64];
     double v = 0;
     ts_engine_view(e, js, sizeof js);
-    CHECK(json_num(js, "cl", &v) && v == TS_CLIP_TRY && json_num(js, "tv", &v) && v == 1 && json_num(js, "tg", &v) && v == GS_FLARE && json_num(js, "lb", &v) && v == 16, "the screen: which clip, that there is a try clip, its style, and its length (16 beats)");
+    CHECK(json_num(js, "cl", &v) && v == TS_CLIP_TRY && json_num(js, "tv", &v) && v == 1 && json_num(js, "tg", &v) && v == ts_style_shown(GS_FLARE) && json_num(js, "lb", &v) && v == 16, "the screen: which clip, that there is a try clip, its style, and its length (16 beats)");
 
     /* keeping: on the next free pad, or an empty pad; a clip pad plays what is on it */
     int pad = ts_engine_keep(e, 0);
@@ -2004,7 +2004,7 @@ static void test_clip_recipe_view(void)
     ts_engine_set_params(e, &p);
     ts_engine_generate(e);
     play_a_little(e);
-    CHECK(view_int(e, "cy") == GS_BABY && view_int(e, "cx") == 0, "Echo is set but a Baby has no echo scratch in it: it is not claimed");
+    CHECK(view_int(e, "cy") == ts_style_shown(GS_BABY) && view_int(e, "cx") == 0, "Echo is set but a Baby has no echo scratch in it: it is not claimed");
 
     /* the generator tells the truth over many clips: no extras at 0, and a setting that is on only sometimes puts it in only some */
     int with_echo = 0, with_fin = 0, wrong = 0;
@@ -3555,6 +3555,16 @@ static void test_state(void)
     CHECK(fabs(b->eng->man - 0.35) < 1e-6, "the playhead is where the knob was");
     int n2 = api->get_param(h2, "state", st2, sizeof st2);
     CHECK(n2 == n && strcmp(st, st2) == 0, "saving what was restored gives the same state");
+    /* a project saved before the Style list was reordered: Style is kept as the style's number, so Baby (1) is still Baby, not Snap */
+    api->set_param(h2, "state", "{\"v\":\"1\",\"gen_style\":\"1\"}");
+    int old_baby = b->p.gen_style == GS_BABY;
+    char out2[32];
+    api->get_param(h2, "gen_style", out2, sizeof out2);
+    old_baby &= atoi(out2) == 2;
+    api->set_param(h2, "gen_style", "Snap");
+    api->get_param(h2, "state", st2, sizeof st2);
+    CHECK(old_baby && b->p.gen_style == TS_GS_SNAP && strstr(st2, "\"gen_style\":\"14\"") != NULL,
+          "an old project's Baby is still Baby (third in the list now), and Snap is saved as its number");
 
     /* hostile and broken states change nothing */
     ts_params_t keep = b->p;
@@ -4053,7 +4063,7 @@ static void test_plugin_generate(void)
     api->set_param(h, "gen_style", "Stab");
     api->set_param(h, "gen_bars", "4 bars");
     api->get_param(h, "gen_style", out, sizeof out);
-    CHECK(atoi(out) == GS_STAB && in->p.gen_style == GS_STAB && in->p.gen_bars == 2, "Style and Length are settings (read back as their index)");
+    CHECK(atoi(out) == ts_style_shown(GS_STAB) && in->p.gen_style == GS_STAB && in->p.gen_bars == 2, "Style and Length are settings (read back as their place in the list)");
     api->set_param(h, "gen_style", "Flow");
     int improv_ok = in->p.gen_style == GS_ANY;
     api->set_param(h, "gen_style", "Stab");
@@ -4066,7 +4076,7 @@ static void test_plugin_generate(void)
     int snap_ok = in->p.gen_style == TS_GS_SNAP;
     api->set_param(h, "gen_style", "Stab");
     api->set_param(h, "gen_style", "Impv 1.1");
-    CHECK(snap_ok && in->p.gen_style == TS_GS_SNAP, "the last style is Snap, and a project from its trial (Impv 1.1) still means it");
+    CHECK(snap_ok && in->p.gen_style == TS_GS_SNAP, "Snap is the second style, and a project from its trial (Impv 1.1) still means it");
     api->set_param(h, "gen_style", "Stab");
     api->set_param(h, "generate", "Generate");
     api->get_param(h, "clip", out, sizeof out);

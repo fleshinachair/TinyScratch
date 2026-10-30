@@ -53,7 +53,7 @@ static const char *const o_clear[] = { "Idle", "Clear" };
 static const char *const o_clip[] = { "Off", "Clip 1", "Clip 2", "Clip 3", "Clip 4", "Clip 5", "Clip 6", "Clip 7", "Clip 8", "Clip 9", "Clip 10",
                                       "Clip 11", "Clip 12", "Clip 13", "Clip 14", "Clip 15", "Clip 16", "Auto", "Try" };
 static const char *const o_generate[] = { "Idle", "Generate" };
-static const char *const o_genstyle[] = { "Flow", "Baby", "Cuts", "Military", "Scribble", "Stab", "Chirp", "Transform", "Flare", "Crab", "Orbit", "Drag", "Tear", "Stutter", "Snap" };
+static const char *const o_genstyle[] = { "Flow", "Snap", "Baby", "Cuts", "Military", "Scribble", "Stab", "Chirp", "Transform", "Flare", "Crab", "Orbit", "Drag", "Tear", "Stutter" };     /* (in the list's order: ts_style_at gives a style's number) */
 static const char *const o_genbars[] = { "1 bar", "2 bars", "4 bars" };
 
 static const pdef_t k_params[P_COUNT] = {
@@ -157,7 +157,7 @@ static float pget(const ts_params_t *p, int i)
     case P_PADS: return (float)p->pads;
     case P_CLIP: return (float)p->clip;
     case P_CLIP_PAGE: return (float)p->clip_page;
-    case P_GEN_STYLE: return (float)p->gen_style;
+    case P_GEN_STYLE: return (float)ts_style_shown(p->gen_style);
     case P_GEN_BARS: return (float)p->gen_bars;
     case P_GEN_FWD: return p->gen_fwd;
     case P_SWING: return p->swing;
@@ -190,7 +190,7 @@ static void pset(ts_params_t *p, int i, float v)
     case P_PADS: p->pads = v >= 0.5f; break;
     case P_CLIP: p->clip = (int)lrintf(v); break;
     case P_CLIP_PAGE: p->clip_page = (int)lrintf(v); break;
-    case P_GEN_STYLE: p->gen_style = (int)lrintf(v); break;
+    case P_GEN_STYLE: p->gen_style = ts_style_at((int)lrintf(v)); break;
     case P_GEN_BARS: p->gen_bars = (int)lrintf(v); break;
     case P_GEN_FWD: p->gen_fwd = v; break;
     case P_SWING: p->swing = v; break;
@@ -347,7 +347,7 @@ static int find_param(const char *key)
 
 /* ---- saved state ----
  * get_param("state") is what Schwung stores with a project or preset; set_param("state") gives it back. A flat object
- * of strings: every parameter by key (enums as their index). */
+ * of strings: every parameter by key (enums as their index; Style as the style's number, which does not change when the list is reordered). */
 
 /* written by the screens or one-shots, never saved with the project */
 static int is_transient(int i)
@@ -362,7 +362,7 @@ static int build_state(const ts_inst_t *in, char *buf, int cap)
     jb_put(&j, "{\"v\":\"1\"");
     for (int i = 0; i < P_COUNT; i++) {
         if (k_params[i].kind == K_CANVAS || k_params[i].kind == K_STRING || k_params[i].kind == K_FILEPATH || is_transient(i)) continue;
-        float v = pget(&in->p, i);
+        float v = i == P_GEN_STYLE ? (float)in->p.gen_style : pget(&in->p, i);
         if (k_params[i].kind == K_FLOAT) jb_put(&j, ",\"%s\":\"%.4f\"", k_params[i].key, (double)v);
         else jb_put(&j, ",\"%s\":\"%d\"", k_params[i].key, (int)v);
     }
@@ -399,7 +399,7 @@ static void restore_state(ts_inst_t *in, const char *json)
         if (!state_get(json, k_params[i].key, val, sizeof val)) continue;
         char *end = NULL;
         float v = strtof(val, &end);
-        if (end != val) pset(&p, i, v);
+        if (end != val) { if (i == P_GEN_STYLE) p.gen_style = (int)lrintf(v); else pset(&p, i, v); }
     }
     ts_engine_set_params(in->eng, &p);
 
@@ -437,7 +437,7 @@ static void ts_set_param(void *h, const char *key, const char *val)
         for (int o = 0; o < d->nopts; o++)
             if (strcmp(val, d->opts[o]) == 0) { v = (float)o; ok = 1; break; }
         if (!ok && i == P_GEN_STYLE && (strcmp(val, "Any") == 0 || strcmp(val, "Improv") == 0)) { v = 0.0f; ok = 1; }        /* (what Flow was called) */
-        if (!ok && i == P_GEN_STYLE && strcmp(val, "Impv 1.1") == 0) { v = (float)TS_GS_SNAP; ok = 1; }                       /* (Snap, while it was a trial) */
+        if (!ok && i == P_GEN_STYLE && strcmp(val, "Impv 1.1") == 0) { v = (float)ts_style_shown(TS_GS_SNAP); ok = 1; }       /* (Snap, while it was a trial) */
     }
     if (!ok) {
         char *end = NULL;

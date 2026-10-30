@@ -632,6 +632,9 @@ static const grid_t k_grid[GS_COUNT] = {
  * stroke shape and no cap on the strokes' speed, punchier. Snap is generated as Improv with these switched; a recipe keeps its own number,
  * so it regenerates the same. (Set for one generation at a time, from the thread that sets parameters.) */
 static int g_snap_flick = 0, g_snap_nocap = 0;
+
+int ts_style_shown(int style) { style = clampi(style, 0, TS_GEN_STYLES - 1); return style == TS_GS_SNAP ? 1 : (style == GS_ANY ? 0 : style + 1); }
+int ts_style_at(int shown) { shown = clampi(shown, 0, TS_GEN_STYLES - 1); return shown == 1 ? TS_GS_SNAP : (shown == 0 ? GS_ANY : shown - 1); }
 /* Only "Any", a phrase from the example clips, has its fader laid on the grid. Every named style keeps the fader it is defined by (TTM): a
  * baby has none, a cut shuts on the pull, a flare clicks mid-stroke and so on, and its strokes and its fader move together. */
 static int grid_style(int s) { return s == GS_ANY; }
@@ -3137,10 +3140,10 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
        x, tx, e->pos, (double)p->turntable, (double)e->vel_out, (double)p->drag, (double)p->gain_db, p->note_gate, p->vel_to_vol, p->normalise, p->lock,
        p->cut_from, e->gate > 0.5f, e->notes_held + e->pad_held, e->transport, e->lane_col, p->clip ? e->clip_now % CID_PAGE : 0, p->clip, e->running, e->last_note, e->pad_raw > 0, lane_beats, e->nclips,
        e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
-       e->try_valid, e->try_valid ? e->try_recipe.style : 0, e->view_seq,
-       (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin, (double)p->gen_echo, (double)p->humanise, (double)p->gen_groove,
+       e->try_valid, e->try_valid ? ts_style_shown(e->try_recipe.style) : 0, e->view_seq,
+       (double)p->clip_depth, (double)p->clip_offset, ts_style_shown(p->gen_style), p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin, (double)p->gen_echo, (double)p->humanise, (double)p->gen_groove,
        p->cues, e->cue_on ? e->cue_pad : -1, cue_cols,
-       rec ? rec->style : -1, rec && (shown_clip->extras & TS_EX_KNOWN) ? shown_clip->extras & 7 : -1, rec ? rec->groove : 0,
+       rec ? ts_style_shown(rec->style) : -1, rec && (shown_clip->extras & TS_EX_KNOWN) ? shown_clip->extras & 7 : -1, rec ? rec->groove : 0,
        rec && (shown_clip->extras & TS_EX_KNOWN) ? (shown_clip->extras >> TS_EX_TMPL_SHIFT) & 15 : 0,
        e->view_page, p->clip ? e->clip_now / CID_PAGE : 0, page_flags);
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->pk[c] : 0);       /* the waveform: peak, then body */
@@ -3267,8 +3270,8 @@ int ts_engine_rview(const ts_engine_t *e, char *buf, int cap)
     jw(&j, "\"rk\":%u,\"lb\":%d,\"hk\":%d,\"cm\":%d,\"cl\":%d,\"cp\":%d,\"pg\":%d,\"tv\":%d,\"tg\":%d,\"cy\":%d,\"cx\":%d,\"cg\":%d,\"ct\":%d,",
        remote_key(e, k), k ? k->len : TS_LANE_BEATS, k ? (int)floor((e->mclock - t0) / (double)k->len) : 0,
        p->clip, p->clip ? e->clip_now % CID_PAGE : 0, p->clip ? e->clip_now / CID_PAGE : 0, e->view_page,
-       e->try_valid, e->try_valid ? e->try_recipe.style : 0,
-       rec ? rec->style : -1, rec && known ? k->extras & 7 : -1, rec ? rec->groove : 0, rec && known ? (k->extras >> TS_EX_TMPL_SHIFT) & 15 : 0);
+       e->try_valid, e->try_valid ? ts_style_shown(e->try_recipe.style) : 0,
+       rec ? ts_style_shown(rec->style) : -1, rec && known ? k->extras & 7 : -1, rec ? rec->groove : 0, rec && known ? (k->extras >> TS_EX_TMPL_SHIFT) & 15 : 0);
     jw(&j, "\"cs\":%d,\"cq\":%d,\"cu\":[", p->cues, e->cue_on ? e->cue_pad : -1);
     for (int i = 0; i < 8; i++) jw(&j, "%s%.4f", i ? "," : "", (double)cu[i]);
     jw(&j, "],\"pk\":%u,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"ln\":%d,\"nc\":%d,\"s\":%d,\"n\":",

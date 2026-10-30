@@ -69,7 +69,7 @@ clip never changes):
 
 | dial | what it does |
 |---|---|
-| **Style** | what Generate makes: one of the two **Improv** styles, an improvised two-bar phrase of strokes of every length answered by a changed version of itself, which does not pick from the named styles: **Flow** (the default: moves like a real hand) or **Snap** (Improv as 1.1.0 made it: faster flicks, punchier); or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear, Stutter |
+| **Style** | what Generate makes: one of the two **Improv** styles, an improvised two-bar phrase of strokes of every length answered by a changed version of itself, which does not pick from the named styles: **Flow** (the default: moves like a real hand) or **Snap** (next in the list: Improv as 1.1.0 made it, faster flicks, punchier); or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear, Stutter |
 | **Length** | 1, 2 or 4 bars |
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |

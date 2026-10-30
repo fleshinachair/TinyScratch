@@ -47,6 +47,10 @@
 #define TS_POOL           256               /* every clip there is: the built-in or imported ones, and the ones you kept */
 #define TS_GEN_STYLES     15                /* flow (Improv), baby, cuts, military, scribble, stab, chirp, transform, flare, crab, orbit, drag, tear, stutter, snap (Improv as 1.1.0 made it) */
 #define TS_GS_SNAP        14
+/* The Style list shows the styles in another order than their numbers (a number is saved in recipes and projects, so it never changes):
+ * Flow, Snap, then Baby to Stutter. These go between a style's number and its place in the list. */
+int ts_style_shown(int style);
+int ts_style_at(int shown);
 #define TS_CLIP_RES       128               /* points to the beat in a clip's data */
 #define TS_CLIP_MAX_BEATS 16
 
