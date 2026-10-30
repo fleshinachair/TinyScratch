@@ -97,7 +97,7 @@ int ts_wav_decode(const uint8_t *d, size_t n, float *dst, int cap, float dst_sr)
  * slow sweep, a chirp, a flare in jerks, a full orbit, a ramp that restarts, three strokes to the bar (so the sixteenths
  * play across the strokes in a different rhythm), and a backwards one. */
 typedef struct { uint8_t t, v, shape; } clip_pt_t;      /* units, 0..100, how it gets to the next point */
-enum { SH_EASE, SH_LIN, SH_FAST, SH_SLOW, SH_FLICK };
+enum { SH_EASE, SH_LIN, SH_FAST, SH_SLOW, SH_FLICK, SH_PUSH, SH_LETGO, SH_HAND };
 #define CLIP_MAX_PTS 16
 #define TS_BUILTIN_CLIPS 8
 #define TS_CLIP_UNITS 128                       /* the built-in clips: 128 units to the bar */
@@ -409,14 +409,16 @@ int ts_engine_load_clips(ts_engine_t *e, const char *path)
  * Strokes are on the sixteenth grid with a little hand jitter. Every bar ends back at the clip's base position, so the
  * clip loops, and a bar of the same style is never quite the same twice. Positions are 0..1 of the sample's sound
  * (a generated clip is for any sample: it is spread over where the sample has its sound). */
-enum { GS_ANY /* shown as "Improv": a phrase, not a technique */, GS_BABY, GS_CUTS, GS_MILITARY, GS_SCRIBBLE, GS_STAB, GS_CHIRP, GS_TRANSFORM, GS_FLARE, GS_CRAB, GS_ORBIT, GS_DRAG, GS_TEAR, GS_COUNT };       /* (a style's number is saved in a recipe: new ones go on the end) */
+enum { GS_ANY /* shown as "Flow" (Improv): a phrase, not a technique */, GS_BABY, GS_CUTS, GS_MILITARY, GS_SCRIBBLE, GS_STAB, GS_CHIRP, GS_TRANSFORM, GS_FLARE, GS_CRAB, GS_ORBIT, GS_DRAG, GS_TEAR, GS_STUTTER, GS_COUNT };       /* (a style's number is saved in a recipe: new ones go on the end) */
 #define GP (TS_CLIP_RES / 4)                         /* dense points per sixteenth */
 
 typedef struct { ts_clip_t *c; uint32_t rng; float amp_t; int shape; int bars; int fw16; float fw_p; int nfw; float fw_t[64], fw_d[64]; int fw_kind[64];
-                 float echo_p; uint32_t seed; float stretch, thin; int dmin; float spx; unsigned used; float groove; int tmpl; uint32_t grng; float dens[4]; } gen_t;         /* amp_t: how tall the strokes are, 0..1, the same all through the clip; stretch: how many sixteenths longer a stroke is (and thin: how much rarer a cut) on a fast song, 1 up to 120 bpm */
+                 float echo_p; uint32_t seed; float stretch, thin; int dmin; float spx, fps, word, attack; int stut_n, stut_skipped; unsigned used; float groove; int tmpl; uint32_t grng; float dens[4]; } gen_t;         /* amp_t: how tall the strokes are, 0..1, the same all through the clip; stretch: how many sixteenths longer a stroke is (and thin: how much rarer a cut) on a fast song, 1 up to 120 bpm */
 
-/* The curve a stroke takes. The hand does not move like a sine: it bites in and settles (a fast start: 60-90% of the strokes in the
- * clips measured), now and then a plain S-curve, and rarely builds slowly. One is the clip's own (g->shape) and most strokes use it. */
+/* The curve a stroke takes. A real hand speeds up into a stroke, is fastest a little before its middle and slows into the turn: LM4K's
+ * recorded strokes (ScratchML), 1.9 times their average speed at the fastest, about 42% of the way (the example clips, drawn, had them
+ * biting in fastest at the start, which a recorded hand does not). Now and then a plain S-curve, rarely one that builds slowly. One is
+ * the clip's own (g->shape) and most strokes use it. */
 static int g_shape(gen_t *g);
 
 static float grnd(gen_t *g)
@@ -496,6 +498,20 @@ static float g_ease(int shape, float u)
     case SH_FAST: return 1.0f - powf(1.0f - u, 2.4f);
     case SH_SLOW: return powf(u, 2.4f);
     case SH_FLICK: return logf(1.0f + 6.0f * u) / 1.9459101f;                   /* speed 1/(1+6u): the hand's push, fastest at the start and never quite stopping */
+    case SH_HAND: {                                                             /* a real hand's stroke: the average of LM4K's 98 strokes (ScratchML): it speeds up, is fastest about 42% of the way, and slows into the turn */
+        static const float k[17] = { 0.000f, 0.018f, 0.059f, 0.117f, 0.188f, 0.268f, 0.352f, 0.440f, 0.527f, 0.613f, 0.697f, 0.775f, 0.846f, 0.909f, 0.958f, 0.990f, 1.000f };
+        const float f = u * 16.0f;
+        const int i = f >= 16.0f ? 15 : (int)f;
+        return k[i] + (k[i + 1] - k[i]) * (f - (float)i);
+    }
+    case SH_PUSH: {                                                             /* a hand's short push: halfway to its bell-shaped speed (slow, fast, slow: the "minimum jerk" of a reach), so the record sweeps in pitch as a pushed one does */
+        const float lin = u + 0.15f * u * (1.0f - u), bell = u * u * u * (10.0f + u * (6.0f * u - 15.0f));
+        return lin + 0.5f * (bell - lin);
+    }
+    case SH_LETGO: {                                                            /* let go: from 0.7 of its speed up to all of it over the first eighth, then steady */
+        const float k = 0.125f, sp0 = 0.7f, tot = 1.0f - (1.0f - sp0) * k * 0.5f;
+        return (u < k ? sp0 * u + (1.0f - sp0) * u * u / (2.0f * k) : u - (1.0f - sp0) * k * 0.5f) / tot;
+    }
     default: return u;
     }
 }
@@ -610,15 +626,26 @@ static void g_limit_open(gen_t *g, float o)
  * almost always heard; a pull often is not), on the style, and on the seed; now and then a note is held over the next step (a swoop). */
 typedef struct { float push, pull, len_lo, len_hi, tie; } grid_t;
 static const grid_t k_grid[GS_COUNT] = {
-    [GS_ANY]      = { 0.95f, 0.72f, 0.22f, 0.72f, 0.12f },
+    [GS_ANY]      = { 0.95f, 0.72f, 0.22f, 0.72f, 0.12f },               /* (real DJs, measured, let sounds ring longer: Freestyle's, below; over a beat these short ones won by ear) */
 };
+/* Freestyle's fader, measured against 74 s of real dry scratching (17 clips): a sound rings most of a sixteenth (~115 ms), often tied over,
+ * ~60 ms between, ~4 a second: looser, as a DJ plays alone */
+static const grid_t k_grid_free = { 0.95f, 0.65f, 0.60f, 1.05f, 0.30f };
+/* Improv comes three ways: Flow (GS_ANY), a real hand's strokes at about the record's own speed; Snap, Improv as 1.1.0 made it: a flick's
+ * stroke shape and no cap on the strokes' speed, punchier; and Freestyle, Flow with the longer sounds real DJs play alone. Snap and Freestyle
+ * are generated as Improv with these switched; a recipe keeps their own numbers, so they regenerate the same. (Set for one generation at a
+ * time, from the thread that sets parameters.) */
+static int g_snap_flick = 0, g_snap_nocap = 0, g_free = 0;
+
+int ts_style_shown(int style) { style = clampi(style, 0, TS_GEN_STYLES - 1); return style == TS_GS_SNAP ? 1 : (style == TS_GS_FREESTYLE ? 2 : (style == GS_ANY ? 0 : style + 2)); }
+int ts_style_at(int shown) { shown = clampi(shown, 0, TS_GEN_STYLES - 1); return shown == 1 ? TS_GS_SNAP : (shown == 2 ? TS_GS_FREESTYLE : (shown == 0 ? GS_ANY : shown - 2)); }
 /* Only "Any", a phrase from the example clips, has its fader laid on the grid. Every named style keeps the fader it is defined by (TTM): a
  * baby has none, a cut shuts on the pull, a flare clicks mid-stroke and so on, and its strokes and its fader move together. */
 static int grid_style(int s) { return s == GS_ANY; }
 
 static void g_grid_gate(gen_t *g, float o, int style)
 {
-    const grid_t *k = &k_grid[style];
+    const grid_t *k = g_free && style == GS_ANY ? &k_grid_free : &k_grid[style];
     int a = (int)(o * (float)GP), b = (int)((o + 16.0f) * (float)GP);
     if (b > g->c->n) b = g->c->n;
     for (int i = a; i < b; i++) g->c->gate[i] = 0;
@@ -756,6 +783,103 @@ static float st_stab(gen_t *g, float o, float base)
     return v;
 }
 
+/* Stutter: a word's first sound pushed again and again in time, then the word let go ("f-f-f-f-fight"). Each push is a forward: the record
+ * pushed over the word's first 50 to 85 ms with the fader open (about the sample's own speed, faster if the slot is short), pulled back
+ * with it shut; the release pushes through the whole word (a third to half a second) at about its own speed. Lengths are in seconds,
+ * not shares of the sample, so a long sample's word is stuttered as a short sample's is. One of six rhythms a bar: the classic run of
+ * sixteenths into a roll of thirty-seconds, a call and answer, a build-up that shows a little more of the word each time, an off-grid
+ * pattern, rubs (back and forth, the fader open, both ways heard) then the word let go, and the word first with the stutter after it. A hand makes about six record strokes a second at most (Hansen's DJ: 5.7), so on a
+ * song over 120 bpm the pushes are an eighth apart, not a sixteenth; a faster "ffff" is a roll: a push a sixteenth with the fader splitting
+ * each into two sounds ("one single, fast record hand movement can produce multiple tone attacks, normally from 2 to 5", Hansen), not the
+ * record pushed thirty-two times a bar. A stutter is played straight: Swing and Humanise do not bend it (the engine knows a clip is one
+ * from its recipe). How many pushes a rhythm has varies from bar to bar, as a hand's does. */
+static void stut_push(gen_t *g, float t, float slot, float base, float secs)
+{
+    const int skip = g->stut_n++ > 0 && !g->stut_skipped && grnd(g) < 0.2f;    /* (now and then a push is left out, never the bar's first nor two running: a hand's count varies) */
+    g->stut_skipped = skip;
+    if (skip) return;
+    /* a hand is never the same twice ("the majority of all movements tend to have unstable speed", Hansen): each push a little early or
+     * late (up to 6 ms at 120 bpm), a little longer or shorter, a little faster or slower */
+    t += gr(g, -0.05f, 0.05f);
+    secs *= gr(g, 0.82f, 1.18f);
+    const float d = fminf(secs * g->spx * gr(g, 0.88f, 1.12f), slot * 0.62f);
+    secs = fminf(secs, d / g->spx * gr(g, 0.9f, 1.05f));                       /* no faster than its own speed on average (DJs: about 0.94, Hansen): a short slot covers less of the word, it does not race through it */
+    const float to = clampf(base + secs * g->fps, base, 0.97f);
+    g_seg(g, t, t + d, base, to, SH_PUSH);
+    g_gate(g, t, t + d - 0.04f, 1);
+    g_seg(g, t + d, t + slot, to, base, SH_EASE);
+}
+static void stut_release(gen_t *g, float t, float end, float base, float secs)
+{
+    const float to = clampf(base + secs * g->fps, base, 0.97f);                /* (a short sample: to its end) */
+    const float d = fmaxf(0.5f, fminf((to - base) / fmaxf(0.8f * g->fps, 0.01f) * g->spx, end - t - 0.5f));     /* at 0.8 of its own speed: a released record plays a little slow (170 deg/s against 180, Hansen), and a word let go a touch slower is clearer */
+    g_seg(g, t, t + d, base, to, SH_LETGO);                                     /* (let go: it comes up to speed and runs on steady) */
+    g_gate(g, t, t + d - 0.08f, 1);
+    g_seg(g, t + d, end, to, base, SH_EASE);
+}
+static void stut_roll(gen_t *g, float t, float len, float base, float secs)
+{
+    for (float u = 0.0f; u + 1.0f <= len + 1e-3f; u += 1.0f) {                 /* a push a sixteenth at about its own speed, two sounds each: "one single, fast record hand movement can produce multiple tone attacks, normally from 2 to 5" (Hansen) */
+        const float d = fminf(fmaxf(secs, 0.06f) * g->spx, 0.8f), to = clampf(base + d / g->spx * g->fps, base, 0.97f);     /* (at its own speed) */
+        g_seg(g, t + u, t + u + d, base, to, SH_LIN);
+        g_gate(g, t + u, t + u + 0.3f * d, 1);
+        g_gate(g, t + u + 0.5f * d, t + u + 0.85f * d, 1);
+        g_seg(g, t + u + d, t + u + 1.0f, to, base, SH_EASE);
+    }
+}
+static float st_stutter(gen_t *g, float o, float base_in)
+{
+    const float base = g->word < base_in ? g->word : base_in;    /* (from the word's very start, not a little into it as a stroke turns: the whole "f", the whole word) */
+    const float c0 = gr(g, 0.05f, 0.085f), word = gr(g, 0.32f, 0.5f), step = g->spx > 8.01f ? 2.0f : 1.0f;     /* (over 120 bpm: an eighth apart) */
+    const float c = g->attack > 0.0f ? g->attack * (0.85f + 0.3f * (c0 - 0.05f) / 0.035f) : c0;               /* a push: the word's attack, "f" to "fre" (a sample with no attacks found: 50-85 ms) */
+    g_gate(g, o, o + 16.0f, 0);
+    g_seg(g, o, o + 16.0f, base, base, SH_LIN);
+    g->stut_n = 0; g->stut_skipped = 0;
+    switch (gi(g, 0, 5)) {                                                      /* (a breath before every release: the word comes in as a sound of its own) */
+    case 0:                                                                     /* f f f f . . f f ff ff . . fight */
+        for (float i = 0.0f; i < 4.0f; i += step) stut_push(g, o + i, step, base, c);
+        for (float i = 6.0f; i < 8.0f; i += step) stut_push(g, o + i, step, base, c);
+        stut_roll(g, o + 8.0f, 2.0f, base, c * 1.5f);
+        stut_release(g, o + 11.5f, o + 15.0f, base, word);
+        break;
+    case 1:                                                                     /* f f . fight, f f . fight */
+        for (int h = 0; h < 2; h++) {
+            for (float i = 0.0f; i < 2.0f; i += step) stut_push(g, o + 8.0f * (float)h + i, step, base, c);
+            stut_release(g, o + 8.0f * (float)h + 2.5f, o + 8.0f * (float)h + 7.0f, base, word);
+        }
+        break;
+    case 2: {                                                                   /* f, fi, fig, figh, . fight */
+        static const float grow[4] = { 1.0f, 1.7f, 2.6f, 3.6f };
+        for (int i = 0; i < 4; i++) { g->stut_n = 0; stut_push(g, o + 2.0f * (float)i, 2.0f, base, c * grow[i]); }     /* (every step: a build-up is its steps) */
+        stut_release(g, o + 9.5f, o + 15.0f, base, word);
+        break;
+    }
+    case 3: {                                                                   /* off the grid: x . x x . x . x . . , fight */
+        const int k = gi(g, 4, 5), rot = gi(g, 0, 9);
+        for (int i = 0, last = -2; i < 10; i++) if (euclid_hit(i, k, 10, rot) && (float)(i - last) >= step) { stut_push(g, o + (float)i, 1.0f, base, c); last = i; }
+        stut_release(g, o + 11.5f, o + 15.0f, base, word);
+        break;
+    }
+    case 4: {                                                                   /* rubs then the word: back and forth with the fader open, both ways heard, then let go */
+        const float d = fminf(c * 2.0f * g->spx, 1.0f), r = fminf(c * 2.0f, d / g->spx), to = clampf(base + r * g->fps, base, 0.97f);     /* (a rub at its own speed at most, eased: about 1.5 at its fastest) */
+        for (float i = 0.0f; i < 8.0f; i += 2.0f * step) {
+            g_seg(g, o + i, o + i + d, base, to, SH_EASE);                       /* (a baby: the turns heard, eased as a hand turns) */
+            g_seg(g, o + i + d, o + i + 2.0f * d, to, base, SH_EASE);
+            g_gate(g, o + i, o + i + 2.0f * d - 0.12f, 1);                     /* (caught for a moment before the next: the release is a sound of its own) */
+        }
+        stut_release(g, o + 11.5f, o + 15.0f, base, word);
+        break;
+    }
+    default:                                                                    /* fight . f f . f f . ff ff */
+        stut_release(g, o, o + 4.5f, base, word);
+        for (float i = 6.0f; i < 8.0f; i += step) stut_push(g, o + i, step, base, c);
+        for (float i = 10.0f; i < 12.0f; i += step) stut_push(g, o + i, step, base, c);
+        stut_roll(g, o + 13.0f, 2.0f, base, c * 1.5f);
+        break;
+    }
+    return base;
+}
+
 /* quick up-and-down strokes, a click at every turn so each stroke is a note of its own */
 static float st_chirp(gen_t *g, float o, float base)
 {
@@ -867,8 +991,8 @@ static float st_tear(gen_t *g, float o, float base)
 }
 
 typedef float (*gen_style_fn)(gen_t *, float, float);
-static const gen_style_fn k_styles[GS_COUNT] = { NULL, st_baby, st_cuts, st_military, st_scribble, st_stab, st_chirp, st_transform, st_flare, st_crab, st_orbit, st_drag, st_tear };
-static const int k_any_weight[GS_COUNT] = { 0, 3, 2, 2, 1, 2, 2, 2, 3, 1, 2, 0 };            /* (Drag is only for when you pick it) */
+static const gen_style_fn k_styles[GS_COUNT] = { NULL, st_baby, st_cuts, st_military, st_scribble, st_stab, st_chirp, st_transform, st_flare, st_crab, st_orbit, st_drag, st_tear, st_stutter };
+static const int k_any_weight[GS_COUNT] = { 0, 3, 2, 2, 1, 2, 2, 2, 3, 1, 2, 0 };            /* (Drag, Tear and Stutter are only for when you pick them) */
 
 /* What tends to follow what, as a scratcher would string them: a Markov chain over the styles, one state to a bar. A bar's
  * successor is drawn from its row, so a phrase hangs together (a baby leads on to cuts or a flare, a flare to an orbit or a
@@ -919,12 +1043,60 @@ static void gen_plan(gen_t *g, int style, int bars, int plan[4], int grp[4])
     else if (bars == 2 && style == GS_ANY) { plan[1] = b; grp[1] = 1; }
 }
 
+/* A long sample (over TS_REACH_S): how much its strokes are scaled down so they are as long in seconds as on a sample TS_REACH_S long,
+ * a DJ's quarter or third of a turn, not a sweep through the whole phrase. 1 for anything up to TS_REACH_S: Ahhh and Fresssh, and their
+ * clips, are exactly what they were. */
+static float slot_reach(const ts_slot_t *s)
+{
+    if (!s || !s->loaded || s->len <= 0) return 1.0f;
+    const float secs = (float)s->len / TS_SAMPLE_RATE;
+    return secs > TS_REACH_S ? TS_REACH_S / secs : 1.0f;
+}
+
+/* A long sample's attacks, read the same way in seconds from the finer overview: a rise over 30 ms out of a dip, at least 0.2 s after the last
+ * (a word, a syllable, a hit), so a long phrase has a place to start for each of its words, not one an eighth of the sample. */
+static int slot_onsets_long(const ts_slot_t *s, float *out, int cap)
+{
+    float e[TS_RCOLS], mx = 0.0f;
+    for (int i = 0; i < TS_RCOLS; i++) { e[i] = (float)s->rms_hi[i] / 255.0f; mx = fmaxf(mx, e[i]); }
+    if (mx < 0.05f) return 0;
+    const float secs = (float)s->len / TS_SAMPLE_RATE, col = secs / (float)TS_RCOLS;
+    const int w = clampi((int)lrintf(0.03f / col), 1, 8), gap = clampi((int)lrintf(0.2f / col), w + 1, TS_RCOLS / 4);
+    const float pre = 0.01f / secs;                                             /* (ten milliseconds ahead of the attack, as on a short sample) */
+    int n = 0, last = (int)(s->lo * (float)TS_RCOLS);
+    out[n++] = clampf((float)last / (float)TS_RCOLS - pre, 0.0f, 0.9f);
+    for (int i = last + gap; i < TS_RCOLS - w - 1 && n < cap; i++) {
+        float rise = e[i + w] - e[i];
+        if (rise > 0.25f * mx && e[i] < 0.6f * e[i + w] && e[i] <= e[i - 1] + 0.01f) {
+            const float at = (float)i / (float)TS_RCOLS - pre;
+            if (at > 0.9f) break;
+            out[n++] = clampf(at, 0.0f, 0.9f);
+            last = i;
+            i += gap - 1;
+        }
+    }
+    return n;
+}
+
+/* How long a word's attack takes to arrive, in seconds: from its start to its loudest point within 0.2 s, the moment its vowel is in ("f"
+ * to "fre"), 50 to 150 ms. A stutter's push covers that, so each push has the vowel's pitch to sweep, not only the hiss before it. */
+static float slot_attack(const ts_slot_t *s, float at)
+{
+    if (!s || !s->loaded || s->len <= 0) return 0.0f;
+    const float secs = (float)s->len / TS_SAMPLE_RATE;
+    const int c0 = clampi((int)(at * (float)TS_RCOLS), 0, TS_RCOLS - 1), c1 = clampi(c0 + (int)(0.2f / secs * (float)TS_RCOLS) + 1, c0 + 1, TS_RCOLS);
+    int best = c0;
+    for (int c = c0; c < c1; c++) if (s->rms_hi[c] > s->rms_hi[best]) best = c;
+    return clampf(((float)(best - c0) + 0.5f) / (float)TS_RCOLS * secs + 0.01f, 0.05f, 0.15f);
+}
+
 /* Where a sample has its attacks: the start of its sound, and every place its level climbs fast out of a dip (a new word, the next hit),
  * read from the 128-column overview. Positions 0..1, a column before the attack, at most `cap` of them. A DJ puts the record there so a
  * stroke begins on the attack; the real performances and the example clips turn where the sample is quiet and about to get loud. */
 static int slot_onsets(const ts_slot_t *s, float *out, int cap)
 {
     if (!s || !s->loaded || cap < 1) return 0;
+    if (slot_reach(s) < 1.0f) return slot_onsets_long(s, out, cap);
     float e[TS_VIEW_COLS], mx = 0.0f;
     for (int i = 0; i < TS_VIEW_COLS; i++) { e[i] = (float)s->rms[i] / 255.0f; mx = fmaxf(mx, e[i]); }
     if (mx < 0.05f) return 0;
@@ -946,7 +1118,13 @@ static int slot_onsets(const ts_slot_t *s, float *out, int cap)
 static void cue_points(const ts_slot_t *s, float out[8])
 {
     float p[9];
-    int n = slot_onsets(s, p, 8);
+    int n;
+    if (slot_reach(s) < 1.0f) {                                                 /* a long sample: eight of its attacks, spread along all of it */
+        float all[32];
+        const int m = slot_onsets(s, all, 32);
+        n = m < 8 ? m : 8;
+        for (int k = 0; k < n; k++) p[k] = all[m <= 8 ? k : k * (m - 1) / 7];
+    } else n = slot_onsets(s, p, 8);
     const float lo = s && s->loaded ? s->lo : 0.0f, hi = s && s->loaded ? s->hi : 1.0f;
     if (n == 0) p[n++] = clampf(lo - 0.01f, 0.0f, 0.9f);
     for (int k = 1; k < n && s && s->loaded; k++) {                              /* a stroke starts a few columns ahead of an attack; a pad you tap lands on it */
@@ -1007,7 +1185,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
         if (eat == t && t + 8 <= len16 && ns + 10 < cap) {                       /* the echo scratch: four stabs, each lower */
             g->used |= TS_EX_ECHO;
             for (int r = 0; r < 4; r++) {
-                sl[ns].dur = 1; sl[ns].to = clampf(base + es[bar], base + 0.12f, 0.9f); sl[ns].shape = SH_FLICK; sl[ns].fw = 3 + r; ns++;
+                sl[ns].dur = 1; sl[ns].to = clampf(base + es[bar], base + 0.12f, 0.9f); sl[ns].shape = g_snap_flick ? SH_FLICK : SH_HAND; sl[ns].fw = 3 + r; ns++;
                 sl[ns].dur = 1; sl[ns].to = base; sl[ns].shape = SH_LIN; sl[ns].fw = 7; ns++;
             }
             t += 8; cur = base; up = 1;
@@ -1052,7 +1230,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
         if (last || to_start) to = base;
         else if (up) to = clampf(cur + span, base + 0.12f, 0.97f);
         else to = grnd(g) < 0.5f ? clampf(base + gr(g, -0.01f, 0.04f), 0.0f, 0.97f) : clampf(cur - span, base, 0.97f);
-        sl[ns].dur = d; sl[ns].to = to; sl[ns].shape = grnd(g) < 0.88f ? SH_FLICK : SH_EASE; sl[ns].fw = 0;
+        sl[ns].dur = d; sl[ns].to = to; sl[ns].shape = grnd(g) < 0.88f ? (g_snap_flick ? SH_FLICK : SH_HAND) : SH_EASE; sl[ns].fw = 0;
         ns++; cur = to; up = !up; t += d;
     }
     return ns;
@@ -1083,7 +1261,29 @@ static void gen_phrase(gen_t *g, int bars, const float *bases)
     }
 }
 
-static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch, float spx, float groove_p)
+/* How fast a stretch of a clip's strokes go, as the median of their average speeds, times the sample's own speed (fps: sample lengths a
+ * second; spx: sixteenths a second); 0 if it has none. A stroke runs from one change of direction to the next. */
+static float stroke_speed(const ts_clip_t *c, int i0, int i1, float fps, float spx)
+{
+    float sp[96];
+    int ns = 0, a = i0, dir = 0;
+    if (i1 > c->n) i1 = c->n;
+    for (int i = i0 + 1; i < i1 && ns < 96; i++) {
+        const int d = c->pos[i] > c->pos[i - 1] + 8 ? 1 : (c->pos[i] < c->pos[i - 1] - 8 ? -1 : 0);
+        if ((d && dir && d != dir) || i == i1 - 1) {
+            const int b = i - 1;
+            const float span = fabsf((float)c->pos[b] - (float)c->pos[a]) / 65535.0f, secs = (float)(b - a) / (float)GP / spx;
+            if (secs > 0.02f && span > 0.004f) sp[ns++] = span / secs / fps;
+            a = b;
+        }
+        if (d) dir = d;
+    }
+    if (!ns) return 0.0f;
+    for (int x = 1; x < ns; x++) for (int y = x; y > 0 && sp[y] < sp[y - 1]; y--) { const float t = sp[y]; sp[y] = sp[y - 1]; sp[y - 1] = t; }
+    return sp[ns / 2];
+}
+
+static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, const float *attacks, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch, float spx, float groove_p, float reach)
 {
     if (!out) return;
     bars = bars <= 1 ? 1 : (bars >= 4 ? 4 : 2);
@@ -1097,6 +1297,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     g.echo_p = echo_p;
     g.stretch = stretch;
     g.spx = spx;
+    g.fps = pps * spx;                                                          /* sample lengths a second: a stutter's lengths are in seconds */
     g.thin = 1.0f / stretch;
     g.dmin = (int)ceilf(0.88f * stretch);                                           /* the fewest sixteenths that make 0.11 s (a sixteenth is 0.125 / stretch seconds) */
     g.seed = seed;
@@ -1118,15 +1319,19 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     for (int i = 0; i < n; i++) { out->pos[i] = b16; out->gate[i] = 1; }
     static const float heights[3] = { 0.15f, 0.5f, 0.85f };
     g.amp_t = heights[gi(&g, 0, 2)];                                            /* how tall the strokes are, for the whole clip */
-    { int r = gi(&g, 0, 19); g.shape = r < 17 ? SH_FLICK : (r < 19 ? SH_EASE : SH_SLOW); }  /* and how they are shaped: almost always a flick */
+    { int r = gi(&g, 0, 19); g.shape = r < 17 ? (g_snap_flick ? SH_FLICK : SH_HAND) : (r < 19 ? SH_EASE : SH_SLOW); }  /* and how they are shaped: almost always a hand's */
     int plan[4], grp[4];
     gen_plan(&g, style, bars, plan, grp);
-    float bases[4];                                                             /* where each bar's strokes start from: an attack of the sample, if there is one to find */
+    float bases[4], words[4], atks[4] = { 0.0f, 0.0f, 0.0f, 0.0f };                                                   /* where each bar's strokes start from: an attack of the sample, if there is one to find; and the word itself, a stutter's start */
     for (int bar = 0; bar < bars; bar++) {
-        if (n_on <= 0) { bases[bar] = base0; continue; }
+        if (n_on <= 0) { bases[bar] = words[bar] = base0; continue; }
         gen_t t = g;
         t.rng = mix32(seed ^ ((uint32_t)(grp[bar] * 2 + 1) * 0x9E3779B9u) ^ ((uint32_t)plan[bar] * 0x85EBCA6Bu) ^ 0xBA5E0000u) | 1u;     /* (the same letter, the same place) */
-        bases[bar] = clampf(onsets[gi(&t, 0, n_on - 1)] + gr(&t, 0.02f, 0.07f), 0.0f, 0.9f);        /* (a little way into the attack: the turn is on the rise) */
+        const int pick = gi(&t, 0, n_on - 1);
+        const float into = gr(&t, 0.02f, 0.07f);                                /* (a little way into the attack: the turn is on the rise) */
+        bases[bar] = clampf(onsets[pick] + (reach < 1.0f ? into * reach : into), 0.0f, 0.9f);       /* (a long sample: as far in, in seconds, as on a short one) */
+        words[bar] = clampf(onsets[pick], 0.0f, 0.9f);
+        atks[bar] = attacks ? attacks[pick] : 0.0f;
     }
     if (style == GS_ANY) {                                                      /* a phrase, not techniques */
         for (int bar = 0; bar < bars; bar++) { plan[bar] = GS_ANY; grp[bar] = bar; }
@@ -1136,9 +1341,11 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         int s = plan[bar];
         g.rng = mix32(seed ^ ((uint32_t)(grp[bar] * 2 + 1) * 0x9E3779B9u) ^ ((uint32_t)s * 0x85EBCA6Bu)) | 1u;      /* the same letter, the same bar */
         float o = 16.0f * (float)bar, base = bases[bar], next = bases[(bar + 1) % bars];
+        g.word = words[bar];
+        g.attack = atks[bar];
         { uint16_t bb = (uint16_t)(base * 65535.0f + 0.5f); for (int i = (int)(o * (float)GP); i < (int)((o + 16.0f) * (float)GP) && i < n; i++) out->pos[i] = bb; }
         float end = k_styles[s](&g, o, base);
-        if (s != GS_STAB && s != GS_CRAB && s != GS_SCRIBBLE && s != GS_TEAR) {   /* (a stab's jabs, a crab's clicks, a scribble's vibrations and a tear's steps keep their exact places and sizes) */
+        if (s != GS_STAB && s != GS_CRAB && s != GS_SCRIBBLE && s != GS_TEAR && s != GS_STUTTER) {   /* (a stab's jabs, a crab's clicks, a scribble's vibrations, a tear's steps and a stutter's pushes keep their exact places and sizes) */
             g_warp(&g, o, base);
             int ie = (int)((o + 15.0f) * (float)GP) - 1;
             if (ie >= 0 && ie < out->n) end = (float)out->pos[ie] / 65535.0f;   /* where the warped path really is */
@@ -1147,19 +1354,89 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
             g_seg(&g, o + 15.0f, o + 16.0f, end, next, SH_EASE);
             g_gate(&g, o + 15.0f, o + 15.85f, 0);
         }
-        if (s != GS_STAB && s != GS_CRAB) {
+        if (s != GS_STAB && s != GS_CRAB && s != GS_STUTTER) {                   /* (a stutter's fader is its own: open on the pushes, shut on the pulls) */
             g_mask_turns(&g, o, s);                                             /* (an open-fader scratch keeps its turns; the others hide them) */
             if (s != GS_BABY && s != GS_SCRIBBLE && s != GS_FLARE && s != GS_ORBIT && s != GS_DRAG && s != GS_TEAR) g_limit_open(&g, o);       /* (a baby is open all the way: that is what it is) */
+        }
+    }
+    /* The strokes' size, scaled toward where each bar (Improv: each phrase) starts:
+     * - a long sample: so they are as long in seconds as on a short one, and stay on the word they start on;
+     * - every sample: so they go about as fast as a DJ's. A real hand works small strokes near the record's own speed (0.91 on average for
+     *   LM4K, 0.94 for Hansen's DJs); drawn ones ran 1.3 to 2.3 times it, three times as far, high and squealing. A bar whose strokes go
+     *   faster than its own speed on average is scaled down until they do not (a scribble's wiggle, a stab's jab and a stutter are their
+     *   speed, and keep it).
+     * The last sixteenth, where the record goes on to the next bar's start, moves between the two. */
+    {
+        const int P = bars >= 2 ? 2 : 1;
+        float ref[4], k[4];
+        for (int b = 0; b < bars; b++) {                                        /* (toward each bar's or phrase's lowest point, where its strokes rise from: Improv's answer can play round another attack than its first bar's) */
+            const int b0 = style == GS_ANY ? (b / P) * P : b, b1 = style == GS_ANY ? (b0 + P < bars ? b0 + P : bars) : b + 1;
+            uint16_t lo = 65535;
+            for (int i = b0 * 16 * GP; i < b1 * 16 * GP && i < n; i++) if (out->pos[i] < lo) lo = out->pos[i];
+            ref[b] = (float)lo / 65535.0f;
+            k[b] = reach < 1.0f ? reach : 1.0f;
+        }
+        for (int b0 = 0; b0 < bars; b0 += style == GS_ANY ? P : 1) {            /* (Improv: one factor for a phrase, so nothing jumps inside it) */
+            const int b1 = style == GS_ANY ? (b0 + P < bars ? b0 + P : bars) : b0 + 1;
+            if (g_snap_nocap || plan[b0] == GS_STUTTER || plan[b0] == GS_SCRIBBLE || plan[b0] == GS_STAB) continue;
+            const float sp = stroke_speed(out, b0 * 16 * GP, b1 * 16 * GP, g.fps, spx);
+            if (sp > 0.0f && sp * k[b0] > 1.0f) for (int b = b0; b < b1; b++) k[b] = clampf(1.0f / sp, 0.3f, k[b]);
+        }
+        /* the record's move on to the next bar's start (from its last turn before the bar line), its first stroke from there, and a
+         * forward (the record let go through the word) are not scaled: the factor fades to 1 across them, so each bar or phrase starts and
+         * ends where it was written, and a forward plays as far at its own speed, joined to what is around it without a jump */
+        static float kk[TS_CLIP_MAX_BEATS * TS_CLIP_RES];
+        for (int i = 0; i < n; i++) { const int b = i / (16 * GP) < bars ? i / (16 * GP) : bars - 1; kk[i] = plan[b] == GS_STUTTER ? 1.0f : k[b]; }
+        for (int b = 0; b < bars; b++) {
+            const int nb = (b + 1) % bars, e1 = (b + 1) * 16 * GP;
+            if (kk[e1 - 1] >= 1.0f && kk[(e1) % n] >= 1.0f) continue;
+            if (style == GS_ANY && (b + 1) % P && b + 1 < bars) continue;     /* (every bar line, so bars written the same stay the same; Improv: every phrase's) */
+            (void)nb;
+            int tr = e1 - 1, dir = 0;
+            const int back = style == GS_ANY ? 6 * GP : GP;                      /* (a named style moves on in its last sixteenth; Improv's phrase in its last stroke, at most six sixteenths) */
+            for (int i = e1 - 1; i > e1 - back && i > b * 16 * GP; i--) {
+                const int d = out->pos[i] > out->pos[i - 1] + 8 ? 1 : (out->pos[i] < out->pos[i - 1] - 8 ? -1 : 0);
+                if (d && dir && d != dir) { tr = i; break; }
+                if (d) dir = d;
+                tr = i;
+            }
+            for (int i = tr; i < e1; i++) { const float f = (float)(i - tr) / (float)(e1 - tr); kk[i] = kk[i] + (1.0f - kk[i]) * f; }
+            if (style != GS_ANY) continue;                                      /* (a named style's bar starts on its lowest point: nothing to fade in) */
+            const int s0 = e1 % n;                                              /* the next phrase's first stroke, up to its first turn */
+            int ft = s0 + 1;
+            dir = 0;
+            for (int i = s0 + 1; i < s0 + 6 * GP && i < n; i++) {
+                const int d = out->pos[i] > out->pos[i - 1] + 8 ? 1 : (out->pos[i] < out->pos[i - 1] - 8 ? -1 : 0);
+                if (d && dir && d != dir) break;
+                if (d) dir = d;
+                ft = i;
+            }
+            for (int i = s0; i <= ft && i < n; i++) { const float f = (float)(ft - i) / (float)(ft - s0 + 1); kk[i] = kk[i] + (1.0f - kk[i]) * f; }
+        }
+        for (int f = 0; f < g.nfw; f++) {
+            if (g.fw_kind[f] != 1) continue;
+            const int a = (int)(g.fw_t[f] * (float)GP), z = (int)((g.fw_t[f] + g.fw_d[f]) * (float)GP), w = GP / 2;
+            for (int i = a - w; i < z + w && i < n; i++) if (i >= 0) {
+                const float f0 = i < a ? (float)(a - i) / (float)w : (i >= z ? (float)(i - z + 1) / (float)w : 0.0f);     /* (eased in and out over half a sixteenth) */
+                kk[i] = 1.0f + (kk[i] - 1.0f) * clampf(f0, 0.0f, 1.0f);
+            }
+        }
+        for (int i = 0; i < n; i++) {
+            if (kk[i] >= 1.0f) continue;
+            const int b = i / (16 * GP) < bars ? i / (16 * GP) : bars - 1;
+            const float x = ref[b] + ((float)out->pos[i] / 65535.0f - ref[b]) * kk[i];
+            out->pos[i] = (uint16_t)(clampf(x, 0.0f, 1.0f) * 65535.0f + 0.5f);
         }
     }
     /* now and then the last half bar runs out: a stroke on to the end of the sample, so its tail plays, and a silent jump back */
     g.rng = mix32(seed ^ 0xA5A5F00Du) | 1u;
     int last = plan[bars - 1];
-    if (last != GS_STAB && last != GS_CRAB && grnd(&g) < 0.25f * fw_p) {                 /* (a run-out is a kind of forward: the Forwards setting rules it too) */
+    if (last != GS_STAB && last != GS_CRAB && last != GS_STUTTER && grnd(&g) < 0.25f * fw_p) {                 /* (a run-out is a kind of forward: the Forwards setting rules it too) */
         float o = 16.0f * (float)(bars - 1);
         int i0 = (int)((o + 8.0f) * (float)GP);
         g.used |= TS_EX_FWD;
         float from = (float)out->pos[i0] / 65535.0f, to = gr(&g, 0.93f, 0.99f);
+        if (reach < 1.0f) to = from + (to - from) * reach;                      /* (a long sample: on through its next words, not all of it) */
         g_seg(&g, o + 8.0f, o + 15.0f, from, to, gi(&g, 0, 1) ? SH_LIN : SH_SLOW);
         g_gate(&g, o + 8.0f, o + 15.0f, 1);
         g_seg(&g, o + 15.0f, o + 16.0f, to, bases[0], SH_FAST);
@@ -1168,13 +1445,14 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     /* Finish: the clip ends with the whole sample played through at its own speed, from where the sound starts to where it ends, so its tail
      * is heard; then the quick silent pull back. The record gets back to the start of the sound just before (a short shut jump). Its own
      * random numbers, so a clip with Finish at 0 is exactly what it was. */
-    if (fin_p > 0.0f && last != GS_STAB && last != GS_CRAB) {
+    if (fin_p > 0.0f && last != GS_STAB && last != GS_CRAB && last != GS_STUTTER) {
         gen_t t = g;
         t.rng = mix32(seed ^ 0xF1415EEDu) | 1u;
         if (grnd(&t) < fin_p) {
             g.used |= TS_EX_FIN;
             float o = 16.0f * (float)(bars - 1);
             float from = bases[bars - 1], span = fmaxf(hi - from, 0.2f);
+            if (reach < 1.0f) span = fmaxf(fminf(hi - from, 2.0f * (bars >= 2 ? 12.0f : 8.0f) * pps), 0.2f);     /* a long sample: to its end if that is no faster than twice its own speed, else as much as that plays */
             /* sixteenths the sound takes at the sample's own speed: up to three quarters of a bar (half a bar in a one bar clip); a sample
              * longer than that is still played right to its end, a little faster than its own speed, not cut short */
             float x = clampf(span / fmaxf(pps, 0.01f), 3.0f, bars >= 2 ? 12.0f : 8.0f);
@@ -1396,23 +1674,29 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     }
     float fw_p = isfinite(fwd) ? clampf(fwd, 0.0f, 1.0f) : 0.0f;
     if (!out) return;
-    float onsets[8];
-    int n_on = slot_onsets(slot, onsets, 8);
+    const float reach = slot_reach(slot);
+    float onsets[32], attacks[32];
+    int n_on = slot_onsets(slot, onsets, reach < 1.0f ? 32 : 8);
+    for (int k = 0; k < n_on; k++) attacks[k] = slot_attack(slot, onsets[k]);
     /* how long a forward takes: most of the sound at about the sample's own speed, at 120 bpm (a sixteenth is 1/8 s); fixed, so a recipe
      * makes the same clip whatever the tempo it is loaded at */
     int fw16 = 4;
     if (slot && slot->loaded && slot->len > 0) fw16 = clampi((int)(0.8f * (slot->hi - slot->lo) * (float)slot->len / TS_SAMPLE_RATE / 0.125f + 0.5f), 3, 7);
+    if (reach < 1.0f) fw16 = clampi((int)(0.8f * TS_REACH_S / 0.125f + 0.5f), 3, 7);     /* (a long sample: a forward through a word or two) */
     /* A hand can make about 6 sounds a second at most (the real DJ in the measurements: 5.7). The grid is sixteenths, so on a fast song the
      * clips would run past that (8.6 a second at 160 bpm, strokes five times the sample's own speed). Above 120 bpm the strokes are as
      * long in seconds as at 120 bpm, and the cuts as rare per second; at 120 and below nothing changes. */
     const float stretch = isfinite(bpm) && bpm > 120.0f ? fminf(bpm / 120.0f, 2.0f) : 1.0f;
     const float spx = isfinite(bpm) && bpm > 0.0f ? bpm / 15.0f : 8.0f;           /* sixteenths a second (what a hand does is in seconds: a scribble's vibration, a crab's fingers) */
-    static const float need[GS_COUNT] = { 0.42f, 0.45f, 0.40f, 0.40f, 0.50f, 0.28f, 0.42f, 0.38f, 0.45f, 0.15f, 0.45f, 0.45f, 0.40f };       /* (a crab is a few clicks a beat: about a fifth of it is heard) */
+    static const float need[GS_COUNT] = { 0.42f, 0.45f, 0.40f, 0.40f, 0.50f, 0.28f, 0.42f, 0.38f, 0.45f, 0.15f, 0.45f, 0.45f, 0.40f, 0.20f };       /* (a crab is a few clicks a beat: about a fifth of it is heard) */
+    g_snap_flick = g_snap_nocap = style == TS_GS_SNAP;
+    g_free = style == TS_GS_FREESTYLE;
+    if (style == TS_GS_SNAP || style == TS_GS_FREESTYLE) style = GS_ANY;
     style = clampi(style, 0, GS_COUNT - 1);
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;
     for (int attempt = 0; attempt < 8; attempt++) {                             /* a seed that comes out mostly silent is thrown again: same seed, same clip, always */
-        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on, fw16, fw_p, fin_p, pps, hi, echo_p, stretch, spx, groove_p);
+        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, attacks, n_on, fw16, fw_p, fin_p, pps, hi, echo_p, stretch, spx, groove_p, reach);
         float a = gen_audible(out);
         if (a >= need[style]) return;
         if (a > best_a) { best_a = a; best = *out; }
@@ -1786,6 +2070,7 @@ void ts_params_default(ts_params_t *p)
     p->bite = 0.10f;                     /* a touch of edge */
     p->clip_depth = 1.0f;
     p->clip_offset = 0.0f;
+    p->vinyl = 0.0f;
 }
 
 void ts_params_sanitize(ts_params_t *p)
@@ -1815,6 +2100,7 @@ void ts_params_sanitize(ts_params_t *p)
     p->bite = isfinite(p->bite) ? clampf(p->bite, 0.0f, 1.0f) : 0.10f;
     p->clip_depth = isfinite(p->clip_depth) ? clampf(p->clip_depth, 0.0f, 2.0f) : 1.0f;
     p->clip_offset = isfinite(p->clip_offset) ? clampf(p->clip_offset, -0.5f, 0.5f) : 0.0f;
+    p->vinyl = isfinite(p->vinyl) ? clampf(p->vinyl, 0.0f, 1.0f) : 0.0f;
 }
 
 /* ------------------------------------------------------------------ */
@@ -2549,6 +2835,30 @@ static float read_hermite(const float *d, int len, double pos)
  * pass is different). The timing drifts (up to 60 ms either way, a new drift every beat), each cut lands early or late (up to 25 ms more, every
  * sixteenth) and softer (down to 55% of its level), and each stroke runs short or long (up to 8% of the sample), all at 100%. The playback and
  * the clip view both come here, so the picture is what you hear. */
+/* A long sample's Clip Depth works around where each bar of the clip starts (its lowest point: the strokes go up from there), not from the
+ * start of the sample, so a clip turned down still scratches the words it is on. Read once a block (render time: no more than a scan of the
+ * clip); in the last sixteenth of a bar it moves on to the next bar's. */
+static double clip_bar_ref(ts_engine_t *e, const ts_clip_t *k, double beat)
+{
+    const int bars = k->len >= 4 ? k->len / 4 : 1;
+    if (e->bref_ck != (const void *)k || e->bref_at != e->frames) {
+        for (int b = 0; b < bars && b < TS_CLIP_MAX_BEATS / 4; b++) {
+            const int i0 = b * 4 * TS_CLIP_RES, i1 = (b + 1) * 4 * TS_CLIP_RES < k->n ? (b + 1) * 4 * TS_CLIP_RES : k->n;
+            uint16_t m = 65535;
+            for (int i = i0; i < i1; i++) if (k->pos[i] < m) m = k->pos[i];
+            e->bref[b] = (float)m / 65535.0f;
+        }
+        e->bref_ck = (const void *)k;
+        e->bref_at = e->frames;
+    }
+    const double x = beat - floor(beat / k->len) * k->len;
+    const int b = clampi((int)(x / 4.0), 0, bars - 1);
+    double r = e->bref[b];
+    const double u = (x - (4.0 * b + 3.75)) / 0.25;
+    if (u > 0.0) r += ((double)e->bref[(b + 1) % bars] - r) * (u > 1.0 ? 1.0 : u);
+    return r;
+}
+
 static void humanise_at(const ts_params_t *p, double bpm, int clip, int len_beats, double pass_beat, double sw_t,
                         double *t_path, double *t_gate, double *pos_off, float *lv_scale)
 {
@@ -2605,6 +2915,8 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
     const float ramp = 1.0f / (0.001f * e->sr);                             // a cut takes 1 ms: a scratch DJ sets the crossfader curve very steep, so it acts as an on-off switch (Hansen)
     const float nrm = p->normalise && s->loaded ? s->norm : 1.0f;
     const float gain = powf(10.0f, p->gain_db / 20.0f) * nrm;
+    const float vy_a = 1.0f - expf(-1.0f / (0.001f * e->sr));                 /* (the cartridge's level follows the speed within a millisecond: no zipper) */
+    const float vy_lpa = 1.0f - expf(-6.2831853f * 7000.0f / e->sr), vy_hpa = 1.0f - expf(-6.2831853f * 300.0f / e->sr);
     const float bite_decay = expf(-1.0f / (0.008f * e->sr));                    /* the attack's extra bite falls away in about 8 ms */
     const float bite_a = 1.0f - expf(-6.2831853f * 1800.0f / e->sr);            /* the brightness lifts what is above about 1.8 kHz */
     const double spb = (double)e->bpm / (60.0 * (double)e->sr);
@@ -2667,10 +2979,12 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         /* The clip's own time, swung. Humanise loosens a clip as it plays, whatever is stored: the timing drifts (up to 25 ms either way, a new
          * drift every beat), each cut lands a little early or late (up to 12 ms, every sixteenth) and a little softer, and each stroke runs a
          * little short or long (up to 4% of the sample). Every pass round the clip is different; at 0 it is exactly as written. */
-        const double sw_t = ts_swing_time(e->mclock, p->swing) - t0;
+        const ts_recipe_t *rr = clip > 0 ? recipe_at(e, clip) : NULL;
+        const int stut = rr && rr->style == GS_STUTTER;                      /* a stutter plays straight: a word cut in at a steady speed, not bent by Swing or Humanise */
+        const double sw_t = stut ? e->mclock - t0 : ts_swing_time(e->mclock, p->swing) - t0;
         double t_path = sw_t, t_gate = sw_t, pos_off = 0.0;
         float lv_scale = 1.0f;
-        if (p->humanise > 0.0f && clip > 0 && live) humanise_at(p, (double)e->bpm, clip, ck->len, e->mclock - t0, sw_t, &t_path, &t_gate, &pos_off, &lv_scale);
+        if (p->humanise > 0.0f && clip > 0 && live && !stut) humanise_at(p, (double)e->bpm, clip, ck->len, e->mclock - t0, sw_t, &t_path, &t_gate, &pos_off, &lv_scale);
 
         if (e->hand_hold > 0) e->hand_hold--;
         if (e->scratch_hold > 0) e->scratch_hold--;
@@ -2679,6 +2993,11 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         if (e->hand_hold > 0 || !live) e->target = e->man;
         else if (clip > 0) {
             double v = (double)ts_clip_pos(e, clip, t_path) * (double)p->clip_depth + (double)p->clip_offset + pos_off;     /* Swing, Humanise, Depth and Offset */
+            const float rk = slot_reach(s);
+            if (rk < 1.0f) {                                                     /* a long sample: Depth around where the bar starts; a clip not made for it is scaled down as a generated one is */
+                const double r = clip_bar_ref(e, ck, t_path);
+                v = r + ((double)ts_clip_pos(e, clip, t_path) - r) * (double)p->clip_depth * (native ? 1.0 : (double)rk) + (double)p->clip_offset + pos_off * (double)rk;
+            }
             v = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
             e->target = native ? v : (double)s->lo + (double)(s->hi - s->lo) * v;
         }
@@ -2707,6 +3026,27 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         float want = open ? lv : 0.0f;
         if (e->gate < want) { e->gate += ramp; if (e->gate > want) e->gate = want; }
         else if (e->gate > want) { e->gate -= ramp; if (e->gate < want) e->gate = want; }
+        /* Vinyl: a record under a needle. A magnetic cartridge's output follows the needle's speed, so a record moving slowly is quieter and
+         * one held still is silent (Hansen: the sound level follows the record's speed, a correlation of .8); faster than its own speed it is
+         * only a little louder (the RIAA curve takes most of that back). And the groove has a sound of its own, moving with it: a faint hiss
+         * and now and then a crackle, as many to the second as the record covers dust. At 0 none of this happens. */
+        if (p->vinyl > 0.0f) {
+            const float sp = fminf(fabsf(e->vel_out), 3.0f);
+            const float gv = sp < 1.0f ? powf(sp, 0.8f) : 1.0f + 0.12f * (sp - 1.0f);
+            e->vy_g += vy_a * (gv - e->vy_g);
+            e->vy_rng = e->vy_rng * 1664525u + 1013904223u;
+            const float wn = (float)(int32_t)e->vy_rng * (1.0f / 2147483648.0f);
+            e->vy_lp += vy_lpa * (wn - e->vy_lp);                               /* (the groove's hiss: about 300 Hz to 7 kHz) */
+            e->vy_hp += vy_hpa * (e->vy_lp - e->vy_hp);
+            float groove = (e->vy_lp - e->vy_hp) * 0.006f;
+            e->vy_rng = e->vy_rng * 1664525u + 1013904223u;
+            if ((float)(e->vy_rng >> 8) * (1.0f / 16777216.0f) < 3.0f * sp / (float)e->sr)       /* (about three crackles a second at the record's own speed) */
+                e->vy_click = (0.02f + 0.06f * (float)((e->vy_rng >> 4) & 255) / 255.0f) * ((e->vy_rng & 1u) ? 1.0f : -1.0f);
+            groove += e->vy_click;
+            e->vy_click *= 0.55f;
+            const float wet = smp * e->vy_g + groove * e->vy_g / nrm;
+            smp += p->vinyl * (wet - smp);
+        }
         /* Bite: soft saturation, on the normalised sound so a quiet recording bites as much as a loud one. The drive rises with the speed of the
          * playhead (a fast stroke is where a scratch is bright and hard) and for a few milliseconds as the fader opens (the attack); the make-up
          * gain keeps the loudness where it was, so it is edge and not level. At 0 the sound is untouched. */
@@ -2805,10 +3145,10 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
        x, tx, e->pos, (double)p->turntable, (double)e->vel_out, (double)p->drag, (double)p->gain_db, p->note_gate, p->vel_to_vol, p->normalise, p->lock,
        p->cut_from, e->gate > 0.5f, e->notes_held + e->pad_held, e->transport, e->lane_col, p->clip ? e->clip_now % CID_PAGE : 0, p->clip, e->running, e->last_note, e->pad_raw > 0, lane_beats, e->nclips,
        e->rec_state == 1, e->rec_state == 1 ? (int)((float)e->rec_len * 10.0f / e->sr) : 0, clampi((int)(e->in_peak * 100.0f + 0.5f), 0, 100),
-       e->try_valid, e->try_valid ? e->try_recipe.style : 0, e->view_seq,
-       (double)p->clip_depth, (double)p->clip_offset, p->gen_style, p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin, (double)p->gen_echo, (double)p->humanise, (double)p->gen_groove,
+       e->try_valid, e->try_valid ? ts_style_shown(e->try_recipe.style) : 0, e->view_seq,
+       (double)p->clip_depth, (double)p->clip_offset, ts_style_shown(p->gen_style), p->gen_bars, (double)p->gen_fwd, (double)p->swing, (double)p->gen_fin, (double)p->gen_echo, (double)p->humanise, (double)p->gen_groove,
        p->cues, e->cue_on ? e->cue_pad : -1, cue_cols,
-       rec ? rec->style : -1, rec && (shown_clip->extras & TS_EX_KNOWN) ? shown_clip->extras & 7 : -1, rec ? rec->groove : 0,
+       rec ? ts_style_shown(rec->style) : -1, rec && (shown_clip->extras & TS_EX_KNOWN) ? shown_clip->extras & 7 : -1, rec ? rec->groove : 0,
        rec && (shown_clip->extras & TS_EX_KNOWN) ? (shown_clip->extras >> TS_EX_TMPL_SHIFT) & 15 : 0,
        e->view_page, p->clip ? e->clip_now / CID_PAGE : 0, page_flags);
     for (int c = 0; c < TS_VIEW_COLS && j.len >= 0; c++) jw(&j, "%02x", s->loaded ? s->pk[c] : 0);       /* the waveform: peak, then body */
@@ -2837,7 +3177,7 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
             double tp, tg, po;
             float lvs;
             humanise_at(p, (double)e->bpm, e->clip_now, pk->len, e->mclock - t0, t, &tp, &tg, &po, &lvs);
-            jw(&j, "%x", clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po), 0.0f, 1.0f) * 15.0f + 0.5f), 0, 15));
+            jw(&j, "%x", clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po * (double)slot_reach(s)), 0.0f, 1.0f) * 15.0f + 0.5f), 0, 15));
             hg[k] = ts_clip_cut(e, e->clip_now, tg) ? '1' : '0';
         }
         hg[TS_LANE] = 0;
@@ -2931,11 +3271,12 @@ int ts_engine_rview(const ts_engine_t *e, char *buf, int cap)
     jw(&j, "\"p\":%.5f,\"tx\":%.5f,\"vl\":%.3f,\"g\":%.3f,\"sl\":%.4f,\"lo\":%.4f,\"hi\":%.4f,\"nat\":%d,\"hh\":%d,",
        e->pos, e->target, (double)e->vel_out, (double)e->gate, s->loaded ? (double)s->len / (double)e->sr : 0.0, (double)s->lo, (double)s->hi,
        native, e->hand_hold > 0);
+    { const ts_recipe_t *fr = e->clip_now > 0 ? recipe_at(e, e->clip_now) : NULL; jw(&j, "\"fm\":%d,", fr && fr->style == GS_STUTTER); }     /* (a stutter is played straight: no Swing, no Humanise) */
     jw(&j, "\"rk\":%u,\"lb\":%d,\"hk\":%d,\"cm\":%d,\"cl\":%d,\"cp\":%d,\"pg\":%d,\"tv\":%d,\"tg\":%d,\"cy\":%d,\"cx\":%d,\"cg\":%d,\"ct\":%d,",
        remote_key(e, k), k ? k->len : TS_LANE_BEATS, k ? (int)floor((e->mclock - t0) / (double)k->len) : 0,
        p->clip, p->clip ? e->clip_now % CID_PAGE : 0, p->clip ? e->clip_now / CID_PAGE : 0, e->view_page,
-       e->try_valid, e->try_valid ? e->try_recipe.style : 0,
-       rec ? rec->style : -1, rec && known ? k->extras & 7 : -1, rec ? rec->groove : 0, rec && known ? (k->extras >> TS_EX_TMPL_SHIFT) & 15 : 0);
+       e->try_valid, e->try_valid ? ts_style_shown(e->try_recipe.style) : 0,
+       rec ? ts_style_shown(rec->style) : -1, rec && known ? k->extras & 7 : -1, rec ? rec->groove : 0, rec && known ? (k->extras >> TS_EX_TMPL_SHIFT) & 15 : 0);
     jw(&j, "\"cs\":%d,\"cq\":%d,\"cu\":[", p->cues, e->cue_on ? e->cue_pad : -1);
     for (int i = 0; i < 8; i++) jw(&j, "%s%.4f", i ? "," : "", (double)cu[i]);
     jw(&j, "],\"pk\":%u,\"rc\":%d,\"rt\":%d,\"rl\":%d,\"ln\":%d,\"nc\":%d,\"s\":%d,\"n\":",
@@ -3004,7 +3345,7 @@ int ts_engine_rclip(const ts_engine_t *e, char *buf, int cap)
                 double tp, tg, po;
                 float lvs;
                 humanise_at(p, (double)e->bpm, e->clip_now, k->len, e->mclock - t0, t, &tp, &tg, &po, &lvs);
-                jw_hex(&j, (unsigned)clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po), 0.0f, 1.0f) * 4095.0f + 0.5f), 0, 4095), 3);
+                jw_hex(&j, (unsigned)clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po * (double)slot_reach(s)), 0.0f, 1.0f) * 4095.0f + 0.5f), 0, 4095), 3);
                 hg[i] = ts_clip_cut(e, e->clip_now, tg) ? '1' : '0';
             }
             hg[hn] = 0;

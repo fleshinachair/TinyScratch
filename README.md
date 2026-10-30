@@ -39,7 +39,7 @@ Each page has its own colour, and a clip on another page than the first is label
 
 **5. Add your own sample.** Best at one to two seconds, noisy and aggressive, with a little silence at each end.
 
-- **Record it:** hold an **empty User pad** (row 3) and make the sound into the Move's input; let go and it is kept (up to four seconds).
+- **Record it:** hold an **empty User pad** (row 3) and make the sound into the Move's input; let go and it is kept (up to ten seconds).
   It is cropped to the sound and brought up to the level of the built-in samples. Recording starts once the pad has been held a moment
   (0.3 s): a tap on an empty User pad just selects it. A recording with no sound in it is not kept.
 - **Or load a file:** pick **Load Sample** in the first menu and choose a `.wav` from the Move's library.
@@ -69,7 +69,7 @@ clip never changes):
 
 | dial | what it does |
 |---|---|
-| **Style** | what Generate makes: **Improv** (the default: an improvised two-bar phrase of strokes of every length, answered by a changed version of itself; it does not pick from the named styles) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear |
+| **Style** | what Generate makes: one of the three **Improv** styles, an improvised two-bar phrase of strokes of every length answered by a changed version of itself, which does not pick from the named styles: **Flow** (the default: moves like a real hand), **Snap** (next in the list: Improv as 1.1.0 made it, faster flicks, punchier) or **Freestyle** (Flow with longer, looser sounds, measured from real DJs playing alone); or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear, Stutter |
 | **Length** | 1, 2 or 4 bars |
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |
@@ -86,6 +86,7 @@ clip never changes):
 | **Clip Depth** / **Clip Offset** | how far the clip moves the playhead (0-200%) and where along the sample it moves it: a smaller or shifted version of every clip |
 | **Drag** | how quickly the playhead follows: low is "digital", high is "analogue" |
 | **Gain** | -24 to +12 dB |
+| **Vinyl** | how much it sounds like a record under a needle (0, the default, is as it always was). A magnetic cartridge's output follows the needle's speed, so a record moved slowly is quieter and one held still is silent (Hansen measured the sound level following the record's speed, a correlation of .8); and the groove has a faint hiss and the odd crackle of its own, moving with the record |
 
 **Pad Play: how the pads play.** **Note Gate** (on: the red pads are the fader; off: you always hear the playhead), **Vel to Vol** and
 **Cue Pads** (below), and **Taste Log** (on). Lock, Normalise, Cut From and Pad Grid keep their defaults.
@@ -112,7 +113,7 @@ top); it matters for bright sounds such as hi-hats and sibilants, and for your o
 Generate makes a **recipe** (sample, style, seed, length, and the dial settings) and builds the clip from it, so the same recipe always
 gives the same clip. A kept clip is saved exactly (its playhead path and fader), so it sounds the same whatever the generator becomes later.
 
-- **Improv** is a two-bar phrase of strokes of every length, then the same phrase again with some strokes changed, on the sixteenth grid at
+- **Improv** (the Flow, Snap and Freestyle styles) is a two-bar phrase of strokes of every length, then the same phrase again with some strokes changed, on the sixteenth grid at
   any tempo up to 120 bpm. The fader is laid on the grid and the record turns a little ahead of the beat, so every cut bites in with the
   record already moving fast. **On a faster song** (above 120 bpm) the strokes and the cuts keep the length in seconds they have at 120, so
   there are fewer to the bar: no more sounds a second (about 6.5) than a hand can make, however fast the song. (At 160 bpm the plain grid
@@ -126,7 +127,17 @@ gives the same clip. A kept clip is saved exactly (its playhead path and fader),
   [Analysis of a genuine scratch performance](https://www.speech.kth.se/~hansen/files/thesis/HansenBresin03_GW.pdf) (2004), and Hansen's thesis
   [The acoustics and performance of DJ scratching](https://www.speech.kth.se/~hansen/files/thesis/KjetilFalkenbergHansen_2010_phdthesis.pdf)
   (2010). The example clips used for measuring are not in this repository and nothing of them is copied; only the measures were used.
-  What was not matched: the real DJ's strokes are not constant in speed (the platter turns in an arc).
+- **Moved like a real hand.** Every style's strokes but Snap's take the shape of a recorded hand's: LM4K's 98 strokes in the one surviving
+  [ScratchML](https://jamiedubs.com/scratchml) performance, which speed up, are fastest about 42% of the way (1.9 times their average) and
+  slow into the turn (drawn strokes had bitten in fastest at the start, which a recorded hand does not). And they go about as fast as a DJ's:
+  near the record's own speed on average (LM4K 0.91, Hansen's DJs 0.94), where drawn ones ran 1.3 to 2.3 times it, three times as far,
+  high and squealing; a bar whose strokes are faster is scaled down toward where it starts (a scribble's wiggle, a stab's jab and a
+  stutter keep their speed: it is what they are). Played back, Flow's strokes average 0.91 of the sample's speed with the hand's
+  shape. **Snap** keeps 1.1.0's: a flick's shape (fastest at the start) and no cap on the speed, which over a beat can be the catchier of
+  the two. **Freestyle** is Flow with the fader of real DJs measured from audio (17 dry clips, 74 s): a sound rings most of a sixteenth
+  (about 115 ms against Flow's 80), often tied into the next, with about 60 ms between and about 4 a second. Alone it is closer to the
+  recordings; over a beat the tighter Flow and Snap won blind tests. Clips already kept, and the shipped ones, play from their saved data,
+  so they do not change.
 
 **The named styles** are built from the definitions in the Turntablist Transcription Methodology
 ([TTM basics](https://www.ttm-dj.com/ttm-01-01-basics/), [the TTM guide](https://lcme.uwl.ac.uk/media/tmpfvcmu/ttm-guide-may-2021.pdf)) and
@@ -147,6 +158,7 @@ sixteenth grid):
 | **Crab** | three or four fast clicks (about sixteen a second) in one record gesture, the pull back silent |
 | **Drag** | slow strokes, low in pitch |
 | **Tear** | the record hand alone, the fader open: pushed forward, stopped, pushed forward again, stopped, then the same backwards: four sounds, two forward and two back (Hansen's "clover tear") |
+| **Stutter** | a word's first sound pushed again and again in time, then the word let go: "f-f-f-f-fight". Each push is a forward over the word's attack (from its start to its loudest point, the "f" to the "fre", 50 to 150 ms), pushed as a hand pushes (slow, fast, slow, so it sweeps in pitch), the fader open on the push and shut on the pull back; the release glides on through the whole word at about its own speed. One of six rhythms a bar: a run of sixteenths into a roll (pushes each split into two sounds by the fader, as a DJ plays a fast "ffff"), a call and answer ("f-f-fight, f-f-fight"), a build-up that shows a little more of the word each time ("f, fi, fig, figh, fight"), an off-grid pattern, rubs (the record back and forth with the fader open, both ways heard, a baby scratch) then the word let go, or the word first and the stutter after. Its lengths are in seconds, so it works the same on a short clip of one word and on a long phrase (each bar on one of its words). It is played straight: **Swing** and **Humanise** do not bend its timing (a word is cut in at a steady speed, so it stays clear); **Drag** gives its pushes a record's weight, as in every style. How many pushes a bar has varies, as a hand's does: now and then one is left out. Best on speech |
 
 The Hansen & Bresin measurements describe one DJ's improvisation, which is what "Improv" follows. The named styles follow the textbook
 techniques. Not yet built: the hydroplane. A style's number is saved in a clip's recipe, so new styles are added on the end.
@@ -193,6 +205,12 @@ from the end of "Change the Beat" (Fab 5 Freddy, 1982), described as public doma
 - **Copying files** into `samples/`: any `.wav` (16-bit, mono or stereo, any rate, up to ten seconds) fills the User slots that are left.
 - A kept clip is rebuilt from its recipe against the same sample if its data is missing, so unload a sample before putting a different one
   in its slot.
+- **Long samples** (over 1.2 s: a phrase, a run of words, a loop) are scratched the way a DJ works a phrase. Each bar of a generated clip
+  starts on one of the sample's words or hits, and its strokes are as long in seconds as on a short sample (a quarter to a third of a turn),
+  not a sweep through the whole phrase. **Clip Depth** turns the strokes up or down around where each bar starts, so a clip turned down
+  stays on its words; a built-in clip on a long sample is scaled down the same way. **Finish** plays the phrase from the bar's word to its
+  end, at up to twice its own speed. Ahhh, Fresssh and anything up to 1.2 s are not touched by any of this: they and their clips sound
+  exactly as they always have.
 
 `tools/audio_convert.c` (`scripts/build_converter.sh`) converts FLAC / WAV / AIFF / MP3 to that format and can cut a one-second excerpt.
 
@@ -230,6 +248,12 @@ page of its own (Schwung's Remote UI shows it in place of the plain list of cont
 - **Load a sound**: drop any audio file on the deck (or press LOAD SOUND). The page makes it a mono WAV of up to 10 s, cut to its
   first sound, puts it in the Move's sample library (Samples/TinyScratch) and loads it onto the selected User slot (the first empty one
   when Ahhh or Fresssh is selected).
+- **Pick from a song**: a file longer than 10 s (a whole song, an MP3 is fine) opens the picker instead. It shows all of the song and a
+  closer view of part of it (scroll to zoom, drag the whole-song view to move along). Mark up to six spots: drag across a word, or choose
+  a LENGTH (1, 2, 3, 5 or 10 s) and click where a spot should start. SNAP TO HITS starts each on the nearest word or hit. Drag a spot to
+  move it, or its edges to trim it, or type its length. Play each one to hear exactly what will be sent, and give each a User slot and a
+  name. Nothing reaches the Move until **SEND**: then each spot becomes a WAV in the sample library and is loaded into its slot. The
+  song itself stays in the browser. The spots are ordinary samples once loaded, so they work on the Move without the Remote UI too.
 - **Scratch the record**: grab the vinyl and turn it. The playhead goes where your hand takes it (a turn at 33 1/3 is the sample at its own
   speed) and the fader is open while your hand is on; let go and the clip takes over again. You hear it after the network's delay.
 - **The dials**, along the top and grouped as the pages are: **Pre-Gen** (Style, Length, Forwards, Finish, Echo, Groove), **Playback** (Swing, Humanise,

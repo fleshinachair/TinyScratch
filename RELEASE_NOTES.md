@@ -1,5 +1,17 @@
 # TinyScratch release notes
 
+## v1.5.0
+
+- **Three ways to Improv**, at the top of the Style list: **Flow** (the default) moves like a real DJ's hand; **Snap** is Improv exactly
+  as 1.1.0 made it, punchier; **Freestyle** is Flow with longer, looser sounds, as real DJs play on their own. Old projects' Improv opens as Flow.
+- **Stutter**, a new style: a word's first sound pushed again and again in time, then let go ("f-f-f-fight"). Best on speech.
+- **Long samples**: each bar starts on one of the sample's words or hits, with strokes as long as on a short sample. Record up to 10 s.
+- **Pick spots from a song** (Remote UI): drop a song, mark up to six spots, preview them, then send them to User slots.
+- **Vinyl** (Playback, dial 8; off by default): slow moves are quieter, with the groove's faint hiss and crackle.
+- **Fix:** the Move's screen named styles after Tear as Tear.
+
+Kept clips and the shipped clips and samples sound exactly as before.
+
 ## v1.1.0
 
 - **Remote UI.** TinyScratch now has a page in Schwung's Remote UI (`http://move.local:7700/remote-ui`): an overhead turntable whose record

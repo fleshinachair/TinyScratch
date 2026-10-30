@@ -200,6 +200,31 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
 .demobar button { font: 600 10px/1 var(--sans); letter-spacing: .12em; padding: 6px 10px; border-radius: 3px; border: 1px solid var(--line); background: var(--well); color: var(--ink); cursor: pointer; }
 .demobar .prog { flex: 1; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; min-width: 80px; }
 .demobar .prog i { display: block; height: 100%; width: 0; background: var(--acid); }
+/* ---- the song picker: spots chosen from a long file ---- */
+.picker { position: fixed; inset: 0; z-index: 50; display: none; justify-content: center; align-items: flex-start; overflow: auto; padding: 24px 16px; background: rgba(10,10,12,.8); -webkit-user-select: none; user-select: none; }
+.picker.show { display: flex; }
+.pk-box { width: min(1400px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.pk-box > h2 { display: flex; align-items: baseline; margin-bottom: 0; }
+.pk-box > h2 .sub { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-btn { font: 600 10px/1 var(--sans); letter-spacing: .1em; padding: 6px 9px; border-radius: 3px; border: 1px solid var(--line); background: var(--well); color: var(--dim); cursor: pointer; white-space: nowrap; }
+.pk-btn:hover { color: var(--ink); }
+.pk-btn.on { color: #19191b; background: var(--acid); border-color: transparent; }
+.pk-btn.go { color: #19191b; background: var(--acid); border-color: transparent; padding: 8px 14px; }
+.pk-btn:disabled { opacity: .4; cursor: default; }
+#pkOv { width: 100%; height: 54px; display: block; border-radius: 4px; background: var(--well); cursor: pointer; touch-action: none; }
+#pkDt { width: 100%; height: 220px; display: block; border-radius: 4px; background: var(--well); cursor: crosshair; touch-action: none; }
+.pk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font: 500 11px/1.3 var(--mono); color: var(--dim); }
+.pk-bar .lbl { font: 600 10px/1 var(--sans); letter-spacing: .14em; color: var(--faint); margin-left: 8px; }
+.pk-bar .hint { flex: 1; min-width: 200px; text-align: right; color: var(--faint); }
+.pk-list { display: flex; flex-direction: column; gap: 6px; }
+.pk-row { display: grid; grid-template-columns: 10px 150px minmax(80px, 1fr) 76px minmax(150px, auto) auto auto; gap: 8px; align-items: center; font: 500 11px/1.3 var(--mono); color: var(--dim); }
+.pk-row i { width: 10px; height: 24px; border-radius: 2px; }
+.pk-row select, .pk-row input { font: 500 12px/1 var(--sans); color: var(--ink); background: var(--well); border: 1px solid var(--line); border-radius: 3px; padding: 6px; min-width: 0; -webkit-user-select: text; user-select: text; }
+.pk-empty { font: 400 12px/1.5 var(--sans); color: var(--faint); padding: 6px 0; }
+.pk-foot { display: flex; align-items: center; gap: 10px; }
+.pk-foot .msg { flex: 1; font: 500 11px/1.3 var(--mono); color: var(--acid); }
+.pk-foot .msg.bad { color: var(--red); }
+@media (max-width: 760px) { .pk-row { grid-template-columns: 10px 1fr 1fr; } .pk-row .t { grid-column: 2 / 4; } }
 </style>
 </head>
 <body>
@@ -251,13 +276,13 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
         <button class="loadbtn" id="loadBtn" title="Load a sound onto a User slot (or drop one on the deck)">LOAD SOUND</button>
         <input type="file" id="loadFile" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.m4a,.ogg" hidden>
         <div class="deckwrap"><canvas id="deck"></canvas>
-          <div class="drop" id="drop"><span id="dropWhere">Drop a sound to load it</span><small>any audio file: it is made a mono WAV, up to 10 s, here first</small></div></div>
+          <div class="drop" id="drop"><span id="dropWhere">Drop a sound to load it</span><small>any audio file, made a mono WAV here first: up to 10 s loads as it is; a longer one (a whole song) opens the picker</small></div></div>
         <div class="loadmsg" id="loadMsg"></div>
         <div class="deckread"><span id="deckSpeed">0.0&times;</span><span>drag the record to scratch</span><span id="deckNeedle">needle 0%</span></div>
       </div>
     </div>
     <div class="scopes">
-      <div class="panel" id="playbackPanel"><h2>Playback<span class="sub">how clips play</span></h2><div class="knobs" id="kPlayback" style="--n:7"></div></div>
+      <div class="panel" id="playbackPanel"><h2>Playback<span class="sub">how clips play</span></h2><div class="knobs" id="kPlayback" style="--n:8"></div></div>
       <div class="panel scope" id="waveScope"><h2>Waveform</h2><div class="cv"><canvas id="wave"></canvas></div></div>
       <div class="panel scope" id="laneScope"><h2>Clip view</h2>
         <div class="zbtns"><button id="strokesBtn" class="on" title="Name each stroke by its shape (what the fader does over it): a reading of the clip, not how it was made">STROKES</button></div>
@@ -272,6 +297,21 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
 
   <footer>drag a dial up or down (shift: fine) &middot; scroll &middot; double-click resets &middot; &#9786;</footer>
 </div>
+
+<div class="picker" id="picker"><div class="panel pk-box">
+  <h2>Pick from a song<span class="sub" id="pkFile"></span><button class="pk-btn" id="pkClose" title="Close (Esc): nothing is sent">CLOSE</button></h2>
+  <canvas id="pkOv"></canvas>
+  <canvas id="pkDt"></canvas>
+  <div class="pk-bar">
+    <button class="pk-btn" id="pkPlay" title="Play from the cursor (space)">&#9654; PLAY</button>
+    <span id="pkTime">0:00.0</span>
+    <span class="lbl">LENGTH</span><span id="pkLens"></span>
+    <button class="pk-btn on" id="pkSnap" title="A spot starts on the nearest hit or word">SNAP TO HITS</button>
+    <span class="hint" id="pkHint"></span>
+  </div>
+  <div class="pk-list" id="pkList"></div>
+  <div class="pk-foot"><span class="msg" id="pkMsg"></span><button class="pk-btn go" id="pkSend" disabled>SEND TO THE MOVE</button></div>
+</div></div>
 
 <div class="demo" id="demo"><button id="demoGo">&#9654;&nbsp; DROP THE NEEDLE</button>
   <p>A recording of TinyScratch's own engine: sixteen bars at 92 bpm, played back to this page exactly as the Move sends it. Auto, then Generate in Improv, Baby and Flare, then Fresssh with Humanise, Swing and Bite turned up. Sound on.</p></div>
@@ -303,8 +343,8 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   /* ================================================================
      What the module is: the dials, as module.json has them.
      ================================================================ */
-  var STYLES = ["IMPROV", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
-  var STYLE_SHORT = ["IMPRO", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
+  var STYLES = ["FLOW", "SNAP", "FREESTYLE", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTTER"];
+  var STYLE_SHORT = ["FLOW", "SNAP", "FREE", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTR"];
   var GROOVES = ["BOOM", "FLOOR", "BRKS", "HALF", "FUNK", "DEMBO", "OPEN"];
   var BARS = ["1 BAR", "2 BARS", "4 BARS"];
   var CLIP_AUTO = 17, CLIP_TRY = 18, CLIP_PADS = 14, PAGES = 4;
@@ -315,7 +355,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   function pct(v) { return Math.round(v * 100) + "%"; }
   /* the Main page's dials, then Playback's, in the module's own order */
   var PREGEN = [
-    { key: "gen_style", name: "STYLE", min: 0, max: 12, def: 0, step: 1, opts: STYLES, c: "--acid" },
+    { key: "gen_style", name: "STYLE", min: 0, max: 15, def: 0, step: 1, opts: STYLES, c: "--acid" },
     { key: "gen_bars", name: "LENGTH", min: 0, max: 2, def: 1, step: 1, opts: BARS, c: "--acid" },
     { key: "gen_fwd", name: "FORWARDS", min: 0, max: 1, def: 0, step: 0.05, fmt: pct, c: "--acid" },
     { key: "gen_fin", name: "FINISH", min: 0, max: 1, def: 0.1, step: 0.05, fmt: pct, c: "--acid" },
@@ -329,7 +369,8 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     { key: "clip_depth", name: "CLIP DEPTH", min: 0, max: 2, def: 1, step: 0.02, fmt: pct, c: "--cyan" },
     { key: "clip_offset", name: "CLIP OFFSET", min: -0.5, max: 0.5, def: 0, step: 0.01, fmt: function (v) { return (v > 0.004 ? "+" : "") + Math.round(v * 100) + "%"; }, c: "--cyan" },
     { key: "drag", name: "DRAG", min: 0, max: 1, def: 0.5, step: 0.01, fmt: function (v) { return v < 0.34 ? "DIGI " + pct(v) : (v > 0.66 ? "ANLG " + pct(v) : pct(v)); }, c: "--cyan" },
-    { key: "gain", name: "GAIN", min: -24, max: 12, def: 0, step: 0.5, fmt: function (v) { return (v > 0 ? "+" : "") + v.toFixed(1) + " DB"; }, c: "--cyan" }
+    { key: "gain", name: "GAIN", min: -24, max: 12, def: 0, step: 0.5, fmt: function (v) { return (v > 0 ? "+" : "") + v.toFixed(1) + " DB"; }, c: "--cyan" },
+    { key: "vinyl", name: "VINYL", min: 0, max: 1, def: 0, step: 0.01, fmt: pct, c: "--cyan" }
   ];
   var PADPLAY = [
     { key: "note_gate", name: "NOTE GATE", def: 1 },
@@ -449,9 +490,28 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   }
   function clipActive() { return !!(rv && rv.cm > 0 && rc && rc.lp && rc.rk === rv.rk); }
 
+  /* a long sample (over 1.2 s, scratch_engine.h TS_REACH_S): Depth works around where each bar of the clip starts (scratch_engine.c
+     clip_bar_ref), and a clip not made for it is scaled down as a generated one is; 1 for Ahhh, Fresssh and anything as short */
+  var REACH_S = 1.2;
+  function reachK() { return rv && rv.sl > REACH_S ? REACH_S / rv.sl : 1; }
+  function barRef(t) {
+    var lp = rc.lp, lb = rc.lb, bars = Math.max(1, Math.floor(lb / 4));
+    if (rc._br !== lp) {                       /* each bar's lowest point, worked out once a plan */
+      rc._brv = [];
+      var per = lp.length * 4 / lb;
+      for (var b = 0; b < bars; b++) { var m = 1; for (var i = Math.floor(b * per); i < Math.min(lp.length, Math.floor((b + 1) * per)); i++) m = Math.min(m, lp[i]); rc._brv.push(m); }
+      rc._br = lp;
+    }
+    var x = ((t % lb) + lb) % lb, b0 = Math.min(bars - 1, Math.floor(x / 4)), r = rc._brv[b0], u = (x - (4 * b0 + 3.75)) / 0.25;
+    if (u > 0) r += (rc._brv[(b0 + 1) % bars] - r) * Math.min(1, u);
+    return r;
+  }
+
   /* where the plan sends the playhead at clip time t, through Depth, Offset and the sample's extent */
-  function mapPos(raw) {
-    var v = clamp(raw * num("clip_depth", 1) + num("clip_offset", 0), 0, 1);
+  function mapPos(raw, t) {
+    var k = reachK(), v;
+    if (k < 1) { var r = barRef(t); v = clamp(r + (raw - r) * num("clip_depth", 1) * (rv.nat ? 1 : k) + num("clip_offset", 0), 0, 1); }
+    else v = clamp(raw * num("clip_depth", 1) + num("clip_offset", 0), 0, 1);
     return rv.nat ? v : rv.lo + (rv.hi - rv.lo) * v;
   }
 
@@ -467,13 +527,13 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     sim.beat = beat; sim.clip = clip; sim.live = live;
     var target, gate = rv.g, lv = 0;
     if (clip) {
-      var t = swingTime(beat, num("swing", 0.3)) - rv.t0;
+      var t = (rv.fm ? beat : swingTime(beat, num("swing", 0.3))) - rv.t0;     /* (a stutter plays straight: scratch_engine.c) */
       sim.t = t;
       var pass = Math.floor((beat - rv.t0) / rc.lb);
-      var useH = rc.hp && rc.hk === pass && num("humanise", 0) > 0;
+      var useH = rc.hp && rc.hk === pass && num("humanise", 0) > 0 && !rv.fm;
       var raw = useH ? planAt(rc.hp, rc.lb, t) : planAt(rc.lp, rc.lb, t);
       if (rv.hh || !live) target = rv.tx;
-      else target = mapPos(raw);
+      else target = mapPos(raw, t);
       if (live) {
         var li = stepAt(rc.lg, rc.lb, t);
         if (useH && rc.hg && !stepAt(rc.hg, rc.lb, t)) li = 0;
@@ -576,8 +636,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     return { blob: new Blob([out.buffer], { type: "audio/wav" }), seconds: len / 44100 };
   }
   function loadSound(file) {
-    if (!file || loading) return;
-    if (demoMode || !window.schwungRemote) { say("Loading a sound works on the Move, not in the demo.", true); return; }
+    if (!file || loading || pk) return;
     var name = file.name.replace(/\.[^.]*$/, "").replace(/[^A-Za-z0-9 _-]+/g, " ").trim().slice(0, 40) || "sound";
     var where = destination(), path = LIB + "/" + LIB_DIR + "/" + name + ".wav";
     loading = { name: name, at: performance.now(), sn: rv ? rv.sn.join("|") : "" };
@@ -593,6 +652,8 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
         return off.startRendering();                                          /* (to mono, at 44.1 kHz) */
       });
     }).then(function (mono) {
+      if (mono.length > PK_LONG * 44100 + 2205) { loading = null; say(""); pickerOpen(file.name, name, mono.getChannelData(0)); return null; }     /* a song: pick spots from it */
+      if (demoMode || !window.schwungRemote) throw new Error("loading a sound works on the Move, not in the demo");
       var w = toWav(mono);
       say("Sending " + name + " (" + w.seconds.toFixed(1) + " s) to the Move\u2026");
       var tok = csrf(), mk = new FormData();
@@ -603,6 +664,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
         return fetch("/files/upload", { method: "POST", headers: { "X-CSRF-Token": tok }, body: up });
       });
     }).then(function (r) {
+      if (r === null) return;
       if (!r.ok) throw new Error("the Move would not take the file (" + r.status + ")");
       say("Loading " + name + " into " + where + "\u2026");
       R.setParam(PRE + "sample_file", path);
@@ -633,6 +695,379 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   });
   document.getElementById("loadBtn").addEventListener("click", function () { document.getElementById("loadFile").click(); });
   document.getElementById("loadFile").addEventListener("change", function () { loadSound(this.files[0]); this.value = ""; });
+
+  /* ---- a song: pick the spots to scratch ----
+   * A file longer than 10 s opens the picker instead of loading: all of it at the top, a closer view of part of it under that, and up to
+   * six spots marked on the closer view (drag across a word; or, with a length chosen, click where the spot starts), each up to 10 s and
+   * heard here first, exactly as it will be sent. Nothing goes to the Move until SEND: then each spot is a WAV of its own, put in the
+   * sample library as a dropped sound is, and loaded into the User slot it was given. The file itself never leaves the browser. */
+  var PK_LONG = 10, PK_MAX = 6, PK_MIN = 0.2, PK_FADE = 0.005, PK_LENS = [0, 1, 2, 3, 5, 10];
+  var PK_COLORS = ["acid", "cyan", "pink", "lime", "orange", "violet"];
+  var pk = null;
+  var pkEl = document.getElementById("picker"), pkOv = document.getElementById("pkOv"), pkDt = document.getElementById("pkDt");
+  var pkList = document.getElementById("pkList"), pkMsgEl = document.getElementById("pkMsg"), pkSendEl = document.getElementById("pkSend");
+  var pkPlayEl = document.getElementById("pkPlay"), pkTimeEl = document.getElementById("pkTime"), pkSnapEl = document.getElementById("pkSnap");
+  var pkAudio = null, pkLen = 0, pkSnapOn = true;
+
+  function pkSay(t, bad) { pkMsgEl.textContent = t || ""; pkMsgEl.classList.toggle("bad", !!bad); }
+  function fmtT(t) { var m = Math.floor(t / 60), x = t - m * 60; return m + ":" + (x < 10 ? "0" : "") + x.toFixed(1); }
+  function pkHint() {
+    document.getElementById("pkHint").textContent = pkLen ? "click a word: a " + pkLen + " s spot starts there · drag a spot to move it, its edges to trim it · scroll to zoom"
+      : "drag across a word to mark a spot (up to 10 s) · drag a spot to move it, its edges to trim it · scroll to zoom";
+  }
+
+  /* the min and max of each column of a stretch of the song */
+  function pkPeaks(a, b, cols) {
+    var d = pk.data, mn = new Float32Array(cols), mx = new Float32Array(cols), spc = (b - a) / cols;
+    for (var c = 0; c < cols; c++) {
+      var i0 = Math.floor(a + c * spc), i1 = Math.max(i0 + 1, Math.floor(a + (c + 1) * spc)), lo = 0, hi = 0;
+      for (var i = Math.max(0, i0); i < i1 && i < d.length; i++) { var v = d[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+      mn[c] = lo; mx[c] = hi;
+    }
+    return { mn: mn, mx: mx };
+  }
+
+  /* Snap: the nearest place within 0.15 s where the level climbs fast (a word, a hit), 5 ms ahead of it; t itself if there is none */
+  function pkSnapAt(t) {
+    if (!pkSnapOn) return t;
+    var d = pk.data, fr = 441, i0 = Math.max(0, Math.floor((t - 0.15) * 44100)), n = Math.floor(0.3 * 44100 / fr), rms = [], top = 0;
+    for (var f = 0; f <= n; f++) {
+      var s2 = 0, o = i0 + f * fr;
+      for (var i = o; i < o + fr && i < d.length; i++) s2 += d[i] * d[i];
+      rms.push(Math.sqrt(s2 / fr)); top = Math.max(top, rms[f]);
+    }
+    var best = -1, rise = 0.08 * top;
+    for (var k = 1; k < rms.length - 2; k++) {
+      var r = rms[k + 2] - rms[k];
+      if (r > rise && rms[k] < 0.6 * rms[k + 2]) { rise = r; best = k; }
+    }
+    if (best < 0 || top < 0.005) return t;
+    return Math.max(0, (i0 + best * fr) / 44100 + 0.01 - PK_FADE);
+  }
+
+  /* a spot's sound, exactly as it is sent: the stretch, faded in and out over 5 ms so it does not click */
+  function pkSlice(sp) {
+    var a = Math.round(sp.a * 44100), n = Math.max(1, Math.round((sp.b - sp.a) * 44100)), out = new Float32Array(n), fade = Math.round(PK_FADE * 44100);
+    for (var i = 0; i < n; i++) {
+      var v = pk.data[a + i] || 0, g = 1;
+      if (i < fade) g = i / fade; else if (n - 1 - i < fade) g = (n - 1 - i) / fade;
+      out[i] = Math.max(-1, Math.min(1, v * g));
+    }
+    return out;
+  }
+  function pkWav(sp) {
+    var x = pkSlice(sp), len = x.length, out = new DataView(new ArrayBuffer(44 + len * 2));
+    function str(o, t) { for (var k = 0; k < t.length; k++) out.setUint8(o + k, t.charCodeAt(k)); }
+    str(0, "RIFF"); out.setUint32(4, 36 + len * 2, true); str(8, "WAVE"); str(12, "fmt "); out.setUint32(16, 16, true);
+    out.setUint16(20, 1, true); out.setUint16(22, 1, true); out.setUint32(24, 44100, true); out.setUint32(28, 88200, true);
+    out.setUint16(32, 2, true); out.setUint16(34, 16, true); str(36, "data"); out.setUint32(40, len * 2, true);
+    for (var j = 0; j < len; j++) out.setInt16(44 + j * 2, x[j] < 0 ? x[j] * 32768 : x[j] * 32767, true);
+    return new Blob([out.buffer], { type: "audio/wav" });
+  }
+
+  /* ---- hearing it: from the cursor, or a spot as it will be sent ---- */
+  function pkStop() {
+    if (pk && pk.play) { try { pk.play.src.onended = null; pk.play.src.stop(); } catch (e) { /* (stopped) */ } pk.play = null; }
+    if (pk) pkRows();
+    pkPlayEl.innerHTML = "&#9654; PLAY";
+  }
+  function pkStart(samples, from, spot) {
+    pkStop();
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!pkAudio) pkAudio = new Ctx();
+    if (pkAudio.state === "suspended") pkAudio.resume();
+    var buf = pkAudio.createBuffer(1, samples.length, 44100);
+    buf.getChannelData(0).set(samples);
+    var src = pkAudio.createBufferSource();
+    src.buffer = buf; src.connect(pkAudio.destination);
+    src.onended = function () { if (pk && pk.play && pk.play.src === src) { pk.play = null; pkStop(); } };
+    src.start();
+    pk.play = { src: src, t0: pkAudio.currentTime, from: from, spot: spot };
+    pkPlayEl.innerHTML = "&#9632; STOP";
+    pkRows();
+  }
+  function pkPlayCursor() {
+    if (pk.play) { pkStop(); return; }
+    var a = Math.floor(pk.cur * 44100), b = Math.min(pk.data.length, a + 60 * 44100);       /* (a minute at a time) */
+    if (b - a > 100) pkStart(pk.data.subarray(a, b), pk.cur, -1);
+  }
+  function pkPlaySpot(i) {
+    if (pk.play && pk.play.spot === i) { pkStop(); return; }
+    pkStart(pkSlice(pk.spots[i]), pk.spots[i].a, i);
+  }
+  function pkNow() { return pk.play ? pk.play.from + (pkAudio.currentTime - pk.play.t0) : pk.cur; }
+
+  /* ---- the spots ---- */
+  function pkSlotFor(skip) {                                  /* a User slot no other spot has: an empty one first */
+    var used = pk.spots.map(function (s, i) { return i === skip ? -1 : s.slot; });
+    for (var pass = 0; pass < 2; pass++)
+      for (var s = 2; s < 8; s++) if (used.indexOf(s) < 0 && (pass || !rv || rv.ld[s] !== "1")) return s;
+    return -1;
+  }
+  function pkName(t) {
+    var m = Math.floor(t / 60), x = Math.floor(t - m * 60);
+    var nm = pk.name.slice(0, 28) + " " + m + "m" + (x < 10 ? "0" : "") + x, k = 2, base = nm;
+    while (pk.spots.some(function (s) { return s.name === nm; })) nm = base + " " + k++;
+    return nm;
+  }
+  function pkAdd(a, b) {
+    if (pk.spots.length >= PK_MAX) { pkSay("Six spots at most: one for each User slot.", true); return; }
+    var slot = pkSlotFor(-1);
+    if (slot < 0) return;
+    a = Math.max(0, Math.min(pk.dur - PK_MIN, a));
+    b = Math.max(a + PK_MIN, Math.min(pk.dur, a + PK_LONG, b));
+    pk.spots.push({ a: a, b: b, slot: slot, name: pkName(a) });
+    pkSay("");
+    pkRows();
+  }
+  function pkSetLen(sp, len) {
+    len = Math.max(PK_MIN, Math.min(PK_LONG, len));
+    sp.b = Math.min(pk.dur, sp.a + len);
+    if (sp.b - sp.a < len) sp.a = Math.max(0, sp.b - len);
+  }
+  function pkRows() {
+    if (!pk) return;
+    var playing = pk.play ? pk.play.spot : -2;
+    pkList.innerHTML = "";
+    if (!pk.spots.length) {
+      var e = document.createElement("div");
+      e.className = "pk-empty";
+      e.textContent = "No spots yet. Mark up to six on the waveform; play each to hear it, then SEND puts each in a User slot. Nothing is sent before that.";
+      pkList.appendChild(e);
+    }
+    pk.spots.forEach(function (sp, i) {
+      var row = document.createElement("div");
+      row.className = "pk-row";
+      var sw = document.createElement("i");
+      sw.style.background = C[PK_COLORS[i]];
+      var sel = document.createElement("select");
+      for (var s = 2; s < 8; s++) {
+        var o = document.createElement("option");
+        o.value = s;
+        o.textContent = "User " + (s - 1) + (rv && rv.ld[s] === "1" ? " (replaces " + rv.sn[s] + ")" : " (empty)");
+        o.disabled = pk.spots.some(function (q, j) { return j !== i && q.slot === s; });
+        sel.appendChild(o);
+      }
+      sel.value = sp.slot;
+      sel.addEventListener("change", function () { sp.slot = +sel.value; pkRows(); });
+      var nm = document.createElement("input");
+      nm.value = sp.name; nm.maxLength = 40; nm.title = "Its name on the Move";
+      nm.addEventListener("input", function () { sp.name = nm.value; });
+      var ln = document.createElement("input");
+      ln.type = "number"; ln.min = PK_MIN; ln.max = PK_LONG; ln.step = 0.1; ln.value = (sp.b - sp.a).toFixed(1); ln.title = "Its length, in seconds";
+      ln.addEventListener("change", function () { var v = parseFloat(ln.value); if (isFinite(v)) pkSetLen(sp, v); pkRows(); });
+      var tm = document.createElement("span");
+      tm.className = "t";
+      tm.textContent = fmtT(sp.a) + " – " + fmtT(sp.b) + " s";
+      var pl = document.createElement("button");
+      pl.className = "pk-btn" + (playing === i ? " on" : ""); pl.innerHTML = playing === i ? "&#9632;" : "&#9654;"; pl.title = "Hear it, exactly as it will be sent";
+      pl.addEventListener("click", function () { pkPlaySpot(i); });
+      var del = document.createElement("button");
+      del.className = "pk-btn"; del.textContent = "✕"; del.title = "Remove this spot";
+      del.addEventListener("click", function () { if (pk.play && pk.play.spot === i) pkStop(); pk.spots.splice(i, 1); pkRows(); });
+      [sw, sel, nm, ln, tm, pl, del].forEach(function (x) { row.appendChild(x); });
+      pkList.appendChild(row);
+    });
+    pkSendEl.disabled = !pk.spots.length || !!pk.sending;
+    pkSendEl.textContent = pk.spots.length > 1 ? "SEND " + pk.spots.length + " TO THE MOVE" : "SEND TO THE MOVE";
+  }
+
+  /* ---- drawing: the whole song, and the closer view with the spots, the cursor and what is playing ---- */
+  function pkDraw() {
+    var d = dpr();
+    if (fitCanvas(pkOv) || !pk.ovPk || pk.ovPk.mx.length !== pkOv.width) pk.ovPk = pkPeaks(0, pk.data.length, pkOv.width);
+    var g = pkOv.getContext("2d"), W = pkOv.width, H = pkOv.height, p = pk.ovPk;
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = C.dim;
+    for (var x = 0; x < W; x++) g.fillRect(x, H / 2 - p.mx[x] * H * 0.45, 1, Math.max(1, (p.mx[x] - p.mn[x]) * H * 0.45));
+    pk.spots.forEach(function (sp, i) { g.fillStyle = C[PK_COLORS[i]]; g.fillRect(sp.a / pk.dur * W, H - 4 * d, Math.max(2, (sp.b - sp.a) / pk.dur * W), 4 * d); });
+    g.strokeStyle = C.acid; g.lineWidth = 1.5 * d;
+    g.strokeRect(pk.va / pk.dur * W, 1, Math.max(3, (pk.vb - pk.va) / pk.dur * W), H - 2);
+    var now = pkNow();
+    g.fillStyle = C.ink; g.fillRect(now / pk.dur * W, 0, Math.max(1, d), H);
+
+    fitCanvas(pkDt);
+    var key = pkDt.width + "x" + pkDt.height + ":" + pk.va + ":" + pk.vb;
+    if (pk.dtKey !== key) { pk.dtKey = key; pk.dtPk = pkPeaks(pk.va * 44100, pk.vb * 44100, pkDt.width); }
+    g = pkDt.getContext("2d"); W = pkDt.width; H = pkDt.height; p = pk.dtPk;
+    var span = pk.vb - pk.va, X = function (t) { return (t - pk.va) / span * W; };
+    g.clearRect(0, 0, W, H);
+    var step = span > 120 ? 30 : span > 40 ? 10 : span > 12 ? 2 : span > 4 ? 1 : 0.25;          /* the time grid */
+    g.font = (10 * d) + "px " + FONT_MONO; g.textBaseline = "top";
+    for (var t = Math.ceil(pk.va / step) * step; t < pk.vb; t += step) {
+      g.fillStyle = "rgba(255,255,255,.06)"; g.fillRect(X(t), 0, 1, H);
+      g.fillStyle = C.dim; g.fillText(fmtT(t), X(t) + 3 * d, 3 * d);
+    }
+    var all = pk.spots.slice();
+    if (pk.drag && pk.drag.tmp) all.push(pk.drag.tmp);
+    all.forEach(function (sp, i) {
+      var col = C[PK_COLORS[i < pk.spots.length ? i : pk.spots.length]] || C.ink, x0 = X(sp.a), x1 = X(sp.b);
+      g.globalAlpha = 0.16; g.fillStyle = col; g.fillRect(x0, 0, x1 - x0, H);
+      g.globalAlpha = 1; g.fillRect(x0, 0, 2 * d, H); g.fillRect(x1 - 2 * d, 0, 2 * d, H);
+      if (i < pk.spots.length) { g.font = "600 " + (11 * d) + "px " + FONT_SANS; g.fillText("USER " + (sp.slot - 1), x0 + 5 * d, H - 16 * d); g.font = (10 * d) + "px " + FONT_MONO; }
+    });
+    g.fillStyle = C.cyan;
+    for (x = 0; x < W; x++) g.fillRect(x, H / 2 - p.mx[x] * H * 0.44, 1, Math.max(1, (p.mx[x] - p.mn[x]) * H * 0.44));
+    g.fillStyle = C.acid; g.fillRect(X(pk.cur), 0, Math.max(1, d), H);
+    if (pk.play) { g.fillStyle = C.ink; g.fillRect(X(now), 0, 1.5 * d, H); }
+    pkTimeEl.textContent = fmtT(now) + " / " + fmtT(pk.dur);
+    if (pk.play && pk.play.spot < 0 && (now > pk.vb || now < pk.va)) pkView(now - span * 0.1, span);       /* (the view follows what plays) */
+  }
+  function pkView(a, span) {
+    span = Math.max(1, Math.min(pk.dur, span));
+    pk.va = Math.max(0, Math.min(pk.dur - span, a));
+    pk.vb = pk.va + span;
+  }
+
+  /* ---- the hand: on the closer view and the whole song ---- */
+  function pkT(e, c) { var r = c.getBoundingClientRect(); return { t: pk.va + (e.clientX - r.left) / r.width * (pk.vb - pk.va), x: e.clientX - r.left, w: r.width }; }
+  function pkHit(at) {                                        /* a spot's edge (within 6 px) or body under the hand */
+    var span = pk.vb - pk.va;
+    for (var i = pk.spots.length - 1; i >= 0; i--) {
+      var sp = pk.spots[i], xa = (sp.a - pk.va) / span * at.w, xb = (sp.b - pk.va) / span * at.w;
+      if (Math.abs(at.x - xa) <= 6) return { i: i, mode: "a" };
+      if (Math.abs(at.x - xb) <= 6) return { i: i, mode: "b" };
+      if (at.x > xa && at.x < xb) return { i: i, mode: "move", off: at.t - sp.a };
+    }
+    return null;
+  }
+  pkDt.addEventListener("pointerdown", function (e) {
+    if (!pk || pk.sending) return;
+    var at = pkT(e, pkDt), h = pkHit(at);
+    pkDt.setPointerCapture(e.pointerId);
+    pk.drag = h ? { i: h.i, mode: h.mode, off: h.off, x0: at.x } : { mode: "new", t0: at.t, x0: at.x, tmp: null };
+  });
+  pkDt.addEventListener("pointermove", function (e) {
+    if (!pk) return;
+    var at = pkT(e, pkDt), dr = pk.drag;
+    if (!dr) { var h = pkHit(at); pkDt.style.cursor = !h ? "crosshair" : h.mode === "move" ? "grab" : "ew-resize"; return; }
+    var t = Math.max(0, Math.min(pk.dur, at.t));
+    if (dr.mode === "new") {
+      if (Math.abs(at.x - dr.x0) > 4 && !pkLen) dr.tmp = { a: Math.min(dr.t0, t), b: Math.min(Math.max(dr.t0, t), Math.min(dr.t0, t) + PK_LONG) };
+    } else {
+      var sp = pk.spots[dr.i], len = sp.b - sp.a;
+      if (dr.mode === "a") sp.a = Math.max(0, sp.b - PK_LONG, Math.min(t, sp.b - PK_MIN));
+      else if (dr.mode === "b") sp.b = Math.min(pk.dur, sp.a + PK_LONG, Math.max(t, sp.a + PK_MIN));
+      else { sp.a = Math.max(0, Math.min(pk.dur - len, t - dr.off)); sp.b = sp.a + len; }
+      dr.moved = true;
+    }
+  });
+  pkDt.addEventListener("pointerup", function (e) {
+    if (!pk || !pk.drag) return;
+    var dr = pk.drag, at = pkT(e, pkDt);
+    pk.drag = null;
+    if (dr.mode === "new") {
+      if (dr.tmp && dr.tmp.b - dr.tmp.a >= PK_MIN) { var a = pkSnapAt(dr.tmp.a); pkAdd(a, a + (dr.tmp.b - dr.tmp.a)); }
+      else if (pkLen) { var s0 = pkSnapAt(Math.max(0, dr.t0)); pkAdd(s0, s0 + pkLen); }
+      else { pk.cur = Math.max(0, Math.min(pk.dur, at.t)); if (pk.play && pk.play.spot < 0) { pkStop(); pkPlayCursor(); } }
+    } else if (dr.moved) {
+      if (dr.mode === "a" || dr.mode === "move") { var sp = pk.spots[dr.i], len = sp.b - sp.a, s1 = pkSnapAt(sp.a); if (dr.mode === "move") { sp.a = s1; sp.b = Math.min(pk.dur, s1 + len); } else sp.a = Math.min(s1, sp.b - PK_MIN); }
+      pkRows();
+    } else pkPlaySpot(dr.i);                                    /* (a click on a spot plays it) */
+  });
+  pkDt.addEventListener("wheel", function (e) {
+    if (!pk) return;
+    e.preventDefault();
+    var at = pkT(e, pkDt), span = pk.vb - pk.va;
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { pkView(pk.va + e.deltaX / at.w * span, span); return; }
+    var ns = Math.max(1, Math.min(pk.dur, span * (e.deltaY > 0 ? 1.25 : 0.8)));
+    pkView(at.t - (at.t - pk.va) * ns / span, ns);
+  }, { passive: false });
+  function pkOvAt(e) { var r = pkOv.getBoundingClientRect(), span = pk.vb - pk.va; pkView((e.clientX - r.left) / r.width * pk.dur - span / 2, span); }
+  pkOv.addEventListener("pointerdown", function (e) { if (!pk) return; pkOv.setPointerCapture(e.pointerId); pk.ovDrag = true; pkOvAt(e); });
+  pkOv.addEventListener("pointermove", function (e) { if (pk && pk.ovDrag) pkOvAt(e); });
+  pkOv.addEventListener("pointerup", function () { if (pk) pk.ovDrag = false; });
+
+  /* ---- sending: one spot at a time, each loaded into its slot before the next ---- */
+  function pkWait(ok, ms, what) {
+    return new Promise(function (done, fail) {
+      var t0 = performance.now();
+      (function poll() { if (ok()) done(); else if (performance.now() - t0 > ms) fail(new Error(what)); else setTimeout(poll, 150); })();
+    });
+  }
+  function pkNorm(n) { return String(n || "").toUpperCase().replace(/[^A-Z0-9]+/g, ""); }
+  function pkSendAll() {
+    if (!pk || pk.sending || !pk.spots.length) return;
+    if (demoMode || !window.schwungRemote) { pkSay("Sending works on the Move, not in the demo.", true); return; }
+    pkStop();
+    var spots = pk.spots.map(function (sp) {
+      var nm = sp.name.replace(/[^A-Za-z0-9 _-]+/g, " ").trim().slice(0, 40) || "spot";
+      return { sp: sp, name: nm, path: LIB + "/" + LIB_DIR + "/" + nm + ".wav" };
+    });
+    pk.sending = true; pkRows();
+    var tok = csrf(), mk = new FormData(), chain;
+    mk.append("path", LIB); mk.append("name", LIB_DIR);
+    chain = fetch("/files/mkdir", { method: "POST", headers: { "X-CSRF-Token": tok }, body: mk }).catch(function () {});
+    spots.forEach(function (s, i) {
+      chain = chain.then(function () {
+        pkSay("Sending " + (i + 1) + " of " + spots.length + ": " + s.name + "…");
+        var up = new FormData();
+        up.append("path", LIB + "/" + LIB_DIR); up.append("file", pkWav(s.sp), s.name + ".wav");
+        return fetch("/files/upload", { method: "POST", headers: { "X-CSRF-Token": tok }, body: up });
+      }).then(function (r) {
+        if (!r.ok) throw new Error("the Move would not take " + s.name + " (" + r.status + ")");
+        setP("sample", s.sp.slot);
+        return pkWait(function () { return rv && rv.s === s.sp.slot; }, 4000, "User " + (s.sp.slot - 1) + " was not selected");
+      }).then(function () {
+        pkSay("Loading " + (i + 1) + " of " + spots.length + ": " + s.name + " into User " + (s.sp.slot - 1) + "…");
+        R.setParam(PRE + "sample_file", s.path);
+        return pkWait(function () { return rv && pkNorm(rv.sn[s.sp.slot]) === pkNorm(s.name); }, 15000, s.name + " was sent, but the Move has not shown it yet");
+      });
+    });
+    chain.then(function () {
+      var n = spots.length;
+      setP("sample", spots[0].sp.slot);
+      pk.sending = false; pk.spots = []; pkRows();
+      pkSay("Loaded " + n + (n > 1 ? " spots" : " spot") + ". Generate scratches for each on its pad.");
+      setTimeout(function () { if (pk && !pk.spots.length && !pk.sending) pickerClose(); }, 2500);
+    }).catch(function (e) {
+      if (!pk) return;
+      pk.sending = false; pkRows();
+      pkSay("Stopped: " + (e && e.message ? e.message : "something went wrong") + ".", true);
+    });
+  }
+
+  /* ---- opening and closing ---- */
+  function pickerOpen(fileName, name, data) {
+    pk = { name: name, data: data, dur: data.length / 44100, spots: [], cur: 0, play: null, drag: null, va: 0, vb: 0, sending: false };
+    pkView(0, Math.min(pk.dur, 30));
+    document.getElementById("pkFile").textContent = fileName + " · " + fmtT(pk.dur);
+    pkSay(""); pkHint(); pkRows();
+    pkEl.classList.add("show");
+  }
+  function pickerClose() {
+    if (!pk || pk.sending) return;
+    pkStop();
+    pk = null;
+    pkEl.classList.remove("show");
+  }
+  (function () {
+    var box = document.getElementById("pkLens");
+    PK_LENS.forEach(function (L) {
+      var b = document.createElement("button");
+      b.className = "pk-btn" + (L === pkLen ? " on" : "");
+      b.textContent = L ? L + " S" : "FREE";
+      b.title = L ? "A click on the waveform drops a " + L + " s spot" : "Drag across the waveform to mark a spot of any length";
+      b.addEventListener("click", function () {
+        pkLen = L;
+        Array.prototype.forEach.call(box.children, function (c) { c.classList.toggle("on", c === b); });
+        pkHint();
+      });
+      box.appendChild(b);
+    });
+  })();
+  pkSnapEl.addEventListener("click", function () { pkSnapOn = !pkSnapOn; pkSnapEl.classList.toggle("on", pkSnapOn); });
+  pkPlayEl.addEventListener("click", function () { if (pk) pkPlayCursor(); });
+  pkSendEl.addEventListener("click", pkSendAll);
+  document.getElementById("pkClose").addEventListener("click", pickerClose);
+  pkEl.addEventListener("pointerdown", function (e) { if (e.target === pkEl) pickerClose(); });
+  document.addEventListener("keydown", function (e) {
+    if (!pk) return;
+    var tag = e.target && e.target.tagName;
+    if (e.key === "Escape") { pickerClose(); e.preventDefault(); return; }
+    if (tag === "INPUT" || tag === "SELECT") return;
+    if (e.key === " ") { pkPlayCursor(); e.preventDefault(); }
+  });
 
   /* ---- scratching: a hand on the record ----
    * Grab the vinyl and turn it: the turn is the playhead's move, at the deck's own scale (a turn at 33 1/3 is the sample at its own
@@ -1186,7 +1621,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   function clipLabel() {
     if (!rv) return "";
     var cm = rv.cm, pgl = rv.cp > 0 ? (rv.cp + 1) + "." : "", cy = rv.cy;
-    if (cm === CLIP_TRY) return "TRY " + STYLES[clamp(rv.tg, 0, 12)];
+    if (cm === CLIP_TRY) return "TRY " + STYLES[clamp(rv.tg, 0, STYLES.length - 1)];
     if (!cm) return "HAND" + (rv.cs ? " · CUE PADS" : "");
     return (cm === CLIP_AUTO ? "AUTO · CLIP " : "CLIP ") + pgl + rv.cl + (cy >= 0 ? " " + STYLES[cy] : "");
   }
@@ -1390,6 +1825,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   document.addEventListener("keydown", function (e) {
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     var k = (e.key || "").toLowerCase();
+    if (pk) return;                                                         /* (the song picker has the keys while it is open) */
     if (k >= "1" && k <= "8") { setP("sample", +k - 1); e.preventDefault(); return; }
     if (k === " " || k === "j") { pulse("generate", 1); flash(clipPads[CLIP_PADS]); e.preventDefault(); return; }
     if (k === "k") { setP("clip", rv && rv.cm === CLIP_AUTO ? 0 : CLIP_AUTO); flash(clipPads[CLIP_PADS + 1]); e.preventDefault(); return; }
@@ -1494,7 +1930,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   }
   function renderInfo() {
     if (!rv) return;
-    var gs = clamp(Math.round(num("gen_style", 0)), 0, 12), gb = clamp(Math.round(num("gen_bars", 1)), 0, 2);
+    var gs = clamp(Math.round(num("gen_style", 0)), 0, STYLES.length - 1), gb = clamp(Math.round(num("gen_bars", 1)), 0, 2);
     setText("infoSample", rv.n);
     var clip = document.getElementById("infoClip"), ex = clipExtras();
     clip.textContent = clipLabel();
@@ -1513,6 +1949,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
   }
   function frame(now) {
     requestAnimationFrame(frame);
+    if (pk) pkDraw();
     if (demoMode) safely(demoTick, now);
     safely(step, now);
     safely(drawDeck, now); safely(drawWave, now); safely(drawLane, now); safely(drawZoom, now);

@@ -17,7 +17,7 @@
 (function () {
     "use strict";
 
-    var STYLES = ["IMPROV", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
+    var STYLES = ["FLOW", "SNAP", "FREESTYLE", "BABY", "CUTS", "MILITARY", "SCRIBBLE", "STAB", "CHIRP", "TRANSFORM", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTTER"];
     var CLIP_PADS = 14;                                 /* clip pads 1-14; the next two places are Generate (15) and Auto (16) */
     var PAGES = 4;                                      /* pages of clip pads: < and > turn them (the Move's left and right buttons, CC 62 and 63) */
     var LEFT_CC = 62, RIGHT_CC = 63;
@@ -27,7 +27,7 @@
     var REC_HOLD_MS = 300;                             /* hold an empty User slot this long and it records (a tap selects it) */
     var HOLD_MS = 1500;                                /* hold a clip you made, or a User sample, this long to delete / unload it (the Delete button never reaches a screen) */
     var TOAST_MS = 1600;                               /* how long a dial's new value stays on the screen */
-    var STYLE_SHORT = ["IMPRO", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR"];
+    var STYLE_SHORT = ["FLOW", "SNAP", "FREE", "BABY", "CUTS", "MILIT", "SCRIB", "STAB", "CHIRP", "TRANS", "FLARE", "CRAB", "ORBIT", "DRAG", "TEAR", "STUTR"];
     var BARS = [1, 2, 4];
     var BACK_CC = 51;                                  /* the Move's Back button */
     var JOG_CC = 14;                                   /* the jog wheel: right zooms the clip view in, left out */
@@ -49,7 +49,7 @@
      * then what Generate adds (Groove, Echo, Forwards, Finish). Swing is on the Playback page. The sample, the clip and Generate are on the pads; Load Sample and the rest of
      * the settings (Bite, Clip Depth, Gain, ...) are on the module's own pages. */
     var KNOBS = [
-        { key: "gen_style", v: "gs", min: 0, max: 12, steps: true, detents: 2 },
+        { key: "gen_style", v: "gs", min: 0, max: 15, steps: true, detents: 2 },
         { key: "gen_bars", v: "gb", min: 0, max: 2, steps: true, detents: 3 },
         { key: "drag", v: "dr", min: 0, max: 1, step: 0.02 },                          /* how quickly the playhead follows: digital to analogue */
         { key: "humanise", v: "hu", min: 0, max: 1, step: 0.02 },                      /* every clip, as it plays: looser timing, cuts, strokes */
@@ -140,7 +140,7 @@
 
     function drawTitle(ctx, v) {
         if (num(v.rc, 0)) {                                       /* recording: REC and the seconds so far, and the level of the input */
-            textBig(ctx, 0, 0, "REC " + (clamp(num(v.rt, 0), 0, 99) / 10).toFixed(1));
+            textBig(ctx, 0, 0, "REC " + (clamp(num(v.rt, 0), 0, 100) / 10).toFixed(1));
             ctx.fillRect(0, 10, Math.round(clamp(num(v.rl, 0), 0, 100) * 1.05), 1, 1);
         } else {
             textBig(ctx, 0, 0, fit(typeof v.n === "string" && v.n ? v.n : "EMPTY", 13));
@@ -234,7 +234,7 @@
     /* the style the clip on the screen was made in (a kept clip keeps its recipe), or -1 when it has none (a built-in one, or hand playing) */
     function clipStyle(v) {
         var cy = Math.round(num(v.cy, -1));
-        return num(v.cm, 0) > 0 && cy >= 0 && cy <= 12 ? cy : -1;
+        return num(v.cm, 0) > 0 && cy >= 0 && cy < STYLES.length ? cy : -1;
     }
 
     /* The pages of clip pads, a mark each, top right: the page the pads show is solid, a page with clips is a box and an empty one a dot. While the
@@ -253,9 +253,9 @@
 
     function clipLabel(v, plain) {
         var cm = clamp(Math.round(num(v.cm, 0)), 0, 18), cl = clamp(Math.round(num(v.cl, 0)), 0, 18);
-        var ln = Math.round(num(v.ln, 0)), tg = clamp(Math.round(num(v.tg, 0)), 0, 12), cy = clipStyle(v);
+        var ln = Math.round(num(v.ln, 0)), tg = clamp(Math.round(num(v.tg, 0)), 0, STYLES.length - 1), cy = clipStyle(v);
         var cp = clamp(Math.round(num(v.cp, 0)), 0, PAGES - 1), pgl = cp > 0 ? (cp + 1) + "." : "";                  /* a clip on another page than the first: CLIP 2.3 */
-        var head = cm === CLIP_TRY ? "TRY " + STYLES[tg].slice(0, 5) : (cm ? (cm === CLIP_AUTO ? "AUTO " : "CLIP ") + pgl + cl + (cy >= 0 ? " " + STYLE_SHORT[cy] : "") : "HAND");
+        var head = cm === CLIP_TRY ? "TRY " + STYLE_SHORT[tg] : (cm ? (cm === CLIP_AUTO ? "AUTO " : "CLIP ") + pgl + cl + (cy >= 0 ? " " + STYLE_SHORT[cy] : "") : "HAND");
         return head + (ln > 0 && !plain ? " N" + ln : "");                                          /* N: the last note that arrived */
     }
 
@@ -318,7 +318,7 @@
         var made = clipStyle(v) >= 0;
         text(ctx, 1, 59, notice || (clipLabel(v) + (made ? "" : (pad !== undefined && pad >= 0 ? " P" + pad : "") + (cc !== undefined && cc >= 0 ? " C" + cc : ""))), inv ? 0 : 1);
         /* a clip with a recipe: its style is in the label and here is what else it was made with; otherwise what Generate makes (the dials 1 and 2), then how the pads are being read */
-        var right = made ? clipExtras(v, clipLabel(v).length) : (STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : ""));
+        var right = made ? clipExtras(v, clipLabel(v).length) : (STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, STYLE_SHORT.length - 1)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (v.rw ? "RAW" : "NOTE") + (leds ? " " + leds : ""));
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 
@@ -358,7 +358,7 @@
         if (inv) ctx.fillRect(0, 57, 128, 7, 1);
         var zl = "BAR " + bar + " BEAT " + beat + (pad !== undefined && pad >= 0 ? "  P" + pad : "");
         text(ctx, 1, 59, notice || zl, inv ? 0 : 1);
-        var right = clipStyle(v) >= 0 ? clipExtras(v, zl.length) : STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, 12)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
+        var right = clipStyle(v) >= 0 ? clipExtras(v, zl.length) : STYLE_SHORT[clamp(Math.round(num(v.gs, 0)), 0, STYLE_SHORT.length - 1)] + " " + BARS[clamp(Math.round(num(v.gb, 1)), 0, 2)] + "B " + (leds ? leds : "JOG");
         if (!notice) text(ctx, 128 - 4 * right.length, 59, right, 1);
     }
 
@@ -517,11 +517,12 @@
         switch (k.key) {
         case "clip_depth": return "CLIP DEPTH " + Math.round(val * 100) + "%";
         case "clip_offset": return "CLIP OFFSET " + sign + val.toFixed(2);
-        case "gen_style": return "STYLE " + STYLES[clamp(Math.round(val), 0, 12)];
+        case "gen_style": return "STYLE " + STYLES[clamp(Math.round(val), 0, STYLES.length - 1)];
         case "gen_bars": return "LENGTH " + BARS[clamp(Math.round(val), 0, 2)] + (Math.round(val) ? " BARS" : " BAR");
         case "gen_fwd": return "FORWARDS " + Math.round(val * 100) + "%";
         case "swing": return "SWING " + Math.round(val * 100) + "%";
         case "drag": return "DRAG " + Math.round(val * 100) + "%";
+        case "vinyl": return "VINYL " + Math.round(val * 100) + "%";
         case "gen_groove": return "GROOVE " + Math.round(val * 100) + "%";
         case "humanise": return "HUMANISE " + Math.round(val * 100) + "%";
         case "gen_fin": return "FINISH " + Math.round(val * 100) + "%";

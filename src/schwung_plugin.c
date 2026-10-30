@@ -32,7 +32,7 @@ static const char *const k_recipe_file = "/data/UserData/schwung/modules/sound_g
 
 enum { K_ENUM, K_FLOAT, K_INT, K_CANVAS, K_STRING, K_FILEPATH };
 enum { P_SAMPLE, P_TURNTABLE, P_DRAG, P_GAIN, P_NOTE_GATE, P_VEL_VOL, P_NORMALISE,
-       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_BITE, P_GEN_FIN, P_GEN_ECHO, P_GEN_GROOVE, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_TASTE_LOG, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_PAGE, P_CLIP_PAGE, P_SAMPLE_FILE,
+       P_LOCK, P_CUT_FROM, P_PADS, P_CLIP, P_RECORD, P_CLEAR, P_GENERATE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_SWING, P_HUMANISE, P_BITE, P_GEN_FIN, P_GEN_ECHO, P_GEN_GROOVE, P_CLIP_DEPTH, P_CLIP_OFFSET, P_CUES, P_TASTE_LOG, P_CLIP_PAD, P_CLIP_DEL, P_ZOOM, P_PAGE, P_CLIP_PAGE, P_SAMPLE_FILE, P_VINYL,
        P_PAD_RAW, P_PAD_CUTS,
        P_VIEW, P_WAVE, P_FULL, P_STATUS,
        P_COUNT };
@@ -53,7 +53,7 @@ static const char *const o_clear[] = { "Idle", "Clear" };
 static const char *const o_clip[] = { "Off", "Clip 1", "Clip 2", "Clip 3", "Clip 4", "Clip 5", "Clip 6", "Clip 7", "Clip 8", "Clip 9", "Clip 10",
                                       "Clip 11", "Clip 12", "Clip 13", "Clip 14", "Clip 15", "Clip 16", "Auto", "Try" };
 static const char *const o_generate[] = { "Idle", "Generate" };
-static const char *const o_genstyle[] = { "Improv", "Baby", "Cuts", "Military", "Scribble", "Stab", "Chirp", "Transform", "Flare", "Crab", "Orbit", "Drag", "Tear" };
+static const char *const o_genstyle[] = { "Flow", "Snap", "Freestyle", "Baby", "Cuts", "Military", "Scribble", "Stab", "Chirp", "Transform", "Flare", "Crab", "Orbit", "Drag", "Tear", "Stutter" };     /* (in the list's order: ts_style_at gives a style's number) */
 static const char *const o_genbars[] = { "1 bar", "2 bars", "4 bars" };
 
 static const pdef_t k_params[P_COUNT] = {
@@ -72,7 +72,7 @@ static const pdef_t k_params[P_COUNT] = {
      * and deleting a clip you made (the Delete button and its pad) are all on the pads: generate, clip_pad and clip_delete are what
      * the Pads screen writes. */
     [P_GENERATE]    = { "generate", "Generate", K_ENUM, o_generate, 2, 0, 1, 0, 0, NULL },
-    [P_GEN_STYLE]   = { "gen_style", "Style", K_ENUM, o_genstyle, 13, 0, 12, 0, 0, NULL },
+    [P_GEN_STYLE]   = { "gen_style", "Style", K_ENUM, o_genstyle, 16, 0, 15, 0, 0, NULL },
     [P_GEN_BARS]    = { "gen_bars", "Length", K_ENUM, o_genbars, 3, 0, 2, 1, 0, NULL },
     [P_GEN_FWD]     = { "gen_fwd", "Forwards", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.05f, NULL },
     [P_SWING]       = { "swing", "Swing", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.30f, 0.02f, NULL },
@@ -83,6 +83,7 @@ static const pdef_t k_params[P_COUNT] = {
     [P_GEN_GROOVE]  = { "gen_groove", "Groove", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.05f, NULL },
     [P_CLIP_DEPTH]  = { "clip_depth", "Clip Depth", K_FLOAT, NULL, 0, 0.0f, 2.0f, 1.0f, 0.02f, NULL },
     [P_CLIP_OFFSET] = { "clip_offset", "Clip Offset", K_FLOAT, NULL, 0, -0.5f, 0.5f, 0.0f, 0.01f, NULL },
+    [P_VINYL]       = { "vinyl", "Vinyl", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.01f, NULL },
     [P_CUES]        = { "cues", "Cue Pads", K_ENUM, o_onoff, 2, 0, 1, 1, 0, NULL },    [P_CLIP_PAD]    = { "clip_pad", "Clip Pad", K_INT, NULL, 0, 0, 16, 0, 1, NULL },
     [P_TASTE_LOG]   = { "taste_log", "Taste Log", K_ENUM, o_onoff, 2, 0, 1, 1, 0, NULL },
     [P_CLIP_DEL]    = { "clip_delete", "Delete Clip", K_INT, NULL, 0, 0, 16, 0, 1, NULL },
@@ -128,7 +129,7 @@ static const pdef_t k_params[P_COUNT] = {
  * project and not on a dial.) */
 static const int pg_root[] = { P_VIEW, P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO, P_GEN_GROOVE };
 static const int kn_root[] = { P_FULL, P_SAMPLE_FILE, P_GEN_STYLE, P_GEN_BARS, P_GEN_FWD, P_GEN_FIN, P_GEN_ECHO, P_GEN_GROOVE };
-static const int pg_playback[] = { P_SWING, P_HUMANISE, P_BITE, P_CLIP_DEPTH, P_CLIP_OFFSET, P_DRAG, P_GAIN };
+static const int pg_playback[] = { P_SWING, P_HUMANISE, P_BITE, P_CLIP_DEPTH, P_CLIP_OFFSET, P_DRAG, P_GAIN, P_VINYL };
 static const int pg_padplay[] = { P_NOTE_GATE, P_VEL_VOL, P_CUES, P_TASTE_LOG };
 static const int pg_wave[] = { P_WAVE };
 
@@ -156,7 +157,7 @@ static float pget(const ts_params_t *p, int i)
     case P_PADS: return (float)p->pads;
     case P_CLIP: return (float)p->clip;
     case P_CLIP_PAGE: return (float)p->clip_page;
-    case P_GEN_STYLE: return (float)p->gen_style;
+    case P_GEN_STYLE: return (float)ts_style_shown(p->gen_style);
     case P_GEN_BARS: return (float)p->gen_bars;
     case P_GEN_FWD: return p->gen_fwd;
     case P_SWING: return p->swing;
@@ -167,6 +168,7 @@ static float pget(const ts_params_t *p, int i)
     case P_GEN_GROOVE: return p->gen_groove;
     case P_CLIP_DEPTH: return p->clip_depth;
     case P_CLIP_OFFSET: return p->clip_offset;
+    case P_VINYL: return p->vinyl;
     case P_CUES: return (float)p->cues;
     case P_TASTE_LOG: return (float)p->taste_log;    default: return 0.0f;
     }
@@ -188,7 +190,7 @@ static void pset(ts_params_t *p, int i, float v)
     case P_PADS: p->pads = v >= 0.5f; break;
     case P_CLIP: p->clip = (int)lrintf(v); break;
     case P_CLIP_PAGE: p->clip_page = (int)lrintf(v); break;
-    case P_GEN_STYLE: p->gen_style = (int)lrintf(v); break;
+    case P_GEN_STYLE: p->gen_style = ts_style_at((int)lrintf(v)); break;
     case P_GEN_BARS: p->gen_bars = (int)lrintf(v); break;
     case P_GEN_FWD: p->gen_fwd = v; break;
     case P_SWING: p->swing = v; break;
@@ -199,6 +201,7 @@ static void pset(ts_params_t *p, int i, float v)
     case P_GEN_GROOVE: p->gen_groove = v; break;
     case P_CLIP_DEPTH: p->clip_depth = v; break;
     case P_CLIP_OFFSET: p->clip_offset = v; break;
+    case P_VINYL: p->vinyl = v; break;
     case P_CUES: p->cues = v >= 0.5f; break;
     case P_TASTE_LOG: p->taste_log = v >= 0.5f; break;    default: break;                                     /* the screen, the status string and the Save button are not values */
     }
@@ -344,7 +347,7 @@ static int find_param(const char *key)
 
 /* ---- saved state ----
  * get_param("state") is what Schwung stores with a project or preset; set_param("state") gives it back. A flat object
- * of strings: every parameter by key (enums as their index). */
+ * of strings: every parameter by key (enums as their index; Style as the style's number, which does not change when the list is reordered). */
 
 /* written by the screens or one-shots, never saved with the project */
 static int is_transient(int i)
@@ -359,7 +362,7 @@ static int build_state(const ts_inst_t *in, char *buf, int cap)
     jb_put(&j, "{\"v\":\"1\"");
     for (int i = 0; i < P_COUNT; i++) {
         if (k_params[i].kind == K_CANVAS || k_params[i].kind == K_STRING || k_params[i].kind == K_FILEPATH || is_transient(i)) continue;
-        float v = pget(&in->p, i);
+        float v = i == P_GEN_STYLE ? (float)in->p.gen_style : pget(&in->p, i);
         if (k_params[i].kind == K_FLOAT) jb_put(&j, ",\"%s\":\"%.4f\"", k_params[i].key, (double)v);
         else jb_put(&j, ",\"%s\":\"%d\"", k_params[i].key, (int)v);
     }
@@ -396,7 +399,7 @@ static void restore_state(ts_inst_t *in, const char *json)
         if (!state_get(json, k_params[i].key, val, sizeof val)) continue;
         char *end = NULL;
         float v = strtof(val, &end);
-        if (end != val) pset(&p, i, v);
+        if (end != val) { if (i == P_GEN_STYLE) p.gen_style = (int)lrintf(v); else pset(&p, i, v); }
     }
     ts_engine_set_params(in->eng, &p);
 
@@ -433,7 +436,8 @@ static void ts_set_param(void *h, const char *key, const char *val)
     if (d->kind == K_ENUM) {
         for (int o = 0; o < d->nopts; o++)
             if (strcmp(val, d->opts[o]) == 0) { v = (float)o; ok = 1; break; }
-        if (!ok && i == P_GEN_STYLE && strcmp(val, "Any") == 0) { v = 0.0f; ok = 1; }        /* (what Improv was called) */
+        if (!ok && i == P_GEN_STYLE && (strcmp(val, "Any") == 0 || strcmp(val, "Improv") == 0)) { v = 0.0f; ok = 1; }        /* (what Flow was called) */
+        if (!ok && i == P_GEN_STYLE && strcmp(val, "Impv 1.1") == 0) { v = (float)ts_style_shown(TS_GS_SNAP); ok = 1; }       /* (Snap, while it was a trial) */
     }
     if (!ok) {
         char *end = NULL;

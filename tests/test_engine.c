@@ -1424,7 +1424,7 @@ static void test_generator(void)
         pairs++;
     }
     int all_seen = 1;
-    for (int st = 1; st < GS_COUNT; st++) all_seen &= seen_style[st] > 0 || st == GS_DRAG || st == GS_TEAR;          /* (a drag is a whole bar of two slow strokes and a tear is only the record hand: 'any' keeps away from both) */
+    for (int st = 1; st < GS_COUNT; st++) all_seen &= seen_style[st] > 0 || st == GS_DRAG || st == GS_TEAR || st == GS_STUTTER;          /* (a drag is a whole bar of two slow strokes, a tear is only the record hand and a stutter is a word's: 'any' keeps away from them) */
     CHECK(chain_ok && all_seen, "'any' makes a phrase A A B A where B is a style that follows A, as a scratcher would string them, and uses every style");
     CHECK(repeats < pairs / 4, "...with B a different style most of the time (%d of %d are the same)", repeats, pairs);
 
@@ -1536,7 +1536,7 @@ static void test_generator(void)
     char js[8192], cf[64];
     double v = 0;
     ts_engine_view(e, js, sizeof js);
-    CHECK(json_num(js, "cl", &v) && v == TS_CLIP_TRY && json_num(js, "tv", &v) && v == 1 && json_num(js, "tg", &v) && v == GS_FLARE && json_num(js, "lb", &v) && v == 16, "the screen: which clip, that there is a try clip, its style, and its length (16 beats)");
+    CHECK(json_num(js, "cl", &v) && v == TS_CLIP_TRY && json_num(js, "tv", &v) && v == 1 && json_num(js, "tg", &v) && v == ts_style_shown(GS_FLARE) && json_num(js, "lb", &v) && v == 16, "the screen: which clip, that there is a try clip, its style, and its length (16 beats)");
 
     /* keeping: on the next free pad, or an empty pad; a clip pad plays what is on it */
     int pad = ts_engine_keep(e, 0);
@@ -2004,7 +2004,7 @@ static void test_clip_recipe_view(void)
     ts_engine_set_params(e, &p);
     ts_engine_generate(e);
     play_a_little(e);
-    CHECK(view_int(e, "cy") == GS_BABY && view_int(e, "cx") == 0, "Echo is set but a Baby has no echo scratch in it: it is not claimed");
+    CHECK(view_int(e, "cy") == ts_style_shown(GS_BABY) && view_int(e, "cx") == 0, "Echo is set but a Baby has no echo scratch in it: it is not claimed");
 
     /* the generator tells the truth over many clips: no extras at 0, and a setting that is on only sometimes puts it in only some */
     int with_echo = 0, with_fin = 0, wrong = 0;
@@ -2510,28 +2510,32 @@ static uint32_t clip_fnv(const ts_clip_t *c)
 static void test_tempo(void)
 {
     printf("tempo\n");
-    /* clips made before the tempo was looked at, for a few seeds and styles: the tempo does not change them up to 120 bpm */
-    /* (the first six are "Any", unchanged since before the tempo was looked at; the rest are a baby, a flare and cuts as the notation defines them) */
-    static const uint32_t before[15] = { 1953970742u, 557623256u, 1711664955u, 4219920907u, 4086795089u, 4086795089u, 2739137509u, 753900917u,
-                                          753900917u, 4204885726u, 3910051669u, 3910051669u, 4116409320u, 2109576546u, 2109576546u };
+    /* up to 120 bpm: a clip is fixed by its seed and its tempo (a recipe keeps both, so a saved clip never changes when the song does), and a
+     * named style keeps its fader rhythm at every tempo; only how far the strokes reach follows a hand's speed in seconds */
     ts_engine_t *e = ts_engine_create(44100.0f);
     int have = ts_engine_load_dir(e, "samples") == 3;
     const int cfg[5][3] = { { GS_ANY, 4, 1 }, { GS_ANY, 2, 0 }, { GS_BABY, 2, 1 }, { GS_FLARE, 4, 0 }, { GS_CUTS, 1, 0 } };
-    static ts_clip_t c;
-    int same = 1, n_checked = 0;
+    static ts_clip_t c, c2;
+    int same = 1, rhythm = 1, n_checked = 0;
     for (int k = 0; k < 5; k++)
         for (int sl = -1; sl < 2; sl++) {
             if (sl >= 0 && !have) continue;
-            uint32_t seed = 7919u * (uint32_t)(k + 3);
+            uint32_t seed = 7919u * (uint32_t)(k + 3), g0 = 0;
             for (int bi = 0; bi < 8; bi++) {
                 const float bpms[8] = { 120.0f, 119.0f, 99.0f, 90.0f, 75.0f, 66.0f, 55.0f, 40.0f };
                 float bpm = bpms[bi];
-                ts_clip_generate_for(&c, cfg[k][0], seed, cfg[k][1], sl >= 0 ? &e->slot[sl] : NULL, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f, 0.0f);
-                same &= clip_fnv(&c) == before[k * 3 + (sl + 1)];
+                const ts_slot_t *slp = sl >= 0 ? &e->slot[sl] : NULL;
+                ts_clip_generate_for(&c, cfg[k][0], seed, cfg[k][1], slp, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f, 0.0f);
+                ts_clip_generate_for(&c2, cfg[k][0], seed, cfg[k][1], slp, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f, 0.0f);
+                same &= clip_fnv(&c) == clip_fnv(&c2);
+                uint32_t g = 2166136261u;
+                for (int i = 0; i < c.n; i++) g = (g ^ c.gate[i]) * 16777619u;
+                if (bi == 0) g0 = g; else if (cfg[k][0] != GS_ANY) rhythm &= g == g0;
                 n_checked++;
             }
         }
-    CHECK(same && n_checked >= 15, "at 40 to 120 bpm the clips are exactly what they were, the tempo changes nothing (%d checked)", n_checked);
+    CHECK(same && n_checked >= 15, "a seed and a tempo make the same clip every time (%d checked)", n_checked);
+    CHECK(rhythm, "at 40 to 120 bpm a named style's fader rhythm is the same: the tempo only changes how far the strokes reach");
     /* above 120 bpm: the sounds a second stay where they are at 120 (a hand tops out near 6), and the clips are not what the grid alone makes */
     double rate[4] = { 0, 0, 0, 0 }, beats[4] = { 0, 0, 0, 0 };
     const float fast[4] = { 120.0f, 140.0f, 160.0f, 200.0f };
@@ -3148,15 +3152,15 @@ static void test_recording(void)
     render_n(e, buf, 128);
     CHECK(e->pend_ready == 0 && e->slot[3].len == 5120 && e->slot[3].data[100] < 0.6f, "a recording under 46 ms is thrown away and the sample already there stays");
 
-    /* it stops by itself after four seconds, and replaces the old one, which the service call frees */
+    /* it stops by itself after ten seconds, and replaces the old one, which the service call frees */
     ts_engine_rec_start(e);
-    for (int b = 0; b < 1500; b++) ts_engine_feed_input(e, in, 128);
-    CHECK(e->rec_state == 2 && e->rec_len == e->rec_cap && e->rec_cap == 176400, "it stops by itself after four seconds (%d frames)", e->rec_len);
+    for (int b = 0; b < 3500; b++) ts_engine_feed_input(e, in, 128);
+    CHECK(e->rec_state == 2 && e->rec_len == e->rec_cap && e->rec_cap == 441000, "it stops by itself after ten seconds (%d frames)", e->rec_len);
     ts_engine_service(e);
     render_n(e, buf, 128);
     int parked = 0;
     for (int i = 0; i < TS_SLOTS + 2; i++) parked += e->garbage[i] != NULL;
-    CHECK(e->slot[3].len == 176400 - 2646 - 4410 && parked == 1, "recording over a sample replaces it (less the first 60 ms and the last 100 ms: the pad's press and let-go); the old data waits for the service call, not freed on the audio thread (%d)", e->slot[3].len);
+    CHECK(e->slot[3].len == 441000 - 2646 - 4410 && parked == 1, "recording over a sample replaces it (less the first 60 ms and the last 100 ms: the pad's press and let-go); the old data waits for the service call, not freed on the audio thread (%d)", e->slot[3].len);
     ts_engine_service(e);
     parked = 0;
     for (int i = 0; i < TS_SLOTS + 2; i++) parked += e->garbage[i] != NULL;
@@ -3551,6 +3555,16 @@ static void test_state(void)
     CHECK(fabs(b->eng->man - 0.35) < 1e-6, "the playhead is where the knob was");
     int n2 = api->get_param(h2, "state", st2, sizeof st2);
     CHECK(n2 == n && strcmp(st, st2) == 0, "saving what was restored gives the same state");
+    /* a project saved before the Style list was reordered: Style is kept as the style's number, so Baby (1) is still Baby, not Snap */
+    api->set_param(h2, "state", "{\"v\":\"1\",\"gen_style\":\"1\"}");
+    int old_baby = b->p.gen_style == GS_BABY;
+    char out2[32];
+    api->get_param(h2, "gen_style", out2, sizeof out2);
+    old_baby &= atoi(out2) == 3;
+    api->set_param(h2, "gen_style", "Snap");
+    api->get_param(h2, "state", st2, sizeof st2);
+    CHECK(old_baby && b->p.gen_style == TS_GS_SNAP && strstr(st2, "\"gen_style\":\"14\"") != NULL,
+          "an old project's Baby is still Baby (fourth in the list now), and Snap is saved as its number");
 
     /* hostile and broken states change nothing */
     ts_params_t keep = b->p;
@@ -3849,6 +3863,193 @@ static void test_shipped_clips(void)
     ts_engine_destroy(e);
 }
 
+/* A long sample (over TS_REACH_S): strokes as long in seconds as on a short one, bars that start on its words, Clip Depth around those.
+ * Ahhh and Fresssh are shorter, so nothing about them may change: the shipped clips are still exactly what their recipes make. */
+static int cmp_float(const void *a, const void *b) { const float x = *(const float *)a, y = *(const float *)b; return x < y ? -1 : x > y; }
+
+static void test_long_samples(void)
+{
+    printf("long samples\n");
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    ts_engine_load_dir(e, "samples");
+    ts_engine_set_recipes_path(e, "clips/recipes.txt");
+    ts_engine_load_recipes(e);
+    int known = 0, kept = 0;
+    for (int sm = 0; sm < 2; sm++)
+        for (int pad = 1; pad <= 3; pad++) { const ts_clip_t *c = bank_clip(e, sm, pad); kept++; known += c && (c->extras & TS_EX_KNOWN); }
+    CHECK(slot_reach(&e->slot[0]) == 1.0f && slot_reach(&e->slot[1]) == 1.0f, "Ahhh and Fresssh are under %.1f s: none of this touches them", (double)TS_REACH_S);
+    {   /* the shipped clips play from their saved data, so a change to the generator never changes them: their sound, exactly as in 1.1.0 */
+        uint32_t h = 2166136261u;
+        for (int sm = 0; sm < 2; sm++)
+            for (int pad = 1; pad <= 3; pad++) {
+                const ts_clip_t *c = bank_clip(e, sm, pad);
+                for (int i = 0; c && i < c->n; i++) { h = (h ^ (c->pos[i] & 255u)) * 16777619u; h = (h ^ (c->pos[i] >> 8)) * 16777619u; h = (h ^ c->gate[i]) * 16777619u; }
+                if (c) h = (h ^ (uint32_t)c->len) * 16777619u;
+            }
+        CHECK(kept == 6 && h == 0xae0c5a42u, "...and the six shipped clips are exactly as they were in 1.1.0, whatever the generator has become (%08x; %d still made by their recipes)", h, known);
+    }
+
+    /* a phrase: Ahhh, Fresssh, Ahhh, Fresssh, Ahhh, a gap after each (about 5 s); its words start at these seconds */
+    static int16_t pcm[44100 * 6];
+    double words[5];
+    int n = 0;
+    for (int w = 0; w < 5; w++) {
+        const ts_slot_t *src = &e->slot[w % 2];
+        words[w] = (double)n / 44100.0;
+        for (int i = 0; i < src->len; i++) pcm[n++] = (int16_t)lrintf(clampf(src->data[i], -1.0f, 1.0f) * 30000.0f);
+        for (int i = 0; i < 6615; i++) pcm[n++] = 0;
+    }
+    const double secs = (double)n / 44100.0;
+    size_t sz = make_wav(g_wav, pcm, n, 44100, 1, 16, 1);
+    const int loaded = ts_engine_load_wav_mem(e, 2, "phrase", g_wav, sz);
+    CHECK(loaded == TS_WAV_OK && slot_reach(&e->slot[2]) < 0.3f, "a 5 s phrase loads, and is a long sample");
+    static ts_clip_t c;
+    static float strokes[40000];
+    int ns = 0, on_word = 0, starts = 0, hit[5] = { 0 };
+    for (int st = 0; st < TS_GEN_STYLES; st++)
+        for (uint32_t seed = 1; seed <= 12; seed++) {
+            ts_clip_generate_ex(&c, st, seed * 31u, 4, &e->slot[2], 0.5f, 96.0f, 0.3f, 0.25f, 0.5f);
+            float prev = (float)c.pos[0] / 65535.0f, from = prev;
+            int dir = 0;
+            for (int i = 1; i < c.n; i++) {
+                const float x = (float)c.pos[i] / 65535.0f;
+                const int d = x > prev + 1e-5f ? 1 : (x < prev - 1e-5f ? -1 : 0);
+                if (d && dir && d != dir) { if (fabsf(prev - from) > 0.01f && ns < 40000) strokes[ns++] = fabsf(prev - from) * (float)secs; from = prev; }
+                if (d) dir = d;
+                prev = x;
+            }
+            for (int b = 0; b < 4; b++) {                                         /* where each bar starts (its lowest point): on a word? */
+                uint16_t m = 65535;
+                for (int i = b * 4 * TS_CLIP_RES; i < (b + 1) * 4 * TS_CLIP_RES; i++) if (c.pos[i] < m) m = c.pos[i];
+                const double at = (double)m / 65535.0 * secs;
+                starts++;
+                for (int w = 0; w < 5; w++) if (at >= words[w] - 0.05 && at <= words[w] + 0.6) { on_word++; hit[w] = 1; break; }
+            }
+        }
+    qsort(strokes, (size_t)ns, sizeof strokes[0], cmp_float);
+    const float med = strokes[ns / 2];
+    CHECK(med > 0.2f && med < 0.8f, "a long sample's strokes are as long as on a short one: the median is %.2f s (a turn is 1.8 s; on 5 s they were 1.6 to 2.8 s)", (double)med);
+    CHECK(on_word >= starts * 8 / 10 && hit[0] + hit[1] + hit[2] + hit[3] + hit[4] >= 4,
+          "...the bars start on its words (%d of %d bars), and on %d of the five", on_word, starts, hit[0] + hit[1] + hit[2] + hit[3] + hit[4]);
+
+    /* Stutter: short forwards on a word's first sound, in seconds whatever the sample's length, the fader open only while the record goes
+     * forward, a release through the word in every bar, and no more than one push a sixteenth (an eighth over 120 bpm) */
+    for (int pass = 0; pass < 2; pass++) {
+        const float bpm = pass ? 160.0f : 96.0f;
+        int pushes = 0, push_ok = 0, push_first = 0, n_first = 0, releases = 0, bars_with_release = 0, nbars = 0, back_open = 0, too_close = 0;
+        for (uint32_t seed = 1; seed <= 40; seed++) {
+            ts_clip_generate_ex(&c, GS_STUTTER, seed * 131u, 1, &e->slot[2], 0.0f, bpm, 0.0f, 0.0f, 0.0f);
+            int had = 0;
+            float last_push = -10.0f;
+            int i0 = 0;
+            while (c.gate[c.n - 1] && i0 < c.n && c.gate[i0]) i0++;              /* (a push across the loop's end, as the clip runs a little ahead: counted once, at the end) */
+            float first = 1.0f;
+            for (int i = i0; i < c.n;) {
+                if (!c.gate[i]) { i++; continue; }
+                int j = i;
+                float lo = 1.0f, hi = 0.0f;
+                int fwd = 0, back = 0;
+                while (j < c.n + (c.gate[c.n - 1] ? i0 : 0) && c.gate[j % c.n]) {
+                    const float x = (float)c.pos[j % c.n] / 65535.0f;
+                    lo = fminf(lo, x); hi = fmaxf(hi, x);
+                    if (j > i && c.pos[j % c.n] + 30 < c.pos[(j - 1) % c.n]) back++;
+                    if (j > i && c.pos[j % c.n] > c.pos[(j - 1) % c.n] + 30) fwd++;
+                    j++;
+                }
+                back_open += back > 0 && fwd == 0;                                /* (a rub is open both ways; a pull alone is never heard) */
+                const float span = (hi - lo) * (float)secs, len16 = (float)(j - i) / (float)(TS_CLIP_RES / 4), at16 = (float)i / (float)(TS_CLIP_RES / 4);
+                if (back > 0 && fwd > 0) { i = j; continue; }                    /* (a rub: its own measure) */
+                if (span > 0.25f) { releases++; had = 1; }
+                else if (len16 > 0.3f) {                                          /* (a push, not a roll's click; a build-up's pushes grow, to 0.3 s) */
+                    pushes++; push_ok += span > 0.035f && span < 0.8f;
+                    first = fminf(first, span);
+                    too_close += at16 - last_push < (bpm > 120.0f ? 1.9f : 0.9f);
+                    last_push = at16;
+                }
+                i = j;
+            }
+            nbars++; bars_with_release += had;
+            if (first < 0.9f) { n_first++; push_first += first > 0.035f && first < 0.22f; }
+        }
+        CHECK(pushes > 40 && push_ok == pushes && push_first == n_first, "Stutter at %.0f bpm: each bar's pushes are a word's attack, 35-220 ms on a 5 s phrase, a hand's give either way (%d of %d bars), and none longer than a build-up's 0.8 s", (double)bpm, push_first, n_first);
+        CHECK(bars_with_release == nbars && back_open == 0, "...every bar lets the word go (%d of %d), and the fader is never open on a pull alone, only on a rub (%d)", bars_with_release, nbars, back_open);
+        CHECK(too_close == 0, "...the record hand never pushes faster than a sixteenth apart (an eighth over 120 bpm) (%d too close)", too_close);
+    }
+
+    /* ...and on Fresssh, whose attack is long (131 ms, "f" to "fre"), its pushes and rubs are no faster than a DJ's: about its own speed on
+     * average (DJs: 0.94, Hansen), peaking not much above (a hand's push sweeps), not a squeal at twice its speed */
+    {
+        const double fs = (double)e->slot[1].len / 44100.0, pt = 60.0 / 120.0 / TS_CLIP_RES;
+        double msum = 0.0, pmax = 0.0;
+        int np = 0;
+        for (uint32_t seed = 1; seed <= 40; seed++) {
+            ts_clip_generate_ex(&c, GS_STUTTER, seed * 977u, 1, &e->slot[1], 0.0f, 120.0f, 0.0f, 0.0f, 0.0f);
+            for (int i = 0; i < c.n;) {
+                if (!c.gate[i]) { i++; continue; }
+                int j = i;
+                double vmax = 0.0;
+                while (j < c.n && c.gate[j]) { if (j > i) vmax = fmax(vmax, fabs((double)c.pos[j] - c.pos[j - 1]) / 65535.0 * fs / pt); j++; }
+                const double span = fabs((double)c.pos[j - 1] - c.pos[i]) / 65535.0 * fs, dur = (j - i) * pt;
+                if (dur > 0.02 && span < 0.25) { msum += span / dur; pmax = fmax(pmax, vmax); np++; }
+                i = j;
+            }
+        }
+        CHECK(np > 50 && msum / np < 1.1 && pmax < 1.9, "Stutter on Fresssh at 120 bpm: pushes and rubs at %.2f of its speed on average, %.2f at the fastest", msum / np, pmax);
+    }
+
+    /* Clip Depth turned down: the record stays on the words the clip starts on, not pulled toward the start of the sample */
+    ts_params_t p;
+    ts_params_default(&p);
+    p.lock = 0; p.sample = 2; p.gen_bars = 2; p.gen_style = GS_BABY; p.clip_depth = 0.4f; p.humanise = 0.0f;
+    ts_engine_set_tempo(e, 96.0f);
+    ts_engine_set_params(e, &p);
+    ts_engine_select_sample(e, 2);
+    ts_engine_generate(e);
+    p.clip = TS_CLIP_TRY;
+    ts_engine_set_params(e, &p);
+    const ts_clip_t *k = &e->clip_data[e->try_idx];
+    uint16_t lo = 65535;
+    for (int i = 0; i < k->n; i++) if (k->pos[i] < lo) lo = k->pos[i];
+    static float out[512];
+    float below = 0.0f;
+    for (int b = 0; b < 600; b++) { ts_engine_render(e, out, 256); below = fmaxf(below, (float)lo / 65535.0f - (float)e->target); }
+    CHECK(below < 0.01f, "Clip Depth at 40%% keeps the record on the clip's words: never more than %.3f below where it starts", (double)below);
+    ts_engine_destroy(e);
+}
+
+/* Vinyl: a cartridge's output follows the needle's speed, so a record moved slowly is quieter, and one held still is all but silent (only
+ * the groove's own faint noise); at 0, the default, nothing changes: a slow pull is as loud as a push at the record's own speed. */
+static void test_vinyl(void)
+{
+    printf("vinyl\n");
+    float rms[2][3];
+    for (int vy = 0; vy < 2; vy++)
+        for (int sp = 0; sp < 3; sp++) {
+            ts_engine_t *e = ts_engine_create(44100.0f);
+            load_sample(e, 0, "tone.wav", SMP_SINE, 0.5f, 44100 * 4);
+            ts_params_t p = e->p;
+            p.sample = 0; p.clip = 0; p.vinyl = vy ? 1.0f : 0.0f; p.drag = 0.0f; p.note_gate = 0;
+            ts_engine_set_params(e, &p);
+            static float out[512];
+            const float speed = sp == 0 ? 1.0f : (sp == 1 ? 0.25f : 0.0f);
+            float pos = 0.1f;
+            double sum = 0.0;
+            int n = 0;
+            for (int b = 0; b < 400; b++) {
+                pos += speed * 256.0f / (float)(e->slot[0].len - 1);
+                ts_engine_scratch(e, pos);
+                ts_engine_render(e, out, 256);
+                if (b >= 100) for (int i = 0; i < 256; i++) { sum += (double)out[2 * i] * out[2 * i]; n++; }
+            }
+            rms[vy][sp] = (float)sqrt(sum / n);
+            ts_engine_destroy(e);
+        }
+    CHECK(fabsf(rms[0][1] / rms[0][0] - 1.0f) < 0.1f, "Vinyl at 0: a pull at a quarter speed is as loud as at the record's own speed (%.2f), as it always was", (double)(rms[0][1] / rms[0][0]));
+    CHECK(rms[1][1] / rms[1][0] < 0.45f && rms[1][1] / rms[1][0] > 0.2f, "Vinyl at 100%%: at a quarter speed it is quieter, as a cartridge is (%.2f of the level; 0.33 would be the needle's speed to the power 0.8)", (double)(rms[1][1] / rms[1][0]));
+    CHECK(rms[1][2] < 0.01f * rms[1][0], "...and a record held still is all but silent (%.4f against %.3f)", (double)rms[1][2], (double)rms[1][0]);
+    CHECK(rms[1][0] > 0.8f * rms[0][0] && rms[1][0] < 1.2f * rms[0][0], "...at its own speed it is as loud as without Vinyl (%.3f, %.3f)", (double)rms[1][0], (double)rms[0][0]);
+}
+
 static void test_plugin_generate(void)
 {
     printf("plugin generate\n");
@@ -3862,12 +4063,20 @@ static void test_plugin_generate(void)
     api->set_param(h, "gen_style", "Stab");
     api->set_param(h, "gen_bars", "4 bars");
     api->get_param(h, "gen_style", out, sizeof out);
-    CHECK(atoi(out) == GS_STAB && in->p.gen_style == GS_STAB && in->p.gen_bars == 2, "Style and Length are settings (read back as their index)");
-    api->set_param(h, "gen_style", "Improv");
+    CHECK(atoi(out) == ts_style_shown(GS_STAB) && in->p.gen_style == GS_STAB && in->p.gen_bars == 2, "Style and Length are settings (read back as their place in the list)");
+    api->set_param(h, "gen_style", "Flow");
     int improv_ok = in->p.gen_style == GS_ANY;
     api->set_param(h, "gen_style", "Stab");
+    api->set_param(h, "gen_style", "Improv");
+    improv_ok &= in->p.gen_style == GS_ANY;
+    api->set_param(h, "gen_style", "Stab");
     api->set_param(h, "gen_style", "Any");
-    CHECK(improv_ok && in->p.gen_style == GS_ANY, "the first style is Improv, and a project that says Any still means it");
+    CHECK(improv_ok && in->p.gen_style == GS_ANY, "the first style is Flow, and a project that says Improv or Any still means it");
+    api->set_param(h, "gen_style", "Snap");
+    int snap_ok = in->p.gen_style == TS_GS_SNAP;
+    api->set_param(h, "gen_style", "Stab");
+    api->set_param(h, "gen_style", "Impv 1.1");
+    CHECK(snap_ok && in->p.gen_style == TS_GS_SNAP, "Snap is the second style, and a project from its trial (Impv 1.1) still means it");
     api->set_param(h, "gen_style", "Stab");
     api->set_param(h, "generate", "Generate");
     api->get_param(h, "clip", out, sizeof out);
@@ -4343,6 +4552,8 @@ int main(int argc, char **argv)
     test_clip_pages();
     test_groove();
     test_shipped_clips();
+    test_long_samples();
+    test_vinyl();
     test_pad_runs_clip();
     test_unload_files();
     test_load_file_and_zoom();
