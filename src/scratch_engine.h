@@ -96,6 +96,7 @@ typedef struct {
     float gen_groove;           /* 0..1: how far Improv keeps to a groove: its strokes land where a drum pattern leaves room for a scratch, there are rests, a fill ends each phrase and the bars breathe; 0 = as it always was */
     float clip_depth;           /* 0..2: how far a clip moves the playhead (1 = as written; the movement is scaled, then offset) */
     float clip_offset;          /* -0.5..0.5: shifts the whole clip along the sample */
+    float vinyl;                /* 0..1: how much it sounds like a record under a needle: quieter as it slows (a cartridge's output follows the needle's speed), and the groove's own noise and crackle moving with it; 0 = as it always was */
 } ts_params_t;
 
 typedef struct {
@@ -164,6 +165,8 @@ typedef struct ts_engine {
     float       sc_pos[TS_SCRATCH_PTS];
     int         sc_n, sc_head;  /* points held, and where the oldest is */
     double      sc_off;         /* engine ms minus page ms, at the quickest delivery seen in this gesture */
+    float       vy_g, vy_lp, vy_hp, vy_click;   /* Vinyl: the cartridge's level, the groove noise's filters, a crackle dying away */
+    uint32_t    vy_rng;
     const void *bref_ck;        /* a long sample's Clip Depth: the clip whose bars' starting points are in bref, and the block they were read in */
     uint64_t    bref_at;
     float       bref[TS_CLIP_MAX_BEATS / 4];

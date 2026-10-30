@@ -3973,6 +3973,39 @@ static void test_long_samples(void)
     ts_engine_destroy(e);
 }
 
+/* Vinyl: a cartridge's output follows the needle's speed, so a record moved slowly is quieter, and one held still is all but silent (only
+ * the groove's own faint noise); at 0, the default, nothing changes: a slow pull is as loud as a push at the record's own speed. */
+static void test_vinyl(void)
+{
+    printf("vinyl\n");
+    float rms[2][3];
+    for (int vy = 0; vy < 2; vy++)
+        for (int sp = 0; sp < 3; sp++) {
+            ts_engine_t *e = ts_engine_create(44100.0f);
+            load_sample(e, 0, "tone.wav", SMP_SINE, 0.5f, 44100 * 4);
+            ts_params_t p = e->p;
+            p.sample = 0; p.clip = 0; p.vinyl = vy ? 1.0f : 0.0f; p.drag = 0.0f; p.note_gate = 0;
+            ts_engine_set_params(e, &p);
+            static float out[512];
+            const float speed = sp == 0 ? 1.0f : (sp == 1 ? 0.25f : 0.0f);
+            float pos = 0.1f;
+            double sum = 0.0;
+            int n = 0;
+            for (int b = 0; b < 400; b++) {
+                pos += speed * 256.0f / (float)(e->slot[0].len - 1);
+                ts_engine_scratch(e, pos);
+                ts_engine_render(e, out, 256);
+                if (b >= 100) for (int i = 0; i < 256; i++) { sum += (double)out[2 * i] * out[2 * i]; n++; }
+            }
+            rms[vy][sp] = (float)sqrt(sum / n);
+            ts_engine_destroy(e);
+        }
+    CHECK(fabsf(rms[0][1] / rms[0][0] - 1.0f) < 0.1f, "Vinyl at 0: a pull at a quarter speed is as loud as at the record's own speed (%.2f), as it always was", (double)(rms[0][1] / rms[0][0]));
+    CHECK(rms[1][1] / rms[1][0] < 0.45f && rms[1][1] / rms[1][0] > 0.2f, "Vinyl at 100%%: at a quarter speed it is quieter, as a cartridge is (%.2f of the level; 0.33 would be the needle's speed to the power 0.8)", (double)(rms[1][1] / rms[1][0]));
+    CHECK(rms[1][2] < 0.01f * rms[1][0], "...and a record held still is all but silent (%.4f against %.3f)", (double)rms[1][2], (double)rms[1][0]);
+    CHECK(rms[1][0] > 0.8f * rms[0][0] && rms[1][0] < 1.2f * rms[0][0], "...at its own speed it is as loud as without Vinyl (%.3f, %.3f)", (double)rms[1][0], (double)rms[0][0]);
+}
+
 static void test_plugin_generate(void)
 {
     printf("plugin generate\n");
@@ -4468,6 +4501,7 @@ int main(int argc, char **argv)
     test_groove();
     test_shipped_clips();
     test_long_samples();
+    test_vinyl();
     test_pad_runs_clip();
     test_unload_files();
     test_load_file_and_zoom();

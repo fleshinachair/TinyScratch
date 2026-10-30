@@ -97,7 +97,7 @@ int ts_wav_decode(const uint8_t *d, size_t n, float *dst, int cap, float dst_sr)
  * slow sweep, a chirp, a flare in jerks, a full orbit, a ramp that restarts, three strokes to the bar (so the sixteenths
  * play across the strokes in a different rhythm), and a backwards one. */
 typedef struct { uint8_t t, v, shape; } clip_pt_t;      /* units, 0..100, how it gets to the next point */
-enum { SH_EASE, SH_LIN, SH_FAST, SH_SLOW, SH_FLICK };
+enum { SH_EASE, SH_LIN, SH_FAST, SH_SLOW, SH_FLICK, SH_PUSH };
 #define CLIP_MAX_PTS 16
 #define TS_BUILTIN_CLIPS 8
 #define TS_CLIP_UNITS 128                       /* the built-in clips: 128 units to the bar */
@@ -496,6 +496,7 @@ static float g_ease(int shape, float u)
     case SH_FAST: return 1.0f - powf(1.0f - u, 2.4f);
     case SH_SLOW: return powf(u, 2.4f);
     case SH_FLICK: return logf(1.0f + 6.0f * u) / 1.9459101f;                   /* speed 1/(1+6u): the hand's push, fastest at the start and never quite stopping */
+    case SH_PUSH: return u + 0.15f * u * (1.0f - u);                            /* a short push: a little faster at the start (1.15), a little slower into the turn (0.85) */
     default: return u;
     }
 }
@@ -768,16 +769,20 @@ static float st_stab(gen_t *g, float o, float base)
  * recipe), as a slow run-up on every push sounds like a robot. */
 static void stut_push(gen_t *g, float t, float slot, float base, float secs)
 {
-    const float d = fminf(secs * g->spx, slot * 0.62f), to = clampf(base + secs * g->fps, base, 0.97f);
-    g_seg(g, t, t + d, base, to, SH_LIN);
+    /* a hand is never the same twice ("the majority of all movements tend to have unstable speed", Hansen): each push a little early or
+     * late (up to 6 ms at 120 bpm), a little longer or shorter, a little faster or slower */
+    t += gr(g, -0.05f, 0.05f);
+    secs *= gr(g, 0.82f, 1.18f);
+    const float d = fminf(secs * g->spx * gr(g, 0.88f, 1.12f), slot * 0.62f), to = clampf(base + secs * g->fps, base, 0.97f);
+    g_seg(g, t, t + d, base, to, SH_PUSH);
     g_gate(g, t, t + d - 0.04f, 1);
     g_seg(g, t + d, t + slot, to, base, SH_EASE);
 }
 static void stut_release(gen_t *g, float t, float end, float base, float secs)
 {
     const float to = clampf(base + secs * g->fps, base, 0.97f);                /* (a short sample: to its end) */
-    const float d = fmaxf(0.5f, fminf((to - base) / fmaxf(0.9f * g->fps, 0.01f) * g->spx, end - t - 0.5f));     /* at 0.9 of its own speed, as a released record plays (170 deg/s against 180: Hansen) */
-    g_seg(g, t, t + d, base, to, SH_LIN);
+    const float d = fmaxf(0.5f, fminf((to - base) / fmaxf(0.8f * g->fps, 0.01f) * g->spx, end - t - 0.5f));     /* at 0.8 of its own speed: a released record plays a little slow (170 deg/s against 180, Hansen), and a word let go a touch slower is clearer */
+    g_seg(g, t, t + d, base, to, SH_FAST);                                      /* (let go: it comes up to speed and runs on, not a ruler-straight line) */
     g_gate(g, t, t + d - 0.08f, 1);
     g_seg(g, t + d, end, to, base, SH_EASE);
 }
@@ -797,44 +802,46 @@ static float st_stutter(gen_t *g, float o, float base_in)
     const float c = gr(g, 0.05f, 0.085f), word = gr(g, 0.32f, 0.5f), step = g->spx > 8.01f ? 2.0f : 1.0f;     /* (over 120 bpm: an eighth apart) */
     g_gate(g, o, o + 16.0f, 0);
     g_seg(g, o, o + 16.0f, base, base, SH_LIN);
-    switch (gi(g, 0, 5)) {
-    case 0:                                                                     /* f f f f f f f f, fffff, fight */
-        for (float i = 0.0f; i < 8.0f; i += step) stut_push(g, o + i, step, base, c);
-        stut_roll(g, o + 8.0f, 3.0f, base, c * 1.5f);
-        stut_release(g, o + 12.0f, o + 15.0f, base, word);
+    switch (gi(g, 0, 5)) {                                                      /* (a breath before every release: the word comes in as a sound of its own) */
+    case 0:                                                                     /* f f f f . . f f ff ff . . fight */
+        for (float i = 0.0f; i < 4.0f; i += step) stut_push(g, o + i, step, base, c);
+        for (float i = 6.0f; i < 8.0f; i += step) stut_push(g, o + i, step, base, c);
+        stut_roll(g, o + 8.0f, 2.0f, base, c * 1.5f);
+        stut_release(g, o + 11.5f, o + 15.0f, base, word);
         break;
-    case 1:                                                                     /* f f fight, f f fight */
+    case 1:                                                                     /* f f . fight, f f . fight */
         for (int h = 0; h < 2; h++) {
-            for (float i = 0.0f; i < 3.0f; i += step) stut_push(g, o + 8.0f * (float)h + i, step, base, c);
-            stut_release(g, o + 8.0f * (float)h + 3.0f, o + 8.0f * (float)h + 7.0f, base, word);
+            for (float i = 0.0f; i < 2.0f; i += step) stut_push(g, o + 8.0f * (float)h + i, step, base, c);
+            stut_release(g, o + 8.0f * (float)h + 2.5f, o + 8.0f * (float)h + 7.0f, base, word);
         }
         break;
-    case 2: {                                                                   /* f, fi, fig, figh, fight */
-        static const float grow[5] = { 1.0f, 1.6f, 2.4f, 3.3f, 4.4f };
-        for (int i = 0; i < 5; i++) stut_push(g, o + 2.0f * (float)i, 2.0f, base, c * grow[i]);
-        stut_release(g, o + 10.0f, o + 15.0f, base, word);
+    case 2: {                                                                   /* f, fi, fig, figh, . fight */
+        static const float grow[4] = { 1.0f, 1.7f, 2.6f, 3.6f };
+        for (int i = 0; i < 4; i++) stut_push(g, o + 2.0f * (float)i, 2.0f, base, c * grow[i]);
+        stut_release(g, o + 9.5f, o + 15.0f, base, word);
         break;
     }
-    case 3: {                                                                   /* off the grid: x . x x . x . x x . x . , fight */
-        const int k = gi(g, 5, 7), rot = gi(g, 0, 11);
-        for (int i = 0, last = -2; i < 12; i++) if (euclid_hit(i, k, 12, rot) && (float)(i - last) >= step) { stut_push(g, o + (float)i, 1.0f, base, c); last = i; }
-        stut_release(g, o + 12.0f, o + 15.0f, base, word);
+    case 3: {                                                                   /* off the grid: x . x x . x . x . . , fight */
+        const int k = gi(g, 4, 5), rot = gi(g, 0, 9);
+        for (int i = 0, last = -2; i < 10; i++) if (euclid_hit(i, k, 10, rot) && (float)(i - last) >= step) { stut_push(g, o + (float)i, 1.0f, base, c); last = i; }
+        stut_release(g, o + 11.5f, o + 15.0f, base, word);
         break;
     }
     case 4: {                                                                   /* rubs then the word: back and forth with the fader open, both ways heard, then let go */
         const float r = c * 2.0f, d = fminf(r * g->spx, 1.0f), to = clampf(base + r * g->fps, base, 0.97f);
-        for (float i = 0.0f; i < 12.0f; i += 2.0f * step) {
+        for (float i = 0.0f; i < 8.0f; i += 2.0f * step) {
             g_seg(g, o + i, o + i + d, base, to, SH_EASE);                       /* (a baby: the turns heard, eased as a hand turns) */
             g_seg(g, o + i + d, o + i + 2.0f * d, to, base, SH_EASE);
             g_gate(g, o + i, o + i + 2.0f * d - 0.12f, 1);                     /* (caught for a moment before the next: the release is a sound of its own) */
         }
-        stut_release(g, o + 12.0f, o + 15.0f, base, word);
+        stut_release(g, o + 11.5f, o + 15.0f, base, word);
         break;
     }
-    default:                                                                    /* fight, f f f f f f, fffff */
-        stut_release(g, o, o + 5.0f, base, word);
-        for (float i = 0.0f; i < 6.0f; i += step) stut_push(g, o + 5.0f + i, step, base, c);
-        stut_roll(g, o + 11.0f, 3.5f, base, c * 1.5f);
+    default:                                                                    /* fight . f f . f f . ff ff */
+        stut_release(g, o, o + 4.5f, base, word);
+        for (float i = 6.0f; i < 8.0f; i += step) stut_push(g, o + i, step, base, c);
+        for (float i = 10.0f; i < 12.0f; i += step) stut_push(g, o + i, step, base, c);
+        stut_roll(g, o + 13.0f, 2.0f, base, c * 1.5f);
         break;
     }
     return base;
@@ -1936,6 +1943,7 @@ void ts_params_default(ts_params_t *p)
     p->bite = 0.10f;                     /* a touch of edge */
     p->clip_depth = 1.0f;
     p->clip_offset = 0.0f;
+    p->vinyl = 0.0f;
 }
 
 void ts_params_sanitize(ts_params_t *p)
@@ -1965,6 +1973,7 @@ void ts_params_sanitize(ts_params_t *p)
     p->bite = isfinite(p->bite) ? clampf(p->bite, 0.0f, 1.0f) : 0.10f;
     p->clip_depth = isfinite(p->clip_depth) ? clampf(p->clip_depth, 0.0f, 2.0f) : 1.0f;
     p->clip_offset = isfinite(p->clip_offset) ? clampf(p->clip_offset, -0.5f, 0.5f) : 0.0f;
+    p->vinyl = isfinite(p->vinyl) ? clampf(p->vinyl, 0.0f, 1.0f) : 0.0f;
 }
 
 /* ------------------------------------------------------------------ */
@@ -2776,10 +2785,12 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
     const float drag = p->drag;
     const float tau = (0.003f + 0.08f * drag * drag) * e->sr;                // 3 .. 83 ms
     const float alpha = 1.0f - expf(-1.0f / tau);
-    const float alpha_firm = 1.0f - expf(-1.0f / (0.003f * e->sr));          /* a stutter's pushes are stabs, "performed faster by using more force" (Hansen): Drag does not soften them */
+    const float alpha_firm = 1.0f - expf(-1.0f / (0.006f * e->sr));          /* a stutter's pushes are stabs, "performed faster by using more force" (Hansen): Drag does not soften them (6 ms: a firm hand, but a record still has a little weight) */
     const float ramp = 1.0f / (0.001f * e->sr);                             // a cut takes 1 ms: a scratch DJ sets the crossfader curve very steep, so it acts as an on-off switch (Hansen)
     const float nrm = p->normalise && s->loaded ? s->norm : 1.0f;
     const float gain = powf(10.0f, p->gain_db / 20.0f) * nrm;
+    const float vy_a = 1.0f - expf(-1.0f / (0.001f * e->sr));                 /* (the cartridge's level follows the speed within a millisecond: no zipper) */
+    const float vy_lpa = 1.0f - expf(-6.2831853f * 7000.0f / e->sr), vy_hpa = 1.0f - expf(-6.2831853f * 300.0f / e->sr);
     const float bite_decay = expf(-1.0f / (0.008f * e->sr));                    /* the attack's extra bite falls away in about 8 ms */
     const float bite_a = 1.0f - expf(-6.2831853f * 1800.0f / e->sr);            /* the brightness lifts what is above about 1.8 kHz */
     const double spb = (double)e->bpm / (60.0 * (double)e->sr);
@@ -2891,6 +2902,27 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
         float want = open ? lv : 0.0f;
         if (e->gate < want) { e->gate += ramp; if (e->gate > want) e->gate = want; }
         else if (e->gate > want) { e->gate -= ramp; if (e->gate < want) e->gate = want; }
+        /* Vinyl: a record under a needle. A magnetic cartridge's output follows the needle's speed, so a record moving slowly is quieter and
+         * one held still is silent (Hansen: the sound level follows the record's speed, a correlation of .8); faster than its own speed it is
+         * only a little louder (the RIAA curve takes most of that back). And the groove has a sound of its own, moving with it: a faint hiss
+         * and now and then a crackle, as many to the second as the record covers dust. At 0 none of this happens. */
+        if (p->vinyl > 0.0f) {
+            const float sp = fminf(fabsf(e->vel_out), 3.0f);
+            const float gv = sp < 1.0f ? powf(sp, 0.8f) : 1.0f + 0.12f * (sp - 1.0f);
+            e->vy_g += vy_a * (gv - e->vy_g);
+            e->vy_rng = e->vy_rng * 1664525u + 1013904223u;
+            const float wn = (float)(int32_t)e->vy_rng * (1.0f / 2147483648.0f);
+            e->vy_lp += vy_lpa * (wn - e->vy_lp);                               /* (the groove's hiss: about 300 Hz to 7 kHz) */
+            e->vy_hp += vy_hpa * (e->vy_lp - e->vy_hp);
+            float groove = (e->vy_lp - e->vy_hp) * 0.006f;
+            e->vy_rng = e->vy_rng * 1664525u + 1013904223u;
+            if ((float)(e->vy_rng >> 8) * (1.0f / 16777216.0f) < 3.0f * sp / (float)e->sr)       /* (about three crackles a second at the record's own speed) */
+                e->vy_click = (0.02f + 0.06f * (float)((e->vy_rng >> 4) & 255) / 255.0f) * ((e->vy_rng & 1u) ? 1.0f : -1.0f);
+            groove += e->vy_click;
+            e->vy_click *= 0.55f;
+            const float wet = smp * e->vy_g + groove * e->vy_g / nrm;
+            smp += p->vinyl * (wet - smp);
+        }
         /* Bite: soft saturation, on the normalised sound so a quiet recording bites as much as a loud one. The drive rises with the speed of the
          * playhead (a fast stroke is where a scratch is bright and hard) and for a few milliseconds as the fader opens (the attack); the make-up
          * gain keeps the loudness where it was, so it is edge and not level. At 0 the sound is untouched. */

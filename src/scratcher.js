@@ -522,6 +522,7 @@
         case "gen_fwd": return "FORWARDS " + Math.round(val * 100) + "%";
         case "swing": return "SWING " + Math.round(val * 100) + "%";
         case "drag": return "DRAG " + Math.round(val * 100) + "%";
+        case "vinyl": return "VINYL " + Math.round(val * 100) + "%";
         case "gen_groove": return "GROOVE " + Math.round(val * 100) + "%";
         case "humanise": return "HUMANISE " + Math.round(val * 100) + "%";
         case "gen_fin": return "FINISH " + Math.round(val * 100) + "%";

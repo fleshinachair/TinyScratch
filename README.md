@@ -86,6 +86,7 @@ clip never changes):
 | **Clip Depth** / **Clip Offset** | how far the clip moves the playhead (0-200%) and where along the sample it moves it: a smaller or shifted version of every clip |
 | **Drag** | how quickly the playhead follows: low is "digital", high is "analogue" |
 | **Gain** | -24 to +12 dB |
+| **Vinyl** | how much it sounds like a record under a needle (0, the default, is as it always was). A magnetic cartridge's output follows the needle's speed, so a record moved slowly is quieter and one held still is silent (Hansen measured the sound level following the record's speed, a correlation of .8); and the groove has a faint hiss and the odd crackle of its own, moving with the record |
 
 **Pad Play: how the pads play.** **Note Gate** (on: the red pads are the fader; off: you always hear the playhead), **Vel to Vol** and
 **Cue Pads** (below), and **Taste Log** (on). Lock, Normalise, Cut From and Pad Grid keep their defaults.

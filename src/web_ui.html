@@ -282,7 +282,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       </div>
     </div>
     <div class="scopes">
-      <div class="panel" id="playbackPanel"><h2>Playback<span class="sub">how clips play</span></h2><div class="knobs" id="kPlayback" style="--n:7"></div></div>
+      <div class="panel" id="playbackPanel"><h2>Playback<span class="sub">how clips play</span></h2><div class="knobs" id="kPlayback" style="--n:8"></div></div>
       <div class="panel scope" id="waveScope"><h2>Waveform</h2><div class="cv"><canvas id="wave"></canvas></div></div>
       <div class="panel scope" id="laneScope"><h2>Clip view</h2>
         <div class="zbtns"><button id="strokesBtn" class="on" title="Name each stroke by its shape (what the fader does over it): a reading of the clip, not how it was made">STROKES</button></div>
@@ -369,7 +369,8 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     { key: "clip_depth", name: "CLIP DEPTH", min: 0, max: 2, def: 1, step: 0.02, fmt: pct, c: "--cyan" },
     { key: "clip_offset", name: "CLIP OFFSET", min: -0.5, max: 0.5, def: 0, step: 0.01, fmt: function (v) { return (v > 0.004 ? "+" : "") + Math.round(v * 100) + "%"; }, c: "--cyan" },
     { key: "drag", name: "DRAG", min: 0, max: 1, def: 0.5, step: 0.01, fmt: function (v) { return v < 0.34 ? "DIGI " + pct(v) : (v > 0.66 ? "ANLG " + pct(v) : pct(v)); }, c: "--cyan" },
-    { key: "gain", name: "GAIN", min: -24, max: 12, def: 0, step: 0.5, fmt: function (v) { return (v > 0 ? "+" : "") + v.toFixed(1) + " DB"; }, c: "--cyan" }
+    { key: "gain", name: "GAIN", min: -24, max: 12, def: 0, step: 0.5, fmt: function (v) { return (v > 0 ? "+" : "") + v.toFixed(1) + " DB"; }, c: "--cyan" },
+    { key: "vinyl", name: "VINYL", min: 0, max: 1, def: 0, step: 0.01, fmt: pct, c: "--cyan" }
   ];
   var PADPLAY = [
     { key: "note_gate", name: "NOTE GATE", def: 1 },
@@ -546,7 +547,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
       if (rv.cq >= 0 && live && rv.sl > 0) target = Math.min(1, rv.tx + el / rv.sl);     /* a cue pad plays the sound on at its own speed */
     }
     if (scratch.on || now - scratch.end < 650) target = scratch.pos;        /* a hand on the record: it goes where the hand takes it (as long as the engine's hand hold) */
-    var drag = num("drag", 0.5), tau = clip && live && rv.fm && !(scratch.on || now - scratch.end < 650) && !rv.hh ? 0.003 : 0.003 + 0.08 * drag * drag;     /* (a stutter is played firm: no Drag) */
+    var drag = num("drag", 0.5), tau = clip && live && rv.fm && !(scratch.on || now - scratch.end < 650) && !rv.hh ? 0.006 : 0.003 + 0.08 * drag * drag;     /* (a stutter is played firm: no Drag) */
     var before = sim.pos;
     if (!sim.seeded) { sim.pos = rv.p; sim.seeded = true; before = sim.pos; }
     var k = 1 - Math.exp(-dt / tau);
