@@ -628,13 +628,18 @@ typedef struct { float push, pull, len_lo, len_hi, tie; } grid_t;
 static const grid_t k_grid[GS_COUNT] = {
     [GS_ANY]      = { 0.95f, 0.65f, 0.60f, 1.05f, 0.30f },               /* measured against 74 s of real dry scratching (17 clips): sounds ring ~115 ms with ~60 ms between, ~4 a second */
 };
+/* A trial, to be settled by ear on the device over a track and then removed: two more entries in the Style list, both Improv.
+ * "Impv 1.1" is Improv as 1.1.0 made it (a flick's stroke shape, no cap on the strokes' speed, short sounds on the grid); "Impv Mix" is that
+ * with the longer sounds above. They are generated as Improv with these switched; a recipe keeps their own number, so they regenerate the same. */
+static const grid_t k_grid_v110 = { 0.95f, 0.72f, 0.22f, 0.72f, 0.12f };
+static int g_tr_flick = 0, g_tr_nocap = 0, g_tr_grid = 0;
 /* Only "Any", a phrase from the example clips, has its fader laid on the grid. Every named style keeps the fader it is defined by (TTM): a
  * baby has none, a cut shuts on the pull, a flare clicks mid-stroke and so on, and its strokes and its fader move together. */
 static int grid_style(int s) { return s == GS_ANY; }
 
 static void g_grid_gate(gen_t *g, float o, int style)
 {
-    const grid_t *k = &k_grid[style];
+    const grid_t *k = g_tr_grid ? &k_grid_v110 : &k_grid[style];
     int a = (int)(o * (float)GP), b = (int)((o + 16.0f) * (float)GP);
     if (b > g->c->n) b = g->c->n;
     for (int i = a; i < b; i++) g->c->gate[i] = 0;
@@ -1174,7 +1179,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
         if (eat == t && t + 8 <= len16 && ns + 10 < cap) {                       /* the echo scratch: four stabs, each lower */
             g->used |= TS_EX_ECHO;
             for (int r = 0; r < 4; r++) {
-                sl[ns].dur = 1; sl[ns].to = clampf(base + es[bar], base + 0.12f, 0.9f); sl[ns].shape = SH_HAND; sl[ns].fw = 3 + r; ns++;
+                sl[ns].dur = 1; sl[ns].to = clampf(base + es[bar], base + 0.12f, 0.9f); sl[ns].shape = g_tr_flick ? SH_FLICK : SH_HAND; sl[ns].fw = 3 + r; ns++;
                 sl[ns].dur = 1; sl[ns].to = base; sl[ns].shape = SH_LIN; sl[ns].fw = 7; ns++;
             }
             t += 8; cur = base; up = 1;
@@ -1219,7 +1224,7 @@ static int phrase_build(gen_t *g, int len16, float base, pstroke_t *sl, int cap)
         if (last || to_start) to = base;
         else if (up) to = clampf(cur + span, base + 0.12f, 0.97f);
         else to = grnd(g) < 0.5f ? clampf(base + gr(g, -0.01f, 0.04f), 0.0f, 0.97f) : clampf(cur - span, base, 0.97f);
-        sl[ns].dur = d; sl[ns].to = to; sl[ns].shape = grnd(g) < 0.88f ? SH_HAND : SH_EASE; sl[ns].fw = 0;
+        sl[ns].dur = d; sl[ns].to = to; sl[ns].shape = grnd(g) < 0.88f ? (g_tr_flick ? SH_FLICK : SH_HAND) : SH_EASE; sl[ns].fw = 0;
         ns++; cur = to; up = !up; t += d;
     }
     return ns;
@@ -1308,7 +1313,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     for (int i = 0; i < n; i++) { out->pos[i] = b16; out->gate[i] = 1; }
     static const float heights[3] = { 0.15f, 0.5f, 0.85f };
     g.amp_t = heights[gi(&g, 0, 2)];                                            /* how tall the strokes are, for the whole clip */
-    { int r = gi(&g, 0, 19); g.shape = r < 17 ? SH_HAND : (r < 19 ? SH_EASE : SH_SLOW); }  /* and how they are shaped: almost always a hand's */
+    { int r = gi(&g, 0, 19); g.shape = r < 17 ? (g_tr_flick ? SH_FLICK : SH_HAND) : (r < 19 ? SH_EASE : SH_SLOW); }  /* and how they are shaped: almost always a hand's */
     int plan[4], grp[4];
     gen_plan(&g, style, bars, plan, grp);
     float bases[4], words[4], atks[4] = { 0.0f, 0.0f, 0.0f, 0.0f };                                                   /* where each bar's strokes start from: an attack of the sample, if there is one to find; and the word itself, a stutter's start */
@@ -1367,7 +1372,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         }
         for (int b0 = 0; b0 < bars; b0 += style == GS_ANY ? P : 1) {            /* (Improv: one factor for a phrase, so nothing jumps inside it) */
             const int b1 = style == GS_ANY ? (b0 + P < bars ? b0 + P : bars) : b0 + 1;
-            if (plan[b0] == GS_STUTTER || plan[b0] == GS_SCRIBBLE || plan[b0] == GS_STAB) continue;
+            if (g_tr_nocap || plan[b0] == GS_STUTTER || plan[b0] == GS_SCRIBBLE || plan[b0] == GS_STAB) continue;
             const float sp = stroke_speed(out, b0 * 16 * GP, b1 * 16 * GP, g.fps, spx);
             if (sp > 0.0f && sp * k[b0] > 1.0f) for (int b = b0; b < b1; b++) k[b] = clampf(1.0f / sp, 0.3f, k[b]);
         }
@@ -1678,6 +1683,8 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     const float stretch = isfinite(bpm) && bpm > 120.0f ? fminf(bpm / 120.0f, 2.0f) : 1.0f;
     const float spx = isfinite(bpm) && bpm > 0.0f ? bpm / 15.0f : 8.0f;           /* sixteenths a second (what a hand does is in seconds: a scribble's vibration, a crab's fingers) */
     static const float need[GS_COUNT] = { 0.42f, 0.45f, 0.40f, 0.40f, 0.50f, 0.28f, 0.42f, 0.38f, 0.45f, 0.15f, 0.45f, 0.45f, 0.40f, 0.20f };       /* (a crab is a few clicks a beat: about a fifth of it is heard) */
+    if (style == TS_GS_IMPV_110 || style == TS_GS_IMPV_MIX) { g_tr_flick = g_tr_nocap = 1; g_tr_grid = style == TS_GS_IMPV_110; style = GS_ANY; }
+    else g_tr_flick = g_tr_nocap = g_tr_grid = 0;
     style = clampi(style, 0, GS_COUNT - 1);
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;
