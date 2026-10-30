@@ -488,6 +488,7 @@ static float g_top(gen_t *g, float base, float lo, float hi, float cl_lo, float 
     return clampf(base + 1.15f * (lo + (hi - lo) * g->amp_t) * gr(g, 0.96f, 1.0f), cl_lo, cl_hi);        /* (1.15: the example clips' strokes average 0.47 of the sample) */
 }
 
+static float g_stut_open = 0.0f, g_stut_into = 0.0f;                            /* (a trial: how far into a push the fader opens; how far into the word a push starts, in seconds) */
 static float g_ease(int shape, float u)
 {
     u = clampf(u, 0.0f, 1.0f);
@@ -784,7 +785,7 @@ static void stut_push(gen_t *g, float t, float slot, float base, float secs)
     secs = fminf(secs, d / g->spx * gr(g, 0.9f, 1.05f));                       /* no faster than its own speed on average (DJs: about 0.94, Hansen): a short slot covers less of the word, it does not race through it */
     const float to = clampf(base + secs * g->fps, base, 0.97f);
     g_seg(g, t, t + d, base, to, SH_PUSH);
-    g_gate(g, t, t + d - 0.04f, 1);
+    g_gate(g, t + g_stut_open * d, t + d - 0.04f, 1);
     g_seg(g, t + d, t + slot, to, base, SH_EASE);
 }
 static void stut_release(gen_t *g, float t, float end, float base, float secs)
@@ -807,7 +808,7 @@ static void stut_roll(gen_t *g, float t, float len, float base, float secs)
 }
 static float st_stutter(gen_t *g, float o, float base_in)
 {
-    const float base = g->word < base_in ? g->word : base_in;                 /* (from the word's very start, not a little into it as a stroke turns: the whole "f", the whole word) */
+    const float base = clampf((g->word < base_in ? g->word : base_in) + g_stut_into * g->fps, 0.0f, 0.9f);    /* (from the word's very start, not a little into it as a stroke turns: the whole "f", the whole word) */
     const float c0 = gr(g, 0.05f, 0.085f), word = gr(g, 0.32f, 0.5f), step = g->spx > 8.01f ? 2.0f : 1.0f;     /* (over 120 bpm: an eighth apart) */
     const float c = g->attack > 0.0f ? g->attack * (0.85f + 0.3f * (c0 - 0.05f) / 0.035f) : c0;               /* a push: the word's attack, "f" to "fre" (a sample with no attacks found: 50-85 ms) */
     g_gate(g, o, o + 16.0f, 0);
