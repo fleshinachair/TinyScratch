@@ -2562,12 +2562,12 @@ static void test_finish(void)
     ts_engine_t *e = ts_engine_create(44100.0f);
     load_sample(e, 3, "one.wav", SMP_SINE, 0.7f, 44100);                         /* one second: at 120 bpm 0.125 sample lengths to a sixteenth */
     static ts_clip_t c;
-    int ends = 0, speed_ok = 1, shut = 1, none_at_0 = 0, n = 40;
+    int ends = 0, speed_ok = 1, shut = 1, none_at_0 = 0, on_beat = 0, n = 40;
     for (uint32_t seed = 1; seed <= (uint32_t)n; seed++) {
         for (int pass = 0; pass < 2; pass++) {
             ts_clip_generate_for(&c, GS_ANY, seed * 7919u, 2, &e->slot[3], 0.0f, 120.0f, pass ? 1.0f : 0.0f, 0.0f);
             const int q = TS_CLIP_RES / 4, last_bar = 16 * q;
-            int a = last_bar + 10 * q, b = last_bar + 13 * q, op = 0;         /* three sixteenths of the play-out, clear of the turns at its ends */
+            int a = last_bar + 5 * q, b = last_bar + 8 * q, op = 0;           /* three sixteenths of the play-out (let go on beat 2: the sound takes 8), clear of the turns at its ends */
             for (int i = a; i < b; i++) op += c.gate[i] != 0;
             double rise = ((double)c.pos[b] - (double)c.pos[a]) / 65535.0, per16 = rise / ((double)(b - a) / q);
             int finishes = op > (b - a) * 9 / 10 && per16 > 0.08 && per16 < 0.18;
@@ -2578,12 +2578,14 @@ static void test_finish(void)
                 int closed = 1;
                 for (int i = s0; i < s0 + q / 2 && i < c.n; i++) closed &= c.gate[i] == 0;
                 shut &= closed;
+                on_beat += finishes && c.gate[last_bar + 4 * q + q / 8];                                          /* (open on beat 2) */
             } else none_at_0 += finishes;
         }
     }
     CHECK(ends >= n - 2, "Finish at 100%%: every clip ends with the sample played through, fader open, rising (%d of %d)", ends, n);
     CHECK(speed_ok, "...at the sample's own speed (0.125 sample lengths a sixteenth at 120 bpm for a one second sample)");
     CHECK(shut, "...and the pull back after it has the fader shut");
+    CHECK(on_beat >= ends - 2, "...let go on a beat: the latest that leaves room for the whole sound (%d of %d on beat 2)", on_beat, ends);
     CHECK(none_at_0 < n / 4, "Finish at 0 leaves clips as they were (%d of %d end that way anyway)", none_at_0, n);
     /* a long sample (2.2 s, like a recording) is played right to its end: at its own speed where three quarters of a bar allows (75 bpm:
      * 10 sixteenths), a little faster where it does not (120 bpm: 16 sixteenths of sound in 12) */

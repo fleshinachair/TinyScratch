@@ -1,5 +1,10 @@
 # TinyScratch release notes
 
+## v1.5.3
+
+- **Finish lets go on the beat.** The sample now plays out from a beat (the latest one that leaves room for the whole sound), not from
+  wherever it had to start to end with the bar. Clips you have kept are unchanged.
+
 ## v1.5.2
 
 - **Fix:** a sample loaded into a User slot (Load Sample, or from the Remote UI) kept its name only until the module restarted, then showed

@@ -1443,8 +1443,9 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         g_gate(&g, o + 15.0f, o + 15.9f, 0);
     }
     /* Finish: the clip ends with the whole sample played through at its own speed, from where the sound starts to where it ends, so its tail
-     * is heard; then the quick silent pull back. The record gets back to the start of the sound just before (a short shut jump). Its own
-     * random numbers, so a clip with Finish at 0 is exactly what it was. */
+     * is heard; then the quick silent pull back. It is let go on a beat, as a DJ lets a record go: the latest one that leaves room for the
+     * whole sound, from beat 2 (so the record has a sixteenth to get back to the start of the sound, a short shut jump, after the bar's
+     * own strokes); the fader shuts where the sound ends. Its own random numbers, so a clip with Finish at 0 is exactly what it was. */
     if (fin_p > 0.0f && last != GS_STAB && last != GS_CRAB && last != GS_STUTTER) {
         gen_t t = g;
         t.rng = mix32(seed ^ 0xF1415EEDu) | 1u;
@@ -1456,18 +1457,21 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
             /* sixteenths the sound takes at the sample's own speed: up to three quarters of a bar (half a bar in a one bar clip); a sample
              * longer than that is still played right to its end, a little faster than its own speed, not cut short */
             float x = clampf(span / fmaxf(pps, 0.01f), 3.0f, bars >= 2 ? 12.0f : 8.0f);
-            float to = clampf(from + span, from + 0.15f, 0.98f), zs = 15.0f - x;
+            const float zs = fmaxf(4.0f, floorf((15.0f - x) / 4.0f) * 4.0f);   /* the beat it is let go on */
+            x = fminf(x, 15.0f - zs);                                           /* (a sound longer than from beat 2 plays a little faster) */
+            float to = clampf(from + span, from + 0.15f, 0.98f);
             int i0 = (int)((o + zs - 1.0f) * (float)GP);
             float cur = i0 >= 0 && i0 < out->n ? (float)out->pos[i0] / 65535.0f : from;
             g_seg(&g, o + zs - 1.0f, o + zs, cur, from, SH_FAST);                /* back to the start of the sound, shut */
             g_gate(&g, o + zs - 1.0f, o + zs - 0.05f, 0);
-            g_seg(&g, o + zs, o + 15.0f, from, to, SH_LIN);                      /* the sample, at its own speed */
-            g_gate(&g, o + zs, o + 15.0f, 1);
+            g_seg(&g, o + zs, o + zs + x, from, to, SH_LIN);                     /* the sample, at its own speed */
+            g_gate(&g, o + zs, o + zs + x, 1);
+            if (zs + x < 15.0f) { g_seg(&g, o + zs + x, o + 15.0f, to, to, SH_LIN); g_gate(&g, o + zs + x, o + 15.0f, 0); }     /* (the sound is over: still, shut) */
             g_seg(&g, o + 15.0f, o + 16.0f, to, bases[0], SH_FAST);              /* and the pull back */
             g_gate(&g, o + 15.0f, o + 15.9f, 0);
             if (g.nfw < 58) {                                                    /* (Any lays its fader on the grid after this: the play-out and the pull are told to it as a forward) */
                 g.fw_t[g.nfw] = o + zs; g.fw_d[g.nfw] = x; g.fw_kind[g.nfw] = 1; g.nfw++;
-                g.fw_t[g.nfw] = o + 15.0f; g.fw_d[g.nfw] = 1.0f; g.fw_kind[g.nfw] = 2; g.nfw++;
+                g.fw_t[g.nfw] = o + zs + x; g.fw_d[g.nfw] = 16.0f - zs - x; g.fw_kind[g.nfw] = 2; g.nfw++;     /* (shut from the sound's end) */
             }
         }
     }
@@ -1643,14 +1647,16 @@ static void taste_flush(ts_engine_t *e)
 static float gen_audible(const ts_clip_t *c)
 {
     int heard = 0, run = 0, gap = 0;
+    const int fin = (c->extras & TS_EX_FIN) != 0;
     for (int i = 0; i < c->n; i++) {
         int j = (i + 1) % c->n;
         float d = fabsf((float)c->pos[j] - (float)c->pos[i]) / 65535.0f * (float)TS_CLIP_RES;      /* sample lengths to the beat */
         int on = c->gate[i] != 0 && d > 0.05f;
         heard += on;
+        if (on && run >= TS_CLIP_RES && !(fin && i >= c->n - GP)) gap = 1;     /* a whole beat of nothing (after a Finish's sound, to the clip's end, it is the end) */
         run = on ? 0 : run + 1;
-        if (run >= TS_CLIP_RES) gap = 1;                                         /* a whole beat of nothing */
     }
+    if (run >= TS_CLIP_RES && !fin) gap = 1;
     float a = c->n > 0 ? (float)heard / (float)c->n : 0.0f;
     return gap ? a * 0.5f : a;                                                   /* (counts as too quiet: thrown again) */
 }
