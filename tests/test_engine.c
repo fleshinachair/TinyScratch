@@ -2607,6 +2607,39 @@ static void test_finish(void)
     ts_engine_destroy(e);
 }
 
+/* A Finish's play-out is played straight: with Swing and Humanise at their defaults the record's speed through it is steady (Swing made it
+ * lurch 0.87x / 1.18x every sixteenth, a warble), while the rest of the clip is still swung */
+static void test_finish_straight(void)
+{
+    printf("finish: played straight\n");
+    ts_engine_t *e = ts_engine_create(44100.0f);
+    load_sample(e, 2, "one.wav", SMP_SINE, 0.7f, 44100);
+    ts_engine_set_recipes_path(e, "");
+    ts_engine_set_tempo(e, 120.0f);
+    ts_params_t p;
+    ts_params_default(&p);
+    p.lock = 0; p.pads = 0; p.sample = 2; p.gen_bars = 1; p.gen_fin = 1.0f; p.gen_echo = 0.0f;     /* (Swing 30%, Humanise 35%, Drag 50%: the defaults) */
+    ts_engine_set_params(e, &p);
+    ts_engine_select_sample(e, 2);
+    static float v[2000], g[2000];
+    float blk[128];
+    int steady = 0, found = 0;
+    for (int c = 0; c < 6; c++) {
+        p.clip = 0; ts_engine_set_params(e, &p); ts_engine_generate(e); p.clip = TS_CLIP_TRY; ts_engine_set_params(e, &p);
+        int n = 0;
+        for (int i = 0; i < 44100 * 4 && n < 2000; i += 128) { ts_engine_render(e, blk, 128); v[n] = e->vel_out; g[n] = e->gate; n++; }
+        int best = 0, bs = 0, run = 0, st = 0;
+        for (int i = n / 2; i < n; i++) { if (g[i] > 0.5f && v[i] > 0.2f) { if (!run) st = i; if (++run > best) { best = run; bs = st; } } else run = 0; }
+        if (best < 100) continue;                                               /* (about 0.3 s or more: the play-out) */
+        found++;
+        float lo = 9.0f, hi = 0.0f;
+        for (int i = bs + best / 8; i < bs + best * 7 / 8; i++) { lo = fminf(lo, v[i]); hi = fmaxf(hi, v[i]); }
+        steady += hi - lo < 0.05f * hi;
+    }
+    CHECK(found >= 4 && steady == found, "with Swing and Humanise on, the record's speed through the play-out stays within 5%% (%d of %d)", steady, found);
+    ts_engine_destroy(e);
+}
+
 /* Echo: a stab four times over, each at a lower level of the fader (a gate of 1, 2, 3, 4 steps down through 1.0, 0.7, 0.5, 0.35) */
 static void test_echo(void)
 {
@@ -4557,6 +4590,7 @@ int main(int argc, char **argv)
     test_swing();
     test_humanise();
     test_finish();
+    test_finish_straight();
     test_echo();
     test_tempo();
     test_pad_mutes_clip();

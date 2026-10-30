@@ -2928,6 +2928,42 @@ static double clip_bar_ref(ts_engine_t *e, const ts_clip_t *k, double beat)
     return r;
 }
 
+/* A Finish's play-out (the sample let go on a beat and played through) is played straight: Swing would make its speed lurch every sixteenth
+ * (0.87x, then 1.18x at 30%) and Humanise drift it, a warble on a long steady sound. It is the longest rising run with the fader open in
+ * the clip's last bar, starting on a beat (Finish from 1.5.3, held before it is let go, so leaving swung time there is seamless; an older
+ * clip, whose play-out starts anywhere, plays as it always has). Read once a block. */
+static void playout_find(const ts_clip_t *k, double *a_out, double *b_out)
+{
+    *a_out = *b_out = -1.0;
+    if (!(k->extras & TS_EX_FIN) || k->n < 4 * TS_CLIP_RES) return;
+    const int i0 = k->n - 4 * TS_CLIP_RES;
+    int best = 0, bs = 0, run = 0, st = 0;
+    for (int i = i0 + 1; i < k->n; i++) {
+        if (k->gate[i] && k->pos[i] >= k->pos[i - 1]) { if (!run) st = i; if (++run > best) { best = run; bs = st; } }
+        else run = 0;
+    }
+    while (best > 1 && k->pos[bs + 1] <= k->pos[bs]) { bs++; best--; }        /* (from where the record starts to move: the fader can open a little before, on the still record) */
+    const double a = (double)bs / TS_CLIP_RES, q = a - floor(a + 0.5);
+    if (best >= TS_CLIP_RES / 2 && fabs(q) < 0.04 && k->pos[bs + best - 1] > k->pos[bs] + 2000) { *a_out = floor(a + 0.5); *b_out = (double)(bs + best) / TS_CLIP_RES; }
+}
+
+static int in_playout(const ts_clip_t *k, double a, double b, double beat)
+{
+    if (a < 0.0) return 0;
+    const double x = beat - floor(beat / k->len) * k->len;
+    return x >= a && x < b;
+}
+
+static int clip_playout(ts_engine_t *e, const ts_clip_t *k, double beat)
+{
+    if (e->po_ck != (const void *)k || e->po_at != e->frames) {
+        playout_find(k, &e->po_a, &e->po_b);
+        e->po_ck = (const void *)k;
+        e->po_at = e->frames;
+    }
+    return in_playout(k, e->po_a, e->po_b, beat);
+}
+
 static void humanise_at(const ts_params_t *p, double bpm, int clip, int len_beats, double pass_beat, double sw_t,
                         double *t_path, double *t_gate, double *pos_off, float *lv_scale)
 {
@@ -3049,7 +3085,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
          * drift every beat), each cut lands a little early or late (up to 12 ms, every sixteenth) and a little softer, and each stroke runs a
          * little short or long (up to 4% of the sample). Every pass round the clip is different; at 0 it is exactly as written. */
         const ts_recipe_t *rr = clip > 0 ? recipe_at(e, clip) : NULL;
-        const int stut = rr && rr->style == GS_STUTTER;                      /* a stutter plays straight: a word cut in at a steady speed, not bent by Swing or Humanise */
+        const int stut = (rr && rr->style == GS_STUTTER) || (clip > 0 && ck && clip_playout(e, ck, e->mclock - t0));     /* a stutter, and a Finish's play-out, play straight: a word at a steady speed, not bent by Swing or Humanise */
         const double sw_t = stut ? e->mclock - t0 : ts_swing_time(e->mclock, p->swing) - t0;
         double t_path = sw_t, t_gate = sw_t, pos_off = 0.0;
         float lv_scale = 1.0f;
@@ -3240,12 +3276,15 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     if (pk && p->humanise > 0.0f) {                                            /* with Humanise on, what is played as well as what is written: the path and the cuts, this pass */
         const double t0 = p->clip == TS_CLIP_AUTO ? e->auto_start : 0.0;
         char hg[TS_LANE + 1];
+        double po_a, po_b;
+        playout_find(pk, &po_a, &po_b);
         jw(&j, "\",\"lhp\":\"");
         for (int k = 0; k < TS_LANE && j.len >= 0; k++) {
             const double t = ((double)k + 0.5) * pk->len / TS_LANE;
             double tp, tg, po;
             float lvs;
             humanise_at(p, (double)e->bpm, e->clip_now, pk->len, e->mclock - t0, t, &tp, &tg, &po, &lvs);
+            if (in_playout(pk, po_a, po_b, t)) { tp = tg = t; po = 0.0; }        /* (a Finish's play-out is played straight) */
             jw(&j, "%x", clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po * (double)slot_reach(s)), 0.0f, 1.0f) * 15.0f + 0.5f), 0, 15));
             hg[k] = ts_clip_cut(e, e->clip_now, tg) ? '1' : '0';
         }
@@ -3396,6 +3435,7 @@ int ts_engine_rclip(const ts_engine_t *e, char *buf, int cap)
     if (k) {
         /* the plan: the playhead (three hex digits, 0..4095) and the fader (one: 0 shut, 1 full, 2..7 an echo's lower steps), TS_RCLIP_RES to the beat */
         const int step = TS_CLIP_RES / TS_RCLIP_RES, n = k->len * TS_RCLIP_RES;
+        { double pa, pb; playout_find(k, &pa, &pb); if (pa >= 0.0) jw(&j, ",\"pa\":%.4f,\"pb\":%.4f", pa, pb); }     /* a Finish's play-out, played straight */
         jw(&j, ",\"lb\":%d,\"res\":%d,\"lp\":\"", k->len, TS_RCLIP_RES);
         for (int i = 0; i < n; i++) jw_hex(&j, (unsigned)k->pos[i * step] >> 4, 3);
         jw(&j, "\",\"lg\":\"");

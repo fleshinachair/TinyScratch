@@ -176,6 +176,9 @@ typedef struct ts_engine {
     const void *bref_ck;        /* a long sample's Clip Depth: the clip whose bars' starting points are in bref, and the block they were read in */
     uint64_t    bref_at;
     float       bref[TS_CLIP_MAX_BEATS / 4];
+    const void *po_ck;          /* a Finish's play-out (clip_playout): the clip it was read from, the block, and where it runs, in beats */
+    uint64_t    po_at;
+    double      po_a, po_b;
 
     /* the clip view: where the playhead was and whether the sound was cut in, over one bar of the clock */
     uint8_t     lane_pos[TS_LANE], lane_gate[TS_LANE];
