@@ -620,13 +620,13 @@ static void g_limit_open(gen_t *g, float o)
 }
 
 /* The fader plays notes on the sixteenth grid. In the example clips 57% of the openings fall in the first quarter of a sixteenth and a sound
- * lasts about half a sixteenth: staccato sixteenths, cut in on the beat, while the turns (one sixteenth or so earlier) are hidden. That is
+ * lasts about half a sixteenth, cut in on the beat (in recordings of real DJs a sound rings longer: most of a sixteenth, often tied over), while the turns (one sixteenth or so earlier) are hidden. That is
  * the bite and the rhythm. The record turns a little before the grid (the path is moved earlier as a whole) and the fader opens on the grid,
  * so every sound starts with the record already moving fast. Which steps sound depends on which way the record is going (a push is
  * almost always heard; a pull often is not), on the style, and on the seed; now and then a note is held over the next step (a swoop). */
 typedef struct { float push, pull, len_lo, len_hi, tie; } grid_t;
 static const grid_t k_grid[GS_COUNT] = {
-    [GS_ANY]      = { 0.95f, 0.72f, 0.22f, 0.72f, 0.12f },
+    [GS_ANY]      = { 0.95f, 0.65f, 0.60f, 1.05f, 0.30f },               /* measured against 74 s of real dry scratching (17 clips): sounds ring ~115 ms with ~60 ms between, ~4 a second */
 };
 /* Only "Any", a phrase from the example clips, has its fader laid on the grid. Every named style keeps the fader it is defined by (TTM): a
  * baby has none, a cut shuts on the pull, a flare clicks mid-stroke and so on, and its strokes and its fader move together. */

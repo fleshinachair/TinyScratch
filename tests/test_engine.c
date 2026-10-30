@@ -2510,28 +2510,32 @@ static uint32_t clip_fnv(const ts_clip_t *c)
 static void test_tempo(void)
 {
     printf("tempo\n");
-    /* clips made before the tempo was looked at, for a few seeds and styles: the tempo does not change them up to 120 bpm */
-    /* (the first six are "Any", unchanged since before the tempo was looked at; the rest are a baby, a flare and cuts as the notation defines them) */
-    static const uint32_t before[15] = { 1953970742u, 557623256u, 1711664955u, 4219920907u, 4086795089u, 4086795089u, 2739137509u, 753900917u,
-                                          753900917u, 4204885726u, 3910051669u, 3910051669u, 4116409320u, 2109576546u, 2109576546u };
+    /* up to 120 bpm: a clip is fixed by its seed and its tempo (a recipe keeps both, so a saved clip never changes when the song does), and a
+     * named style keeps its fader rhythm at every tempo; only how far the strokes reach follows a hand's speed in seconds */
     ts_engine_t *e = ts_engine_create(44100.0f);
     int have = ts_engine_load_dir(e, "samples") == 3;
     const int cfg[5][3] = { { GS_ANY, 4, 1 }, { GS_ANY, 2, 0 }, { GS_BABY, 2, 1 }, { GS_FLARE, 4, 0 }, { GS_CUTS, 1, 0 } };
-    static ts_clip_t c;
-    int same = 1, n_checked = 0;
+    static ts_clip_t c, c2;
+    int same = 1, rhythm = 1, n_checked = 0;
     for (int k = 0; k < 5; k++)
         for (int sl = -1; sl < 2; sl++) {
             if (sl >= 0 && !have) continue;
-            uint32_t seed = 7919u * (uint32_t)(k + 3);
+            uint32_t seed = 7919u * (uint32_t)(k + 3), g0 = 0;
             for (int bi = 0; bi < 8; bi++) {
                 const float bpms[8] = { 120.0f, 119.0f, 99.0f, 90.0f, 75.0f, 66.0f, 55.0f, 40.0f };
                 float bpm = bpms[bi];
-                ts_clip_generate_for(&c, cfg[k][0], seed, cfg[k][1], sl >= 0 ? &e->slot[sl] : NULL, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f, 0.0f);
-                same &= clip_fnv(&c) == before[k * 3 + (sl + 1)];
+                const ts_slot_t *slp = sl >= 0 ? &e->slot[sl] : NULL;
+                ts_clip_generate_for(&c, cfg[k][0], seed, cfg[k][1], slp, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f, 0.0f);
+                ts_clip_generate_for(&c2, cfg[k][0], seed, cfg[k][1], slp, cfg[k][2] ? 0.75f : 0.0f, bpm, 0.0f, 0.0f);
+                same &= clip_fnv(&c) == clip_fnv(&c2);
+                uint32_t g = 2166136261u;
+                for (int i = 0; i < c.n; i++) g = (g ^ c.gate[i]) * 16777619u;
+                if (bi == 0) g0 = g; else if (cfg[k][0] != GS_ANY) rhythm &= g == g0;
                 n_checked++;
             }
         }
-    CHECK(same && n_checked >= 15, "at 40 to 120 bpm the clips are exactly what they were, the tempo changes nothing (%d checked)", n_checked);
+    CHECK(same && n_checked >= 15, "a seed and a tempo make the same clip every time (%d checked)", n_checked);
+    CHECK(rhythm, "at 40 to 120 bpm a named style's fader rhythm is the same: the tempo only changes how far the strokes reach");
     /* above 120 bpm: the sounds a second stay where they are at 120 (a hand tops out near 6), and the clips are not what the grid alone makes */
     double rate[4] = { 0, 0, 0, 0 }, beats[4] = { 0, 0, 0, 0 };
     const float fast[4] = { 120.0f, 140.0f, 160.0f, 200.0f };
