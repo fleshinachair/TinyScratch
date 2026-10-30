@@ -488,6 +488,7 @@ static float g_top(gen_t *g, float base, float lo, float hi, float cl_lo, float 
     return clampf(base + 1.15f * (lo + (hi - lo) * g->amp_t) * gr(g, 0.96f, 1.0f), cl_lo, cl_hi);        /* (1.15: the example clips' strokes average 0.47 of the sample) */
 }
 
+static float g_push_bell = 0.0f;                                                 /* (a trial: how much of a hand's bell-shaped speed a stutter's push has) */
 static float g_ease(int shape, float u)
 {
     u = clampf(u, 0.0f, 1.0f);
@@ -496,7 +497,10 @@ static float g_ease(int shape, float u)
     case SH_FAST: return 1.0f - powf(1.0f - u, 2.4f);
     case SH_SLOW: return powf(u, 2.4f);
     case SH_FLICK: return logf(1.0f + 6.0f * u) / 1.9459101f;                   /* speed 1/(1+6u): the hand's push, fastest at the start and never quite stopping */
-    case SH_PUSH: return u + 0.15f * u * (1.0f - u);                            /* a short push: a little faster at the start (1.15), a little slower into the turn (0.85) */
+    case SH_PUSH: {                                                             /* a short push: a little faster at the start (1.15), a little slower into the turn (0.85); blended toward a hand's bell-shaped speed */
+        const float lin = u + 0.15f * u * (1.0f - u), bell = u * u * u * (10.0f + u * (6.0f * u - 15.0f));
+        return lin + g_push_bell * (bell - lin);
+    }
     case SH_LETGO: {                                                            /* let go: from 0.7 of its speed up to all of it over the first eighth, then steady */
         const float k = 0.125f, sp0 = 0.7f, tot = 1.0f - (1.0f - sp0) * k * 0.5f;
         return (u < k ? sp0 * u + (1.0f - sp0) * u * u / (2.0f * k) : u - (1.0f - sp0) * k * 0.5f) / tot;
