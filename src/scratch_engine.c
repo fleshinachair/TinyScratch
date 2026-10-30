@@ -2426,6 +2426,56 @@ int ts_engine_load_wav_mem(ts_engine_t *e, int slot, const char *name, const uin
     return TS_WAV_OK;
 }
 
+/* A file you load is kept as user1.wav .. user6.wav, so its own name is kept beside it in names.txt ("user3.wav", a tab, the name, a
+ * line each) and read back when the folder is loaded; a recording has none, and is called USER 3. */
+static int user_name_get(const char *dir, const char *file, char *out, size_t cap)
+{
+    char path[600], line[200];
+    snprintf(path, sizeof path, "%s/names.txt", dir);
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    int found = 0;
+    const size_t fl = strlen(file);
+    while (!found && fgets(line, sizeof line, f)) {
+        if (strncmp(line, file, fl) != 0 || line[fl] != '\t') continue;
+        char *nm = line + fl + 1;
+        nm[strcspn(nm, "\r\n")] = 0;
+        if (*nm) { snprintf(out, cap, "%s", nm); found = 1; }
+    }
+    fclose(f);
+    return found;
+}
+
+static void user_name_set(const ts_engine_t *e, int slot, const char *name)     /* name NULL: the slot has none (a recording, or empty) */
+{
+    if (!e->save_dir[0] || slot < 2 || slot >= TS_SLOTS) return;
+    char path[600], file[16], keep[TS_SLOTS][200], line[200];
+    int n = 0;
+    snprintf(path, sizeof path, "%s/names.txt", e->save_dir);
+    snprintf(file, sizeof file, "user%d.wav", slot - 1);
+    const size_t fl = strlen(file);
+    FILE *f = fopen(path, "rb");
+    if (f) {
+        while (n < TS_SLOTS && fgets(line, sizeof line, f)) {
+            if (!strncmp(line, file, fl) && line[fl] == '\t') continue;                   /* this slot's old name */
+            line[strcspn(line, "\r\n")] = 0;
+            if (strchr(line, '\t')) snprintf(keep[n++], sizeof keep[0], "%s", line);
+        }
+        fclose(f);
+    }
+    if (name && *name) {
+        char clean[TS_NAME_LEN];
+        snprintf(clean, sizeof clean, "%s", name);
+        for (char *c = clean; *c; c++) if (*c == '\t' || *c == '\r' || *c == '\n') *c = ' ';
+        if (n < TS_SLOTS) snprintf(keep[n++], sizeof keep[0], "%s\t%s", file, clean);
+    }
+    if (!n) { remove(path); return; }
+    f = fopen(path, "wb");
+    if (!f) return;
+    for (int i = 0; i < n; i++) fprintf(f, "%s%c", keep[i], 10);
+    fclose(f);
+}
+
 static int load_file(ts_engine_t *e, int slot, const char *dir, const char *file)
 {
     char path[600];
@@ -2443,8 +2493,10 @@ static int load_file(ts_engine_t *e, int slot, const char *dir, const char *file
     TS_FREE(buf);
     if (r == TS_WAV_OK) {
         snprintf(e->slot[slot].file, sizeof e->slot[slot].file, "%s", file);
-        if (slot >= 2 && strlen(file) == 9 && !strncmp(file, "user", 4) && file[4] == '1' + (slot - 2) && !strcmp(file + 5, ".wav"))
-            snprintf(e->slot[slot].name, sizeof e->slot[slot].name, "USER %d", slot - 1);       /* what you recorded */
+        if (slot >= 2 && strlen(file) == 9 && !strncmp(file, "user", 4) && file[4] == '1' + (slot - 2) && !strcmp(file + 5, ".wav")) {
+            if (!user_name_get(dir, file, e->slot[slot].name, sizeof e->slot[slot].name))    /* a file you loaded: its own name */
+                snprintf(e->slot[slot].name, sizeof e->slot[slot].name, "USER %d", slot - 1);   /* what you recorded */
+        }
     }
     return r;
 }
@@ -2646,6 +2698,7 @@ int ts_engine_load_file(ts_engine_t *e, const char *path)
         char out[600];
         snprintf(out, sizeof out, "%s/user%d.wav", e->save_dir, slot - 1);
         save_wav(out, data, frames, (int)e->sr);
+        user_name_set(e, slot, t.name);
     }
     e->pend = t;
     e->pend_slot = slot;
@@ -2766,6 +2819,7 @@ void ts_engine_service(ts_engine_t *e)
                 if (!was[0] || strcmp(was, ours) == 0) {          /* made here (a recording, a file you picked): its copy goes */
                     snprintf(path, sizeof path, "%s/%s", e->save_dir, ours);
                     remove(path);
+                    user_name_set(e, slot, NULL);
                 } else {
                     unloaded_add(e, was);                                                       /* a file you put there: kept, and not loaded again */
                 }
@@ -2799,6 +2853,7 @@ void ts_engine_service(ts_engine_t *e)
                     char path[600];
                     snprintf(path, sizeof path, "%s/user%d.wav", e->save_dir, slot - 1);
                     save_wav(path, buf, n, (int)e->sr);
+                    user_name_set(e, slot, NULL);
                 }
                 e->pend = t;
                 e->pend_slot = slot;

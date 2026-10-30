@@ -1,5 +1,10 @@
 # TinyScratch release notes
 
+## v1.5.2
+
+- **Fix:** a sample loaded into a User slot (Load Sample, or from the Remote UI) kept its name only until the module restarted, then showed
+  as USER 3 and so on. Names are now kept. Samples loaded before this update need loading again to get their names back.
+
 ## v1.5.1
 
 - **Fix:** the Remote UI could show the wrong style (Stutter when the Move was on Freestyle). Projects still open with the style they were

@@ -2995,6 +2995,7 @@ static void test_load_file_and_zoom(void)
     ts_engine_t *g2 = ts_engine_create(44100.0f);
     ts_engine_load_dir(g2, dir);
     CHECK(g2->slot[3].loaded && g2->slot[3].len == 8000, "(which loads back into User 2)");
+    CHECK(!strcmp(g2->slot[3].name, "PICK_ME"), "...with its own name, not USER 2 (%s)", g2->slot[3].name);
     ts_engine_destroy(g2);
 
     ts_engine_select_sample(e, 0);
@@ -3009,9 +3010,16 @@ static void test_load_file_and_zoom(void)
     CHECK(ts_engine_load_file(e, TDIR "/rec/pick_me.wav") == -1, "a second file before the audio thread has taken the first is refused");
     ts_engine_render(e, blk, 128);
     ts_engine_service(e);
+    ts_engine_clear_slot(e, 3);
+    ts_engine_service(e);
+    ts_engine_render(e, blk, 128);
+    ts_engine_service(e);
+    { char nm[TS_NAME_LEN] = ""; CHECK(!e->slot[3].loaded && !user_name_get(dir, "user2.wav", nm, sizeof nm) && user_name_get(dir, "user1.wav", nm, sizeof nm) && !strcmp(nm, "PICK_ME"),
+          "unloading a slot forgets its name; the others keep theirs"); }
     ts_engine_destroy(e);
     remove(TDIR "/rec/user1.wav");
     remove(TDIR "/rec/user2.wav");
+    remove(TDIR "/rec/names.txt");
     remove(TDIR "/rec/pick_me.wav");
     remove(TDIR "/rec/notawav.wav");
 
@@ -4380,6 +4388,7 @@ static void test_plugin_pickers(void)
     CHECK(in->eng->slot[4].loaded, "a bad path changes nothing");
     snprintf(path, sizeof path, "%s/samples/user3.wav", g_root);
     remove(path);
+    user_name_set(in->eng, 4, NULL);                                                   /* (its name in names.txt goes too) */
     remove(file);
 
     api->set_param(h, "clip_depth", "1.5");
