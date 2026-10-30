@@ -413,7 +413,7 @@ enum { GS_ANY /* shown as "Improv": a phrase, not a technique */, GS_BABY, GS_CU
 #define GP (TS_CLIP_RES / 4)                         /* dense points per sixteenth */
 
 typedef struct { ts_clip_t *c; uint32_t rng; float amp_t; int shape; int bars; int fw16; float fw_p; int nfw; float fw_t[64], fw_d[64]; int fw_kind[64];
-                 float echo_p; uint32_t seed; float stretch, thin; int dmin; float spx, fps, word; unsigned used; float groove; int tmpl; uint32_t grng; float dens[4]; } gen_t;         /* amp_t: how tall the strokes are, 0..1, the same all through the clip; stretch: how many sixteenths longer a stroke is (and thin: how much rarer a cut) on a fast song, 1 up to 120 bpm */
+                 float echo_p; uint32_t seed; float stretch, thin; int dmin; float spx, fps, word, attack; unsigned used; float groove; int tmpl; uint32_t grng; float dens[4]; } gen_t;         /* amp_t: how tall the strokes are, 0..1, the same all through the clip; stretch: how many sixteenths longer a stroke is (and thin: how much rarer a cut) on a fast song, 1 up to 120 bpm */
 
 /* The curve a stroke takes. The hand does not move like a sine: it bites in and settles (a fast start: 60-90% of the strokes in the
  * clips measured), now and then a plain S-curve, and rarely builds slowly. One is the clip's own (g->shape) and most strokes use it. */
@@ -488,7 +488,6 @@ static float g_top(gen_t *g, float base, float lo, float hi, float cl_lo, float 
     return clampf(base + 1.15f * (lo + (hi - lo) * g->amp_t) * gr(g, 0.96f, 1.0f), cl_lo, cl_hi);        /* (1.15: the example clips' strokes average 0.47 of the sample) */
 }
 
-static float g_push_bell = 0.0f;                                                 /* (a trial: how much of a hand's bell-shaped speed a stutter's push has) */
 static float g_ease(int shape, float u)
 {
     u = clampf(u, 0.0f, 1.0f);
@@ -497,9 +496,9 @@ static float g_ease(int shape, float u)
     case SH_FAST: return 1.0f - powf(1.0f - u, 2.4f);
     case SH_SLOW: return powf(u, 2.4f);
     case SH_FLICK: return logf(1.0f + 6.0f * u) / 1.9459101f;                   /* speed 1/(1+6u): the hand's push, fastest at the start and never quite stopping */
-    case SH_PUSH: {                                                             /* a short push: a little faster at the start (1.15), a little slower into the turn (0.85); blended toward a hand's bell-shaped speed */
+    case SH_PUSH: {                                                             /* a hand's short push: halfway to its bell-shaped speed (slow, fast, slow: the "minimum jerk" of a reach), so the record sweeps in pitch as a pushed one does */
         const float lin = u + 0.15f * u * (1.0f - u), bell = u * u * u * (10.0f + u * (6.0f * u - 15.0f));
-        return lin + g_push_bell * (bell - lin);
+        return lin + 0.5f * (bell - lin);
     }
     case SH_LETGO: {                                                            /* let go: from 0.7 of its speed up to all of it over the first eighth, then steady */
         const float k = 0.125f, sp0 = 0.7f, tot = 1.0f - (1.0f - sp0) * k * 0.5f;
@@ -807,7 +806,8 @@ static void stut_roll(gen_t *g, float t, float len, float base, float secs)
 static float st_stutter(gen_t *g, float o, float base_in)
 {
     const float base = g->word < base_in ? g->word : base_in;                 /* (from the word's very start, not a little into it as a stroke turns: the whole "f", the whole word) */
-    const float c = gr(g, 0.05f, 0.085f), word = gr(g, 0.32f, 0.5f), step = g->spx > 8.01f ? 2.0f : 1.0f;     /* (over 120 bpm: an eighth apart) */
+    const float c0 = gr(g, 0.05f, 0.085f), word = gr(g, 0.32f, 0.5f), step = g->spx > 8.01f ? 2.0f : 1.0f;     /* (over 120 bpm: an eighth apart) */
+    const float c = g->attack > 0.0f ? g->attack * (0.85f + 0.3f * (c0 - 0.05f) / 0.035f) : c0;               /* a push: the word's attack, "f" to "fre" (a sample with no attacks found: 50-85 ms) */
     g_gate(g, o, o + 16.0f, 0);
     g_seg(g, o, o + 16.0f, base, base, SH_LIN);
     switch (gi(g, 0, 5)) {                                                      /* (a breath before every release: the word comes in as a sound of its own) */
@@ -1053,6 +1053,18 @@ static int slot_onsets_long(const ts_slot_t *s, float *out, int cap)
     return n;
 }
 
+/* How long a word's attack takes to arrive, in seconds: from its start to its loudest point within 0.2 s, the moment its vowel is in ("f"
+ * to "fre"), 50 to 150 ms. A stutter's push covers that, so each push has the vowel's pitch to sweep, not only the hiss before it. */
+static float slot_attack(const ts_slot_t *s, float at)
+{
+    if (!s || !s->loaded || s->len <= 0) return 0.0f;
+    const float secs = (float)s->len / TS_SAMPLE_RATE;
+    const int c0 = clampi((int)(at * (float)TS_RCOLS), 0, TS_RCOLS - 1), c1 = clampi(c0 + (int)(0.2f / secs * (float)TS_RCOLS) + 1, c0 + 1, TS_RCOLS);
+    int best = c0;
+    for (int c = c0; c < c1; c++) if (s->rms_hi[c] > s->rms_hi[best]) best = c;
+    return clampf(((float)(best - c0) + 0.5f) / (float)TS_RCOLS * secs + 0.01f, 0.05f, 0.15f);
+}
+
 /* Where a sample has its attacks: the start of its sound, and every place its level climbs fast out of a dip (a new word, the next hit),
  * read from the 128-column overview. Positions 0..1, a column before the attack, at most `cap` of them. A DJ puts the record there so a
  * stroke begins on the attack; the real performances and the example clips turn where the sample is quiet and about to get loud. */
@@ -1224,7 +1236,7 @@ static void gen_phrase(gen_t *g, int bars, const float *bases)
     }
 }
 
-static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch, float spx, float groove_p, float reach)
+static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, const float *attacks, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch, float spx, float groove_p, float reach)
 {
     if (!out) return;
     bars = bars <= 1 ? 1 : (bars >= 4 ? 4 : 2);
@@ -1263,7 +1275,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
     { int r = gi(&g, 0, 19); g.shape = r < 17 ? SH_FLICK : (r < 19 ? SH_EASE : SH_SLOW); }  /* and how they are shaped: almost always a flick */
     int plan[4], grp[4];
     gen_plan(&g, style, bars, plan, grp);
-    float bases[4], words[4];                                                   /* where each bar's strokes start from: an attack of the sample, if there is one to find; and the word itself, a stutter's start */
+    float bases[4], words[4], atks[4] = { 0.0f, 0.0f, 0.0f, 0.0f };                                                   /* where each bar's strokes start from: an attack of the sample, if there is one to find; and the word itself, a stutter's start */
     for (int bar = 0; bar < bars; bar++) {
         if (n_on <= 0) { bases[bar] = words[bar] = base0; continue; }
         gen_t t = g;
@@ -1272,6 +1284,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         const float into = gr(&t, 0.02f, 0.07f);                                /* (a little way into the attack: the turn is on the rise) */
         bases[bar] = clampf(onsets[pick] + (reach < 1.0f ? into * reach : into), 0.0f, 0.9f);       /* (a long sample: as far in, in seconds, as on a short one) */
         words[bar] = clampf(onsets[pick], 0.0f, 0.9f);
+        atks[bar] = attacks ? attacks[pick] : 0.0f;
     }
     if (style == GS_ANY) {                                                      /* a phrase, not techniques */
         for (int bar = 0; bar < bars; bar++) { plan[bar] = GS_ANY; grp[bar] = bar; }
@@ -1282,6 +1295,7 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         g.rng = mix32(seed ^ ((uint32_t)(grp[bar] * 2 + 1) * 0x9E3779B9u) ^ ((uint32_t)s * 0x85EBCA6Bu)) | 1u;      /* the same letter, the same bar */
         float o = 16.0f * (float)bar, base = bases[bar], next = bases[(bar + 1) % bars];
         g.word = words[bar];
+        g.attack = atks[bar];
         { uint16_t bb = (uint16_t)(base * 65535.0f + 0.5f); for (int i = (int)(o * (float)GP); i < (int)((o + 16.0f) * (float)GP) && i < n; i++) out->pos[i] = bb; }
         float end = k_styles[s](&g, o, base);
         if (s != GS_STAB && s != GS_CRAB && s != GS_SCRIBBLE && s != GS_TEAR && s != GS_STUTTER) {   /* (a stab's jabs, a crab's clicks, a scribble's vibrations, a tear's steps and a stutter's pushes keep their exact places and sizes) */
@@ -1560,8 +1574,9 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     float fw_p = isfinite(fwd) ? clampf(fwd, 0.0f, 1.0f) : 0.0f;
     if (!out) return;
     const float reach = slot_reach(slot);
-    float onsets[32];
+    float onsets[32], attacks[32];
     int n_on = slot_onsets(slot, onsets, reach < 1.0f ? 32 : 8);
+    for (int k = 0; k < n_on; k++) attacks[k] = slot_attack(slot, onsets[k]);
     /* how long a forward takes: most of the sound at about the sample's own speed, at 120 bpm (a sixteenth is 1/8 s); fixed, so a recipe
      * makes the same clip whatever the tempo it is loaded at */
     int fw16 = 4;
@@ -1577,7 +1592,7 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;
     for (int attempt = 0; attempt < 8; attempt++) {                             /* a seed that comes out mostly silent is thrown again: same seed, same clip, always */
-        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, n_on, fw16, fw_p, fin_p, pps, hi, echo_p, stretch, spx, groove_p, reach);
+        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, attacks, n_on, fw16, fw_p, fin_p, pps, hi, echo_p, stretch, spx, groove_p, reach);
         float a = gen_audible(out);
         if (a >= need[style]) return;
         if (a > best_a) { best_a = a; best = *out; }
