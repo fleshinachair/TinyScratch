@@ -538,11 +538,11 @@ fixtures.forEach((v, i) => {
     knob(0, 1);
     check(!has(ctx, "gen_style"), "Style (dial 1) waits for a second detent");
     knob(0, 1);
-    check(has(ctx, "gen_style", "1"), "...then goes one style on (Improv, then Baby): " + JSON.stringify(ctx.sets));
+    check(has(ctx, "gen_style", "1"), "...then goes one style on (Flow, then Baby): " + JSON.stringify(ctx.sets));
     for (let i = 0; i < 100; i++) knob(0, 1);
     check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "14", "it stops at the last style");
     for (let i = 0; i < 100; i++) knob(0, 127);
-    check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "0", "...and at Improv");
+    check(ctx.sets.filter(([k]) => k === "gen_style").slice(-1)[0][1] === "0", "...and at Flow");
     ctx.sets.length = 0;
     knob(1, 1); knob(1, 1);
     check(!has(ctx, "gen_bars"), "Length (dial 2) waits for three detents");
@@ -1059,7 +1059,7 @@ fixtures.forEach((v, i) => {
     check(styleDiff > 5 && tryA.count(86, 31, 127, 37) > 8, "a generated clip says TRY and its style on the panel (" + styleDiff + " pixels differ between styles)");
     const diff = (a, b) => { let d = 0; for (let x = 86; x < 128; x++) for (let y = 31; y < 38; y++) d += a.on(x, y) !== b.on(x, y) ? 1 : 0; return d; };
     const tryTear = drawPage(box, Object.assign({}, base, { cm: 18, cl: 18, tg: 12, ln: 0 }));
-    check([13, 14].every((t) => diff(tryTear, drawPage(box, Object.assign({}, base, { cm: 18, cl: 18, tg: t, ln: 0 }))) > 5), "...the styles after Tear too (Stutter, Impv 1.1), not shown as Tear");
+    check([13, 14].every((t) => diff(tryTear, drawPage(box, Object.assign({}, base, { cm: 18, cl: 18, tg: t, ln: 0 }))) > 5), "...the styles after Tear too (Stutter, Snap), not shown as Tear");
     const noted = drawPage(box, Object.assign({}, base, { ln: 68 }));
     let more = 0;
     for (let x = 108; x < 128; x++) for (let y = 32; y < 37; y++) more += noted.on(x, y) && !run.on(x, y) ? 1 : 0;

@@ -69,7 +69,7 @@ clip never changes):
 
 | dial | what it does |
 |---|---|
-| **Style** | what Generate makes: **Improv** (the default: an improvised two-bar phrase of strokes of every length, answered by a changed version of itself; it does not pick from the named styles) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear, Stutter |
+| **Style** | what Generate makes: one of the two **Improv** styles, an improvised two-bar phrase of strokes of every length answered by a changed version of itself, which does not pick from the named styles: **Flow** (the default: moves like a real hand) or **Snap** (Improv as 1.1.0 made it: faster flicks, punchier); or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear, Stutter |
 | **Length** | 1, 2 or 4 bars |
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |
@@ -113,7 +113,7 @@ top); it matters for bright sounds such as hi-hats and sibilants, and for your o
 Generate makes a **recipe** (sample, style, seed, length, and the dial settings) and builds the clip from it, so the same recipe always
 gives the same clip. A kept clip is saved exactly (its playhead path and fader), so it sounds the same whatever the generator becomes later.
 
-- **Improv** is a two-bar phrase of strokes of every length, then the same phrase again with some strokes changed, on the sixteenth grid at
+- **Improv** (the Flow and Snap styles) is a two-bar phrase of strokes of every length, then the same phrase again with some strokes changed, on the sixteenth grid at
   any tempo up to 120 bpm. The fader is laid on the grid and the record turns a little ahead of the beat, so every cut bites in with the
   record already moving fast. **On a faster song** (above 120 bpm) the strokes and the cuts keep the length in seconds they have at 120, so
   there are fewer to the bar: no more sounds a second (about 6.5) than a hand can make, however fast the song. (At 160 bpm the plain grid
@@ -127,13 +127,14 @@ gives the same clip. A kept clip is saved exactly (its playhead path and fader),
   [Analysis of a genuine scratch performance](https://www.speech.kth.se/~hansen/files/thesis/HansenBresin03_GW.pdf) (2004), and Hansen's thesis
   [The acoustics and performance of DJ scratching](https://www.speech.kth.se/~hansen/files/thesis/KjetilFalkenbergHansen_2010_phdthesis.pdf)
   (2010). The example clips used for measuring are not in this repository and nothing of them is copied; only the measures were used.
-- **Moved like a real hand.** Every style's strokes take the shape of a recorded hand's: LM4K's 98 strokes in the one surviving
+- **Moved like a real hand.** Every style's strokes but Snap's take the shape of a recorded hand's: LM4K's 98 strokes in the one surviving
   [ScratchML](https://jamiedubs.com/scratchml) performance, which speed up, are fastest about 42% of the way (1.9 times their average) and
   slow into the turn (drawn strokes had bitten in fastest at the start, which a recorded hand does not). And they go about as fast as a DJ's:
   near the record's own speed on average (LM4K 0.91, Hansen's DJs 0.94), where drawn ones ran 1.3 to 2.3 times it, three times as far,
   high and squealing; a bar whose strokes are faster is scaled down toward where it starts (a scribble's wiggle, a stab's jab and a
-  stutter keep their speed: it is what they are). Played back, Improv's strokes now average 0.91 of the sample's speed with the hand's
-  shape. Clips already kept, and the shipped ones, play from their saved data, so they do not change.
+  stutter keep their speed: it is what they are). Played back, Flow's strokes average 0.91 of the sample's speed with the hand's
+  shape. **Snap** keeps 1.1.0's: a flick's shape (fastest at the start) and no cap on the speed, which over a beat can be the catchier of
+  the two. Clips already kept, and the shipped ones, play from their saved data, so they do not change.
 
 **The named styles** are built from the definitions in the Turntablist Transcription Methodology
 ([TTM basics](https://www.ttm-dj.com/ttm-01-01-basics/), [the TTM guide](https://lcme.uwl.ac.uk/media/tmpfvcmu/ttm-guide-may-2021.pdf)) and
