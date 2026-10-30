@@ -488,7 +488,7 @@ static float g_top(gen_t *g, float base, float lo, float hi, float cl_lo, float 
     return clampf(base + 1.15f * (lo + (hi - lo) * g->amp_t) * gr(g, 0.96f, 1.0f), cl_lo, cl_hi);        /* (1.15: the example clips' strokes average 0.47 of the sample) */
 }
 
-static float g_stut_open = 0.0f, g_stut_into = 0.0f;                            /* (a trial: how far into a push the fader opens; how far into the word a push starts, in seconds) */
+static float g_stut_open = 0.0f, g_stut_into = 0.0f, g_stut_speed = 1.0f;   /* (and how fast a push or a rub goes, 1 = as it was) */                            /* (a trial: how far into a push the fader opens; how far into the word a push starts, in seconds) */
 static float g_ease(int shape, float u)
 {
     u = clampf(u, 0.0f, 1.0f);
@@ -782,7 +782,7 @@ static void stut_push(gen_t *g, float t, float slot, float base, float secs)
     t += gr(g, -0.05f, 0.05f);
     secs *= gr(g, 0.82f, 1.18f);
     const float d = fminf(secs * g->spx * gr(g, 0.88f, 1.12f), slot * 0.62f);
-    secs = fminf(secs, d / g->spx * gr(g, 0.9f, 1.05f));                       /* no faster than its own speed on average (DJs: about 0.94, Hansen): a short slot covers less of the word, it does not race through it */
+    secs = fminf(secs, d / g->spx * gr(g, 0.9f, 1.05f)) * g_stut_speed;                       /* no faster than its own speed on average (DJs: about 0.94, Hansen): a short slot covers less of the word, it does not race through it */
     const float to = clampf(base + secs * g->fps, base, 0.97f);
     g_seg(g, t, t + d, base, to, SH_PUSH);
     g_gate(g, t + g_stut_open * d, t + d - 0.04f, 1);
@@ -799,7 +799,7 @@ static void stut_release(gen_t *g, float t, float end, float base, float secs)
 static void stut_roll(gen_t *g, float t, float len, float base, float secs)
 {
     for (float u = 0.0f; u + 1.0f <= len + 1e-3f; u += 1.0f) {                 /* a push a sixteenth at about its own speed, two sounds each: "one single, fast record hand movement can produce multiple tone attacks, normally from 2 to 5" (Hansen) */
-        const float d = fminf(fmaxf(secs, 0.06f) * g->spx, 0.8f), to = clampf(base + d / g->spx * g->fps, base, 0.97f);     /* (at its own speed) */
+        const float d = fminf(fmaxf(secs, 0.06f) * g->spx, 0.8f), to = clampf(base + d / g->spx * g->fps * g_stut_speed, base, 0.97f);     /* (at its own speed) */
         g_seg(g, t + u, t + u + d, base, to, SH_LIN);
         g_gate(g, t + u, t + u + 0.3f * d, 1);
         g_gate(g, t + u + 0.5f * d, t + u + 0.85f * d, 1);
@@ -839,7 +839,7 @@ static float st_stutter(gen_t *g, float o, float base_in)
         break;
     }
     case 4: {                                                                   /* rubs then the word: back and forth with the fader open, both ways heard, then let go */
-        const float d = fminf(c * 2.0f * g->spx, 1.0f), r = fminf(c * 2.0f, d / g->spx), to = clampf(base + r * g->fps, base, 0.97f);     /* (a rub at its own speed at most, eased: about 1.5 at its fastest) */
+        const float d = fminf(c * 2.0f * g->spx, 1.0f), r = fminf(c * 2.0f, d / g->spx) * g_stut_speed, to = clampf(base + r * g->fps, base, 0.97f);     /* (a rub at its own speed at most, eased: about 1.5 at its fastest) */
         for (float i = 0.0f; i < 8.0f; i += 2.0f * step) {
             g_seg(g, o + i, o + i + d, base, to, SH_EASE);                       /* (a baby: the turns heard, eased as a hand turns) */
             g_seg(g, o + i + d, o + i + 2.0f * d, to, base, SH_EASE);
