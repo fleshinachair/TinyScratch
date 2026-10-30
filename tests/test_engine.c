@@ -1424,7 +1424,7 @@ static void test_generator(void)
         pairs++;
     }
     int all_seen = 1;
-    for (int st = 1; st < GS_COUNT; st++) all_seen &= seen_style[st] > 0 || st == GS_DRAG || st == GS_TEAR;          /* (a drag is a whole bar of two slow strokes and a tear is only the record hand: 'any' keeps away from both) */
+    for (int st = 1; st < GS_COUNT; st++) all_seen &= seen_style[st] > 0 || st == GS_DRAG || st == GS_TEAR || st == GS_STUTTER;          /* (a drag is a whole bar of two slow strokes, a tear is only the record hand and a stutter is a word's: 'any' keeps away from them) */
     CHECK(chain_ok && all_seen, "'any' makes a phrase A A B A where B is a style that follows A, as a scratcher would string them, and uses every style");
     CHECK(repeats < pairs / 4, "...with B a different style most of the time (%d of %d are the same)", repeats, pairs);
 

@@ -45,7 +45,7 @@
 #define TS_CLIP_TRY       18
 #define TS_CLIP_PADS      14                /* clip pads 1-14: the two places after them on the pads are Generate and Auto */
 #define TS_POOL           256               /* every clip there is: the built-in or imported ones, and the ones you kept */
-#define TS_GEN_STYLES     13                /* any, baby, cuts, military, scribble, stab, chirp, transform, flare, crab, orbit, drag, tear */
+#define TS_GEN_STYLES     14                /* any, baby, cuts, military, scribble, stab, chirp, transform, flare, crab, orbit, drag, tear, stutter */
 #define TS_CLIP_RES       128               /* points to the beat in a clip's data */
 #define TS_CLIP_MAX_BEATS 16
 

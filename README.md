@@ -69,7 +69,7 @@ clip never changes):
 
 | dial | what it does |
 |---|---|
-| **Style** | what Generate makes: **Improv** (the default: an improvised two-bar phrase of strokes of every length, answered by a changed version of itself; it does not pick from the named styles) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear |
+| **Style** | what Generate makes: **Improv** (the default: an improvised two-bar phrase of strokes of every length, answered by a changed version of itself; it does not pick from the named styles) or one of Baby, Cuts, Military, Scribble, Stab, Chirp, Transform, Flare, Crab, Orbit, Drag, Tear, Stutter |
 | **Length** | 1, 2 or 4 bars |
 | **Forwards** (0%) | how often a clip lets the record go through most of the sample, so the word is heard |
 | **Finish** (10%) | how often a clip ends with the whole sample played through at its own speed, then a quick shut pull back, the way a DJ ends a phrase |
@@ -147,6 +147,7 @@ sixteenth grid):
 | **Crab** | three or four fast clicks (about sixteen a second) in one record gesture, the pull back silent |
 | **Drag** | slow strokes, low in pitch |
 | **Tear** | the record hand alone, the fader open: pushed forward, stopped, pushed forward again, stopped, then the same backwards: four sounds, two forward and two back (Hansen's "clover tear") |
+| **Stutter** | a word's first sound pushed again and again in time, then the word let go: "f-f-f-f-fight". Each push is a forward over the first 50 to 85 ms of the word, the fader open on the push and shut on the pull back; the release glides on through the whole word at about its own speed. One of five rhythms a bar: a run of sixteenths into a roll, a call and answer ("f-f-fight, f-f-fight"), a build-up that shows a little more of the word each time ("f, fi, fig, figh, fight"), an off-grid pattern, or the word first and the stutter after. Its lengths are in seconds, so it works the same on a short clip of one word and on a long phrase (each bar on one of its words). Best on speech |
 
 The Hansen & Bresin measurements describe one DJ's improvisation, which is what "Improv" follows. The named styles follow the textbook
 techniques. Not yet built: the hydroplane. A style's number is saved in a clip's recipe, so new styles are added on the end.
