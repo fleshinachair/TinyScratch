@@ -1,5 +1,28 @@
 # TinyScratch release notes
 
+## v1.5.0
+
+- **Three ways to Improv.** Improv now comes as three styles, at the top of the Style list:
+  - **Flow** (the default) moves like a real hand: every stroke takes the shape of a recorded DJ's (it speeds up, is fastest a little before
+    halfway and slows into the turn) at about the record's own speed, instead of fast flicks.
+  - **Snap** is Improv exactly as 1.1.0 made it: faster flicks, punchier. Over a beat it can be the catchier of the two.
+  - **Freestyle** is Flow with longer, looser sounds, measured from real DJs scratching on their own: each sound rings most of a sixteenth,
+    with less space between.
+
+  A project saved with "Improv" opens as Flow. Every named style moves like a real hand too.
+- **Stutter**, a new style: a word's first sound pushed again and again in time, then the word let go ("f-f-f-f-fight"). Six rhythms, from a
+  roll to a build-up that shows a little more of the word each time; played straight, so the word stays clear. Best on speech.
+- **Long samples.** A sample longer than 1.2 s is scratched the way a DJ works a phrase: each bar starts on one of its words or hits, strokes
+  stay as long in seconds as on a short sample, and the cue pads spread along it. **Record up to 10 s** from the input.
+- **Pick spots from a song** (Remote UI). Drop a whole song on the deck: mark up to six spots on it (drag, or click with a length of 1 to 10 s,
+  snapped to the nearest hit), name each, choose its User slot, and preview it before anything is sent to the Move.
+- **Vinyl** (Playback page, dial 8; 0% by default, exactly as before): a record moved slowly is quieter and one held still is silent, as a real
+  cartridge is, with the groove's faint hiss and crackle moving with the record.
+- **Fix:** on the Move's screen, styles after Tear were named as Tear.
+
+Clips you have kept, and the clips that ship with the module, play from their saved data, so they sound exactly as before. Ahhh and Fresssh
+are unchanged.
+
 ## v1.1.0
 
 - **Remote UI.** TinyScratch now has a page in Schwung's Remote UI (`http://move.local:7700/remote-ui`): an overhead turntable whose record
