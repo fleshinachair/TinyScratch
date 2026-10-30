@@ -2578,14 +2578,14 @@ static void test_finish(void)
                 int closed = 1;
                 for (int i = s0; i < s0 + q / 2 && i < c.n; i++) closed &= c.gate[i] == 0;
                 shut &= closed;
-                on_beat += finishes && c.gate[last_bar + 4 * q + q / 8];                                          /* (open on beat 2) */
+                on_beat += finishes && c.gate[last_bar + 4 * q + q / 8] && (float)c.pos[last_bar + 4 * q + q / 8] / 65535.0f < e->slot[3].lo + 0.04f;     /* (open on beat 2, at the start of the sound) */
             } else none_at_0 += finishes;
         }
     }
     CHECK(ends >= n - 2, "Finish at 100%%: every clip ends with the sample played through, fader open, rising (%d of %d)", ends, n);
     CHECK(speed_ok, "...at the sample's own speed (0.125 sample lengths a sixteenth at 120 bpm for a one second sample)");
     CHECK(shut, "...and the pull back after it has the fader shut");
-    CHECK(on_beat >= ends - 2, "...let go on a beat: the latest that leaves room for the whole sound (%d of %d on beat 2)", on_beat, ends);
+    CHECK(on_beat >= ends - 2, "...let go on a beat, from the very start of the sound: the latest beat that leaves room for all of it (%d of %d on beat 2)", on_beat, ends);
     CHECK(none_at_0 < n / 4, "Finish at 0 leaves clips as they were (%d of %d end that way anyway)", none_at_0, n);
     /* a long sample (2.2 s, like a recording) is played right to its end: at its own speed where three quarters of a bar allows (75 bpm:
      * 10 sixteenths), a little faster where it does not (120 bpm: 16 sixteenths of sound in 12) */

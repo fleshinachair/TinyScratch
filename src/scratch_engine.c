@@ -1283,7 +1283,7 @@ static float stroke_speed(const ts_clip_t *c, int i0, int i1, float fps, float s
     return sp[ns / 2];
 }
 
-static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, const float *attacks, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch, float spx, float groove_p, float reach)
+static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, const float *attacks, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float lo, float echo_p, float stretch, float spx, float groove_p, float reach)
 {
     if (!out) return;
     bars = bars <= 1 ? 1 : (bars >= 4 ? 4 : 2);
@@ -1452,21 +1452,28 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         if (grnd(&t) < fin_p) {
             g.used |= TS_EX_FIN;
             float o = 16.0f * (float)(bars - 1);
-            float from = bases[bars - 1], span = fmaxf(hi - from, 0.2f);
+            float from = reach < 1.0f || lo < 0.0f ? bases[bars - 1] : lo, span = fmaxf(hi - from, 0.2f);     /* (from the very start of the sound: a long sample, from the bar's word) */
             if (reach < 1.0f) span = fmaxf(fminf(hi - from, 2.0f * (bars >= 2 ? 12.0f : 8.0f) * pps), 0.2f);     /* a long sample: to its end if that is no faster than twice its own speed, else as much as that plays */
             /* sixteenths the sound takes at the sample's own speed: up to three quarters of a bar (half a bar in a one bar clip); a sample
              * longer than that is still played right to its end, a little faster than its own speed, not cut short */
             float x = clampf(span / fmaxf(pps, 0.01f), 3.0f, bars >= 2 ? 12.0f : 8.0f);
             const float zs = fmaxf(4.0f, floorf((15.0f - x) / 4.0f) * 4.0f);   /* the beat it is let go on */
-            x = fminf(x, 15.0f - zs);                                           /* (a sound longer than from beat 2 plays a little faster) */
+            /* let go as a DJ does: the record back to the start of the sound and held there, then let go on the beat. (The whole path moves
+             * earlier below, the record turning ahead of the beat, so this is written that much later; and it is held long enough that
+             * the fader's hiding of the turn is over before the beat.) */
+            float ahead;
+            { gen_t t2 = g; t2.rng = mix32(seed ^ 0x51DE5EEDu) | 1u; ahead = (float)(int)(gr(&t2, 0.18f, 0.34f) * (float)GP) / (float)GP; }
+            x = fminf(x, 15.0f - zs - ahead);                                   /* (a sound longer than from beat 2 plays a little faster) */
+            const float z = zs + ahead;
             float to = clampf(from + span, from + 0.15f, 0.98f);
             int i0 = (int)((o + zs - 1.0f) * (float)GP);
             float cur = i0 >= 0 && i0 < out->n ? (float)out->pos[i0] / 65535.0f : from;
-            g_seg(&g, o + zs - 1.0f, o + zs, cur, from, SH_FAST);                /* back to the start of the sound, shut */
-            g_gate(&g, o + zs - 1.0f, o + zs - 0.05f, 0);
-            g_seg(&g, o + zs, o + zs + x, from, to, SH_LIN);                     /* the sample, at its own speed */
-            g_gate(&g, o + zs, o + zs + x, 1);
-            if (zs + x < 15.0f) { g_seg(&g, o + zs + x, o + 15.0f, to, to, SH_LIN); g_gate(&g, o + zs + x, o + 15.0f, 0); }     /* (the sound is over: still, shut) */
+            g_seg(&g, o + zs - 1.0f, o + zs - 0.4f, cur, from, SH_FAST);         /* back to the start of the sound, shut */
+            g_seg(&g, o + zs - 0.4f, o + z, from, from, SH_LIN);                 /* held */
+            g_gate(&g, o + zs - 1.0f, o + z - 0.05f, 0);
+            g_seg(&g, o + z, o + z + x, from, to, SH_LIN);                       /* let go: the sample, at its own speed */
+            g_gate(&g, o + z, o + z + x, 1);
+            if (z + x < 15.0f) { g_seg(&g, o + z + x, o + 15.0f, to, to, SH_LIN); g_gate(&g, o + z + x, o + 15.0f, 0); }     /* (the sound is over: still, shut) */
             g_seg(&g, o + 15.0f, o + 16.0f, to, bases[0], SH_FAST);              /* and the pull back */
             g_gate(&g, o + 15.0f, o + 15.9f, 0);
             if (g.nfw < 58) {                                                    /* (Any lays its fader on the grid after this: the play-out and the pull are told to it as a forward) */
@@ -1673,10 +1680,11 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     const float groove_p = isfinite(groove) ? clampf(groove, 0.0f, 1.0f) : 0.0f;
     float echo_p = isfinite(echo) ? clampf(echo, 0.0f, 1.0f) : 0.0f;
     float fin_p = isfinite(fin) ? clampf(fin, 0.0f, 1.0f) : 0.0f;
-    float pps = 0.15f, hi = 0.95f;                                               /* the sample's own speed, in sample lengths to a sixteenth; where its sound ends */
+    float pps = 0.15f, hi = 0.95f, lo = -1.0f;                                               /* the sample's own speed, in sample lengths to a sixteenth; where its sound ends */
     if (slot && slot->loaded && slot->len > 0 && isfinite(bpm) && bpm > 0.0f) {
         pps = clampf(15.0f / (((float)slot->len / TS_SAMPLE_RATE) * bpm), 0.02f, 0.5f);
         hi = clampf(slot->hi, 0.3f, 0.99f);
+        lo = clampf(slot->lo, 0.0f, 0.5f);
     }
     float fw_p = isfinite(fwd) ? clampf(fwd, 0.0f, 1.0f) : 0.0f;
     if (!out) return;
@@ -1702,7 +1710,7 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;
     for (int attempt = 0; attempt < 8; attempt++) {                             /* a seed that comes out mostly silent is thrown again: same seed, same clip, always */
-        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, attacks, n_on, fw16, fw_p, fin_p, pps, hi, echo_p, stretch, spx, groove_p, reach);
+        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, attacks, n_on, fw16, fw_p, fin_p, pps, hi, lo, echo_p, stretch, spx, groove_p, reach);
         float a = gen_audible(out);
         if (a >= need[style]) return;
         if (a > best_a) { best_a = a; best = *out; }
