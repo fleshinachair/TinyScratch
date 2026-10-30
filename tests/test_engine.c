@@ -3563,8 +3563,16 @@ static void test_state(void)
     old_baby &= atoi(out2) == 3;
     api->set_param(h2, "gen_style", "Snap");
     api->get_param(h2, "state", st2, sizeof st2);
-    CHECK(old_baby && b->p.gen_style == TS_GS_SNAP && strstr(st2, "\"gen_style\":\"14\"") != NULL,
-          "an old project's Baby is still Baby (fourth in the list now), and Snap is saved as its number");
+    CHECK(old_baby && b->p.gen_style == TS_GS_SNAP && strstr(st2, "\"gen_style\":\"1\"") != NULL && strstr(st2, "\"style_n\":\"14\"") != NULL,
+          "an old project's Baby is still Baby (fourth in the list now); Snap is saved as its place in the list and its number");
+    api->set_param(h2, "gen_style", "Freestyle");
+    api->get_param(h2, "state", st2, sizeof st2);
+    api->set_param(h2, "gen_style", "Baby");
+    api->set_param(h2, "state", st2);
+    int free_back = b->p.gen_style == TS_GS_FREESTYLE;
+    api->set_param(h2, "state", "{\"v\":\"1\",\"gen_style\":\"15\"}");
+    CHECK(free_back && b->p.gen_style == TS_GS_FREESTYLE && strstr(st2, "\"gen_style\":\"2\"") != NULL,
+          "Freestyle saves as the list's third entry (what the host shows) and comes back; a 1.5.0 project's 15 is Freestyle too");
 
     /* hostile and broken states change nothing */
     ts_params_t keep = b->p;
@@ -4095,7 +4103,7 @@ static void test_plugin_generate(void)
     api->set_param(h, "clip_pad", "2");
     CHECK(in->p.clip == 2, "...and on a pad with a clip plays it");
     api->get_param(h, "state", out, sizeof out);
-    CHECK(!strstr(out, "\"generate\"") && !strstr(out, "\"keep\"") && !strstr(out, "clip_pad") && !strstr(out, "clip_delete") && !strstr(out, "clear_clip") && strstr(out, "\"gen_style\":\"5\"") && strstr(out, "\"gen_bars\":\"2\""),
+    CHECK(!strstr(out, "\"generate\"") && !strstr(out, "\"keep\"") && !strstr(out, "clip_pad") && !strstr(out, "clip_delete") && !strstr(out, "clear_clip") && strstr(out, "\"gen_style\":\"7\"") && strstr(out, "\"style_n\":\"5\"") && strstr(out, "\"gen_bars\":\"2\""),
           "the one-shots are not saved with the project; Style and Length are");
 
     /* a second instance, as on another track: it starts with the kept clips */

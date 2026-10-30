@@ -1,5 +1,10 @@
 # TinyScratch release notes
 
+## v1.5.1
+
+- **Fix:** the Remote UI could show the wrong style (Stutter when the Move was on Freestyle). Projects still open with the style they were
+  saved with, including ones saved with 1.5.0.
+
 ## v1.5.0
 
 - **Three ways to Improv**, at the top of the Style list: **Flow** (the default) moves like a real DJ's hand; **Snap** is Improv exactly
