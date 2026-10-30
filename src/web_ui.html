@@ -420,7 +420,7 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     try { c = JSON.parse(raw); } catch (e) { return; }
     if (!c || c.v !== 1) return;
     rc = {
-      rk: c.rk, s: c.s, sl: c.sl, lb: c.lb || 4, res: c.res || 64,
+      rk: c.rk, s: c.s, sl: c.sl, lb: c.lb || 4, res: c.res || 64, pa: c.pa === undefined ? -1 : c.pa, pb: c.pb === undefined ? -1 : c.pb,
       w: decodeHex(c.w, 2, 255), wr: decodeHex(c.wr, 2, 255),
       lp: c.lp ? decodeHex(c.lp, 3, 4095) : null, lg: c.lg ? decodeDigits(c.lg) : null,
       hk: c.hk, hp: c.hp ? decodeHex(c.hp, 3, 4095) : null, hg: c.hg ? decodeDigits(c.hg) : null,
@@ -527,10 +527,12 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     sim.beat = beat; sim.clip = clip; sim.live = live;
     var target, gate = rv.g, lv = 0;
     if (clip) {
-      var t = (rv.fm ? beat : swingTime(beat, num("swing", 0.3))) - rv.t0;     /* (a stutter plays straight: scratch_engine.c) */
+      var xb = beat - rv.t0, xm = xb - Math.floor(xb / rc.lb) * rc.lb;
+      var straight = rv.fm || (rc.pa >= 0 && xm >= rc.pa && xm < rc.pb);    /* (a stutter, and a Finish's play-out, play straight: scratch_engine.c) */
+      var t = (straight ? beat : swingTime(beat, num("swing", 0.3))) - rv.t0;
       sim.t = t;
       var pass = Math.floor((beat - rv.t0) / rc.lb);
-      var useH = rc.hp && rc.hk === pass && num("humanise", 0) > 0 && !rv.fm;
+      var useH = rc.hp && rc.hk === pass && num("humanise", 0) > 0 && !straight;
       var raw = useH ? planAt(rc.hp, rc.lb, t) : planAt(rc.lp, rc.lb, t);
       if (rv.hh || !live) target = rv.tx;
       else target = mapPos(raw, t);

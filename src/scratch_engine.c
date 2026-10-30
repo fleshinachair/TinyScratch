@@ -1283,7 +1283,7 @@ static float stroke_speed(const ts_clip_t *c, int i0, int i1, float fps, float s
     return sp[ns / 2];
 }
 
-static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, const float *attacks, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float echo_p, float stretch, float spx, float groove_p, float reach)
+static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const float *onsets, const float *attacks, int n_on, int fw16, float fw_p, float fin_p, float pps, float hi, float lo, float echo_p, float stretch, float spx, float groove_p, float reach)
 {
     if (!out) return;
     bars = bars <= 1 ? 1 : (bars >= 4 ? 4 : 2);
@@ -1443,31 +1443,42 @@ static void gen_once(ts_clip_t *out, int style, uint32_t seed, int bars, const f
         g_gate(&g, o + 15.0f, o + 15.9f, 0);
     }
     /* Finish: the clip ends with the whole sample played through at its own speed, from where the sound starts to where it ends, so its tail
-     * is heard; then the quick silent pull back. The record gets back to the start of the sound just before (a short shut jump). Its own
-     * random numbers, so a clip with Finish at 0 is exactly what it was. */
+     * is heard; then the quick silent pull back. It is let go on a beat, as a DJ lets a record go: the latest one that leaves room for the
+     * whole sound, from beat 2 (so the record has a sixteenth to get back to the start of the sound, a short shut jump, after the bar's
+     * own strokes); the fader shuts where the sound ends. Its own random numbers, so a clip with Finish at 0 is exactly what it was. */
     if (fin_p > 0.0f && last != GS_STAB && last != GS_CRAB && last != GS_STUTTER) {
         gen_t t = g;
         t.rng = mix32(seed ^ 0xF1415EEDu) | 1u;
         if (grnd(&t) < fin_p) {
             g.used |= TS_EX_FIN;
             float o = 16.0f * (float)(bars - 1);
-            float from = bases[bars - 1], span = fmaxf(hi - from, 0.2f);
+            float from = reach < 1.0f || lo < 0.0f ? bases[bars - 1] : lo, span = fmaxf(hi - from, 0.2f);     /* (from the very start of the sound: a long sample, from the bar's word) */
             if (reach < 1.0f) span = fmaxf(fminf(hi - from, 2.0f * (bars >= 2 ? 12.0f : 8.0f) * pps), 0.2f);     /* a long sample: to its end if that is no faster than twice its own speed, else as much as that plays */
             /* sixteenths the sound takes at the sample's own speed: up to three quarters of a bar (half a bar in a one bar clip); a sample
              * longer than that is still played right to its end, a little faster than its own speed, not cut short */
             float x = clampf(span / fmaxf(pps, 0.01f), 3.0f, bars >= 2 ? 12.0f : 8.0f);
-            float to = clampf(from + span, from + 0.15f, 0.98f), zs = 15.0f - x;
+            const float zs = fmaxf(4.0f, floorf((15.0f - x) / 4.0f) * 4.0f);   /* the beat it is let go on */
+            /* let go as a DJ does: the record back to the start of the sound and held there, then let go on the beat. (The whole path moves
+             * earlier below, the record turning ahead of the beat, so this is written that much later; and it is held long enough that
+             * the fader's hiding of the turn is over before the beat.) */
+            float ahead;
+            { gen_t t2 = g; t2.rng = mix32(seed ^ 0x51DE5EEDu) | 1u; ahead = (float)(int)(gr(&t2, 0.18f, 0.34f) * (float)GP) / (float)GP; }
+            x = fminf(x, 15.0f - zs - ahead);                                   /* (a sound longer than from beat 2 plays a little faster) */
+            const float z = zs + ahead;
+            float to = clampf(from + span, from + 0.15f, 0.98f);
             int i0 = (int)((o + zs - 1.0f) * (float)GP);
             float cur = i0 >= 0 && i0 < out->n ? (float)out->pos[i0] / 65535.0f : from;
-            g_seg(&g, o + zs - 1.0f, o + zs, cur, from, SH_FAST);                /* back to the start of the sound, shut */
-            g_gate(&g, o + zs - 1.0f, o + zs - 0.05f, 0);
-            g_seg(&g, o + zs, o + 15.0f, from, to, SH_LIN);                      /* the sample, at its own speed */
-            g_gate(&g, o + zs, o + 15.0f, 1);
+            g_seg(&g, o + zs - 1.0f, o + zs - 0.4f, cur, from, SH_FAST);         /* back to the start of the sound, shut */
+            g_seg(&g, o + zs - 0.4f, o + z, from, from, SH_LIN);                 /* held */
+            g_gate(&g, o + zs - 1.0f, o + z - 0.05f, 0);
+            g_seg(&g, o + z, o + z + x, from, to, SH_LIN);                       /* let go: the sample, at its own speed */
+            g_gate(&g, o + z, o + z + x, 1);
+            if (z + x < 15.0f) { g_seg(&g, o + z + x, o + 15.0f, to, to, SH_LIN); g_gate(&g, o + z + x, o + 15.0f, 0); }     /* (the sound is over: still, shut) */
             g_seg(&g, o + 15.0f, o + 16.0f, to, bases[0], SH_FAST);              /* and the pull back */
             g_gate(&g, o + 15.0f, o + 15.9f, 0);
             if (g.nfw < 58) {                                                    /* (Any lays its fader on the grid after this: the play-out and the pull are told to it as a forward) */
                 g.fw_t[g.nfw] = o + zs; g.fw_d[g.nfw] = x; g.fw_kind[g.nfw] = 1; g.nfw++;
-                g.fw_t[g.nfw] = o + 15.0f; g.fw_d[g.nfw] = 1.0f; g.fw_kind[g.nfw] = 2; g.nfw++;
+                g.fw_t[g.nfw] = o + zs + x; g.fw_d[g.nfw] = 16.0f - zs - x; g.fw_kind[g.nfw] = 2; g.nfw++;     /* (shut from the sound's end) */
             }
         }
     }
@@ -1643,14 +1654,16 @@ static void taste_flush(ts_engine_t *e)
 static float gen_audible(const ts_clip_t *c)
 {
     int heard = 0, run = 0, gap = 0;
+    const int fin = (c->extras & TS_EX_FIN) != 0;
     for (int i = 0; i < c->n; i++) {
         int j = (i + 1) % c->n;
         float d = fabsf((float)c->pos[j] - (float)c->pos[i]) / 65535.0f * (float)TS_CLIP_RES;      /* sample lengths to the beat */
         int on = c->gate[i] != 0 && d > 0.05f;
         heard += on;
+        if (on && run >= TS_CLIP_RES && !(fin && i >= c->n - GP)) gap = 1;     /* a whole beat of nothing (after a Finish's sound, to the clip's end, it is the end) */
         run = on ? 0 : run + 1;
-        if (run >= TS_CLIP_RES) gap = 1;                                         /* a whole beat of nothing */
     }
+    if (run >= TS_CLIP_RES && !fin) gap = 1;
     float a = c->n > 0 ? (float)heard / (float)c->n : 0.0f;
     return gap ? a * 0.5f : a;                                                   /* (counts as too quiet: thrown again) */
 }
@@ -1667,10 +1680,11 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     const float groove_p = isfinite(groove) ? clampf(groove, 0.0f, 1.0f) : 0.0f;
     float echo_p = isfinite(echo) ? clampf(echo, 0.0f, 1.0f) : 0.0f;
     float fin_p = isfinite(fin) ? clampf(fin, 0.0f, 1.0f) : 0.0f;
-    float pps = 0.15f, hi = 0.95f;                                               /* the sample's own speed, in sample lengths to a sixteenth; where its sound ends */
+    float pps = 0.15f, hi = 0.95f, lo = -1.0f;                                               /* the sample's own speed, in sample lengths to a sixteenth; where its sound ends */
     if (slot && slot->loaded && slot->len > 0 && isfinite(bpm) && bpm > 0.0f) {
         pps = clampf(15.0f / (((float)slot->len / TS_SAMPLE_RATE) * bpm), 0.02f, 0.5f);
         hi = clampf(slot->hi, 0.3f, 0.99f);
+        lo = clampf(slot->lo, 0.0f, 0.5f);
     }
     float fw_p = isfinite(fwd) ? clampf(fwd, 0.0f, 1.0f) : 0.0f;
     if (!out) return;
@@ -1696,7 +1710,7 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;
     for (int attempt = 0; attempt < 8; attempt++) {                             /* a seed that comes out mostly silent is thrown again: same seed, same clip, always */
-        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, attacks, n_on, fw16, fw_p, fin_p, pps, hi, echo_p, stretch, spx, groove_p, reach);
+        gen_once(out, style, attempt ? mix32(seed ^ ((uint32_t)attempt * 0x9E3779B9u)) : seed, bars, onsets, attacks, n_on, fw16, fw_p, fin_p, pps, hi, lo, echo_p, stretch, spx, groove_p, reach);
         float a = gen_audible(out);
         if (a >= need[style]) return;
         if (a > best_a) { best_a = a; best = *out; }
@@ -2914,6 +2928,42 @@ static double clip_bar_ref(ts_engine_t *e, const ts_clip_t *k, double beat)
     return r;
 }
 
+/* A Finish's play-out (the sample let go on a beat and played through) is played straight: Swing would make its speed lurch every sixteenth
+ * (0.87x, then 1.18x at 30%) and Humanise drift it, a warble on a long steady sound. It is the longest rising run with the fader open in
+ * the clip's last bar, starting on a beat (Finish from 1.5.3, held before it is let go, so leaving swung time there is seamless; an older
+ * clip, whose play-out starts anywhere, plays as it always has). Read once a block. */
+static void playout_find(const ts_clip_t *k, double *a_out, double *b_out)
+{
+    *a_out = *b_out = -1.0;
+    if (!(k->extras & TS_EX_FIN) || k->n < 4 * TS_CLIP_RES) return;
+    const int i0 = k->n - 4 * TS_CLIP_RES;
+    int best = 0, bs = 0, run = 0, st = 0;
+    for (int i = i0 + 1; i < k->n; i++) {
+        if (k->gate[i] && k->pos[i] >= k->pos[i - 1]) { if (!run) st = i; if (++run > best) { best = run; bs = st; } }
+        else run = 0;
+    }
+    while (best > 1 && k->pos[bs + 1] <= k->pos[bs]) { bs++; best--; }        /* (from where the record starts to move: the fader can open a little before, on the still record) */
+    const double a = (double)bs / TS_CLIP_RES, q = a - floor(a + 0.5);
+    if (best >= TS_CLIP_RES / 2 && fabs(q) < 0.04 && k->pos[bs + best - 1] > k->pos[bs] + 2000) { *a_out = floor(a + 0.5); *b_out = (double)(bs + best) / TS_CLIP_RES; }
+}
+
+static int in_playout(const ts_clip_t *k, double a, double b, double beat)
+{
+    if (a < 0.0) return 0;
+    const double x = beat - floor(beat / k->len) * k->len;
+    return x >= a && x < b;
+}
+
+static int clip_playout(ts_engine_t *e, const ts_clip_t *k, double beat)
+{
+    if (e->po_ck != (const void *)k || e->po_at != e->frames) {
+        playout_find(k, &e->po_a, &e->po_b);
+        e->po_ck = (const void *)k;
+        e->po_at = e->frames;
+    }
+    return in_playout(k, e->po_a, e->po_b, beat);
+}
+
 static void humanise_at(const ts_params_t *p, double bpm, int clip, int len_beats, double pass_beat, double sw_t,
                         double *t_path, double *t_gate, double *pos_off, float *lv_scale)
 {
@@ -3035,7 +3085,7 @@ void ts_engine_render(ts_engine_t *e, float *out, int frames)
          * drift every beat), each cut lands a little early or late (up to 12 ms, every sixteenth) and a little softer, and each stroke runs a
          * little short or long (up to 4% of the sample). Every pass round the clip is different; at 0 it is exactly as written. */
         const ts_recipe_t *rr = clip > 0 ? recipe_at(e, clip) : NULL;
-        const int stut = rr && rr->style == GS_STUTTER;                      /* a stutter plays straight: a word cut in at a steady speed, not bent by Swing or Humanise */
+        const int stut = (rr && rr->style == GS_STUTTER) || (clip > 0 && ck && clip_playout(e, ck, e->mclock - t0));     /* a stutter, and a Finish's play-out, play straight: a word at a steady speed, not bent by Swing or Humanise */
         const double sw_t = stut ? e->mclock - t0 : ts_swing_time(e->mclock, p->swing) - t0;
         double t_path = sw_t, t_gate = sw_t, pos_off = 0.0;
         float lv_scale = 1.0f;
@@ -3226,12 +3276,15 @@ int ts_engine_view(const ts_engine_t *e, char *buf, int cap)
     if (pk && p->humanise > 0.0f) {                                            /* with Humanise on, what is played as well as what is written: the path and the cuts, this pass */
         const double t0 = p->clip == TS_CLIP_AUTO ? e->auto_start : 0.0;
         char hg[TS_LANE + 1];
+        double po_a, po_b;
+        playout_find(pk, &po_a, &po_b);
         jw(&j, "\",\"lhp\":\"");
         for (int k = 0; k < TS_LANE && j.len >= 0; k++) {
             const double t = ((double)k + 0.5) * pk->len / TS_LANE;
             double tp, tg, po;
             float lvs;
             humanise_at(p, (double)e->bpm, e->clip_now, pk->len, e->mclock - t0, t, &tp, &tg, &po, &lvs);
+            if (in_playout(pk, po_a, po_b, t)) { tp = tg = t; po = 0.0; }        /* (a Finish's play-out is played straight) */
             jw(&j, "%x", clampi((int)(clampf((float)((double)ts_clip_pos(e, e->clip_now, tp) + po * (double)slot_reach(s)), 0.0f, 1.0f) * 15.0f + 0.5f), 0, 15));
             hg[k] = ts_clip_cut(e, e->clip_now, tg) ? '1' : '0';
         }
@@ -3382,6 +3435,7 @@ int ts_engine_rclip(const ts_engine_t *e, char *buf, int cap)
     if (k) {
         /* the plan: the playhead (three hex digits, 0..4095) and the fader (one: 0 shut, 1 full, 2..7 an echo's lower steps), TS_RCLIP_RES to the beat */
         const int step = TS_CLIP_RES / TS_RCLIP_RES, n = k->len * TS_RCLIP_RES;
+        { double pa, pb; playout_find(k, &pa, &pb); if (pa >= 0.0) jw(&j, ",\"pa\":%.4f,\"pb\":%.4f", pa, pb); }     /* a Finish's play-out, played straight */
         jw(&j, ",\"lb\":%d,\"res\":%d,\"lp\":\"", k->len, TS_RCLIP_RES);
         for (int i = 0; i < n; i++) jw_hex(&j, (unsigned)k->pos[i * step] >> 4, 3);
         jw(&j, "\",\"lg\":\"");

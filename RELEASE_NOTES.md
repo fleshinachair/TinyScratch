@@ -1,5 +1,11 @@
 # TinyScratch release notes
 
+## v1.5.3
+
+- **Finish lets go on the beat, and plays the whole sample.** The record is held at the start of the sound and let go on a beat (the latest
+  that leaves room for all of it), and played straight, so Swing and Humanise no longer make it warble. Before, it let go wherever it had
+  to end with the bar, and often from partway through the word. Clips you have kept are unchanged.
+
 ## v1.5.2
 
 - **Fix:** a sample loaded into a User slot (Load Sample, or from the Remote UI) kept its name only until the module restarted, then showed
