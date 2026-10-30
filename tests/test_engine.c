@@ -3953,6 +3953,27 @@ static void test_long_samples(void)
         CHECK(too_close == 0, "...the record hand never pushes faster than a sixteenth apart (an eighth over 120 bpm) (%d too close)", too_close);
     }
 
+    /* ...and on Fresssh, whose attack is long (131 ms, "f" to "fre"), its pushes and rubs are no faster than a DJ's: about its own speed on
+     * average (DJs: 0.94, Hansen), peaking not much above (a hand's push sweeps), not a squeal at twice its speed */
+    {
+        const double fs = (double)e->slot[1].len / 44100.0, pt = 60.0 / 120.0 / TS_CLIP_RES;
+        double msum = 0.0, pmax = 0.0;
+        int np = 0;
+        for (uint32_t seed = 1; seed <= 40; seed++) {
+            ts_clip_generate_ex(&c, GS_STUTTER, seed * 977u, 1, &e->slot[1], 0.0f, 120.0f, 0.0f, 0.0f, 0.0f);
+            for (int i = 0; i < c.n;) {
+                if (!c.gate[i]) { i++; continue; }
+                int j = i;
+                double vmax = 0.0;
+                while (j < c.n && c.gate[j]) { if (j > i) vmax = fmax(vmax, fabs((double)c.pos[j] - c.pos[j - 1]) / 65535.0 * fs / pt); j++; }
+                const double span = fabs((double)c.pos[j - 1] - c.pos[i]) / 65535.0 * fs, dur = (j - i) * pt;
+                if (dur > 0.02 && span < 0.25) { msum += span / dur; pmax = fmax(pmax, vmax); np++; }
+                i = j;
+            }
+        }
+        CHECK(np > 50 && msum / np < 1.1 && pmax < 1.9, "Stutter on Fresssh at 120 bpm: pushes and rubs at %.2f of its speed on average, %.2f at the fastest", msum / np, pmax);
+    }
+
     /* Clip Depth turned down: the record stays on the words the clip starts on, not pulled toward the start of the sample */
     ts_params_t p;
     ts_params_default(&p);

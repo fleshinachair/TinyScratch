@@ -780,7 +780,9 @@ static void stut_push(gen_t *g, float t, float slot, float base, float secs)
      * late (up to 6 ms at 120 bpm), a little longer or shorter, a little faster or slower */
     t += gr(g, -0.05f, 0.05f);
     secs *= gr(g, 0.82f, 1.18f);
-    const float d = fminf(secs * g->spx * gr(g, 0.88f, 1.12f), slot * 0.62f), to = clampf(base + secs * g->fps, base, 0.97f);
+    const float d = fminf(secs * g->spx * gr(g, 0.88f, 1.12f), slot * 0.62f);
+    secs = fminf(secs, d / g->spx * gr(g, 0.9f, 1.05f));                       /* no faster than its own speed on average (DJs: about 0.94, Hansen): a short slot covers less of the word, it does not race through it */
+    const float to = clampf(base + secs * g->fps, base, 0.97f);
     g_seg(g, t, t + d, base, to, SH_PUSH);
     g_gate(g, t, t + d - 0.04f, 1);
     g_seg(g, t + d, t + slot, to, base, SH_EASE);
@@ -796,7 +798,7 @@ static void stut_release(gen_t *g, float t, float end, float base, float secs)
 static void stut_roll(gen_t *g, float t, float len, float base, float secs)
 {
     for (float u = 0.0f; u + 1.0f <= len + 1e-3f; u += 1.0f) {                 /* a push a sixteenth at about its own speed, two sounds each: "one single, fast record hand movement can produce multiple tone attacks, normally from 2 to 5" (Hansen) */
-        const float d = fminf(fmaxf(secs, 0.06f) * g->spx, 0.8f), to = clampf(base + d / g->spx * g->fps, base, 0.97f);
+        const float d = fminf(fmaxf(secs, 0.06f) * g->spx, 0.8f), to = clampf(base + d / g->spx * g->fps, base, 0.97f);     /* (at its own speed) */
         g_seg(g, t + u, t + u + d, base, to, SH_LIN);
         g_gate(g, t + u, t + u + 0.3f * d, 1);
         g_gate(g, t + u + 0.5f * d, t + u + 0.85f * d, 1);
@@ -836,7 +838,7 @@ static float st_stutter(gen_t *g, float o, float base_in)
         break;
     }
     case 4: {                                                                   /* rubs then the word: back and forth with the fader open, both ways heard, then let go */
-        const float r = c * 2.0f, d = fminf(r * g->spx, 1.0f), to = clampf(base + r * g->fps, base, 0.97f);
+        const float d = fminf(c * 2.0f * g->spx, 1.0f), r = fminf(c * 2.0f, d / g->spx), to = clampf(base + r * g->fps, base, 0.97f);     /* (a rub at its own speed at most, eased: about 1.5 at its fastest) */
         for (float i = 0.0f; i < 8.0f; i += 2.0f * step) {
             g_seg(g, o + i, o + i + d, base, to, SH_EASE);                       /* (a baby: the turns heard, eased as a hand turns) */
             g_seg(g, o + i + d, o + i + 2.0f * d, to, base, SH_EASE);
