@@ -626,22 +626,26 @@ static void g_limit_open(gen_t *g, float o)
  * almost always heard; a pull often is not), on the style, and on the seed; now and then a note is held over the next step (a swoop). */
 typedef struct { float push, pull, len_lo, len_hi, tie; } grid_t;
 static const grid_t k_grid[GS_COUNT] = {
-    [GS_ANY]      = { 0.95f, 0.72f, 0.22f, 0.72f, 0.12f },               /* (real DJs, measured, let sounds ring longer, ~115 ms; by ear over a beat these short ones won) */
+    [GS_ANY]      = { 0.95f, 0.72f, 0.22f, 0.72f, 0.12f },               /* (real DJs, measured, let sounds ring longer: Freestyle's, below; over a beat these short ones won by ear) */
 };
-/* Improv comes two ways: Flow (GS_ANY), a real hand's strokes at about the record's own speed, and Snap, Improv as 1.1.0 made it: a flick's
- * stroke shape and no cap on the strokes' speed, punchier. Snap is generated as Improv with these switched; a recipe keeps its own number,
- * so it regenerates the same. (Set for one generation at a time, from the thread that sets parameters.) */
-static int g_snap_flick = 0, g_snap_nocap = 0;
+/* Freestyle's fader, measured against 74 s of real dry scratching (17 clips): a sound rings most of a sixteenth (~115 ms), often tied over,
+ * ~60 ms between, ~4 a second: looser, as a DJ plays alone */
+static const grid_t k_grid_free = { 0.95f, 0.65f, 0.60f, 1.05f, 0.30f };
+/* Improv comes three ways: Flow (GS_ANY), a real hand's strokes at about the record's own speed; Snap, Improv as 1.1.0 made it: a flick's
+ * stroke shape and no cap on the strokes' speed, punchier; and Freestyle, Flow with the longer sounds real DJs play alone. Snap and Freestyle
+ * are generated as Improv with these switched; a recipe keeps their own numbers, so they regenerate the same. (Set for one generation at a
+ * time, from the thread that sets parameters.) */
+static int g_snap_flick = 0, g_snap_nocap = 0, g_free = 0;
 
-int ts_style_shown(int style) { style = clampi(style, 0, TS_GEN_STYLES - 1); return style == TS_GS_SNAP ? 1 : (style == GS_ANY ? 0 : style + 1); }
-int ts_style_at(int shown) { shown = clampi(shown, 0, TS_GEN_STYLES - 1); return shown == 1 ? TS_GS_SNAP : (shown == 0 ? GS_ANY : shown - 1); }
+int ts_style_shown(int style) { style = clampi(style, 0, TS_GEN_STYLES - 1); return style == TS_GS_SNAP ? 1 : (style == TS_GS_FREESTYLE ? 2 : (style == GS_ANY ? 0 : style + 2)); }
+int ts_style_at(int shown) { shown = clampi(shown, 0, TS_GEN_STYLES - 1); return shown == 1 ? TS_GS_SNAP : (shown == 2 ? TS_GS_FREESTYLE : (shown == 0 ? GS_ANY : shown - 2)); }
 /* Only "Any", a phrase from the example clips, has its fader laid on the grid. Every named style keeps the fader it is defined by (TTM): a
  * baby has none, a cut shuts on the pull, a flare clicks mid-stroke and so on, and its strokes and its fader move together. */
 static int grid_style(int s) { return s == GS_ANY; }
 
 static void g_grid_gate(gen_t *g, float o, int style)
 {
-    const grid_t *k = &k_grid[style];
+    const grid_t *k = g_free && style == GS_ANY ? &k_grid_free : &k_grid[style];
     int a = (int)(o * (float)GP), b = (int)((o + 16.0f) * (float)GP);
     if (b > g->c->n) b = g->c->n;
     for (int i = a; i < b; i++) g->c->gate[i] = 0;
@@ -1685,8 +1689,9 @@ void ts_clip_generate_ex(ts_clip_t *out, int style, uint32_t seed, int bars, con
     const float stretch = isfinite(bpm) && bpm > 120.0f ? fminf(bpm / 120.0f, 2.0f) : 1.0f;
     const float spx = isfinite(bpm) && bpm > 0.0f ? bpm / 15.0f : 8.0f;           /* sixteenths a second (what a hand does is in seconds: a scribble's vibration, a crab's fingers) */
     static const float need[GS_COUNT] = { 0.42f, 0.45f, 0.40f, 0.40f, 0.50f, 0.28f, 0.42f, 0.38f, 0.45f, 0.15f, 0.45f, 0.45f, 0.40f, 0.20f };       /* (a crab is a few clicks a beat: about a fifth of it is heard) */
-    if (style == TS_GS_SNAP) { g_snap_flick = g_snap_nocap = 1; style = GS_ANY; }
-    else g_snap_flick = g_snap_nocap = 0;
+    g_snap_flick = g_snap_nocap = style == TS_GS_SNAP;
+    g_free = style == TS_GS_FREESTYLE;
+    if (style == TS_GS_SNAP || style == TS_GS_FREESTYLE) style = GS_ANY;
     style = clampi(style, 0, GS_COUNT - 1);
     static ts_clip_t best;                                                      /* (called from the thread that sets parameters, one at a time) */
     float best_a = -1.0f;

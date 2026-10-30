@@ -53,7 +53,7 @@ static const char *const o_clear[] = { "Idle", "Clear" };
 static const char *const o_clip[] = { "Off", "Clip 1", "Clip 2", "Clip 3", "Clip 4", "Clip 5", "Clip 6", "Clip 7", "Clip 8", "Clip 9", "Clip 10",
                                       "Clip 11", "Clip 12", "Clip 13", "Clip 14", "Clip 15", "Clip 16", "Auto", "Try" };
 static const char *const o_generate[] = { "Idle", "Generate" };
-static const char *const o_genstyle[] = { "Flow", "Snap", "Baby", "Cuts", "Military", "Scribble", "Stab", "Chirp", "Transform", "Flare", "Crab", "Orbit", "Drag", "Tear", "Stutter" };     /* (in the list's order: ts_style_at gives a style's number) */
+static const char *const o_genstyle[] = { "Flow", "Snap", "Freestyle", "Baby", "Cuts", "Military", "Scribble", "Stab", "Chirp", "Transform", "Flare", "Crab", "Orbit", "Drag", "Tear", "Stutter" };     /* (in the list's order: ts_style_at gives a style's number) */
 static const char *const o_genbars[] = { "1 bar", "2 bars", "4 bars" };
 
 static const pdef_t k_params[P_COUNT] = {
@@ -72,7 +72,7 @@ static const pdef_t k_params[P_COUNT] = {
      * and deleting a clip you made (the Delete button and its pad) are all on the pads: generate, clip_pad and clip_delete are what
      * the Pads screen writes. */
     [P_GENERATE]    = { "generate", "Generate", K_ENUM, o_generate, 2, 0, 1, 0, 0, NULL },
-    [P_GEN_STYLE]   = { "gen_style", "Style", K_ENUM, o_genstyle, 15, 0, 14, 0, 0, NULL },
+    [P_GEN_STYLE]   = { "gen_style", "Style", K_ENUM, o_genstyle, 16, 0, 15, 0, 0, NULL },
     [P_GEN_BARS]    = { "gen_bars", "Length", K_ENUM, o_genbars, 3, 0, 2, 1, 0, NULL },
     [P_GEN_FWD]     = { "gen_fwd", "Forwards", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.0f, 0.05f, NULL },
     [P_SWING]       = { "swing", "Swing", K_FLOAT, NULL, 0, 0.0f, 1.0f, 0.30f, 0.02f, NULL },

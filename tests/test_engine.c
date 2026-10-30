@@ -3560,11 +3560,11 @@ static void test_state(void)
     int old_baby = b->p.gen_style == GS_BABY;
     char out2[32];
     api->get_param(h2, "gen_style", out2, sizeof out2);
-    old_baby &= atoi(out2) == 2;
+    old_baby &= atoi(out2) == 3;
     api->set_param(h2, "gen_style", "Snap");
     api->get_param(h2, "state", st2, sizeof st2);
     CHECK(old_baby && b->p.gen_style == TS_GS_SNAP && strstr(st2, "\"gen_style\":\"14\"") != NULL,
-          "an old project's Baby is still Baby (third in the list now), and Snap is saved as its number");
+          "an old project's Baby is still Baby (fourth in the list now), and Snap is saved as its number");
 
     /* hostile and broken states change nothing */
     ts_params_t keep = b->p;
