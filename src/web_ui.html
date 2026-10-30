@@ -526,10 +526,10 @@ footer { font: 500 10px/1.4 var(--mono); color: var(--faint); text-align: center
     sim.beat = beat; sim.clip = clip; sim.live = live;
     var target, gate = rv.g, lv = 0;
     if (clip) {
-      var t = swingTime(beat, num("swing", 0.3)) - rv.t0;
+      var t = (rv.fm ? beat : swingTime(beat, num("swing", 0.3))) - rv.t0;     /* (a stutter plays straight: scratch_engine.c) */
       sim.t = t;
       var pass = Math.floor((beat - rv.t0) / rc.lb);
-      var useH = rc.hp && rc.hk === pass && num("humanise", 0) > 0;
+      var useH = rc.hp && rc.hk === pass && num("humanise", 0) > 0 && !rv.fm;
       var raw = useH ? planAt(rc.hp, rc.lb, t) : planAt(rc.lp, rc.lb, t);
       if (rv.hh || !live) target = rv.tx;
       else target = mapPos(raw, t);
